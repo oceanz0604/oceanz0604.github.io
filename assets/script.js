@@ -1,4 +1,4 @@
-const scriptURL = 'https://script.google.com/macros/s/AKfycbwACR9Vy3r-66sZtywSYId4BKRGDHv69PxP2TQm6GHuRYBt4cGyPakiwjEVeJd1YGcq/exec'; // Replace this
+const scriptURL = 'https://script.google.com/macros/s/AKfycbyBxN7KdwYj0pgR0x4um0BfRtJ4r9-Pg6j2Tb5MUUT_qkTfftYdMoqSHD66bANn8fNg/exec'; // Replace this
 const pricePerMinute = 40 / 60;
 const priceInfo = document.getElementById('priceInfo');
 
