@@ -13,16 +13,26 @@
       <label for="userName">Name:</label>
       <input type="text" id="userName" required />
 
+      <label for="email">Email:</label>
+      <input type="email" id="email" required />
+
       <label for="pcNumber">Select PC:</label>
-      <select id="pcNumber" required>
+      <select id="pcNumber" multiple required>
         <option value="">--Choose PC--</option>
-        <option value="PC1">T1</option>
-        <option value="PC2">T2</option>
-        <option value="PC3">T3</option>
-        <option value="PC4">T4</option>
-        <option value="PC5">T5</option>
-        <option value="PC6">T6</option>
-        <option value="PC7">T7</option>
+        <option value="T1">T-Room 1</option>
+        <option value="T2">T-Room 2</option>
+        <option value="T3">T-Room 3</option>
+        <option value="T4">T-Room 4</option>
+        <option value="T5">T-Room 5</option>
+        <option value="T6">T-Room 6</option>
+        <option value="T7">T-Room 7</option>
+        <option value="CT1">CT-Room 1</option>
+        <option value="CT2">CT-Room 2</option>
+        <option value="CT3">CT-Room 3</option>
+        <option value="CT4">CT-Room 4</option>
+        <option value="CT5">CT-Room 5</option>
+        <option value="CT6">CT-Room 6</option>
+        <option value="CT7">CT-Room 7</option>
       </select>
 
       <label for="startTime">Start Time:</label>
@@ -31,13 +41,14 @@
       <label for="endTime">End Time:</label>
       <input type="datetime-local" id="endTime" required />
 
+      <p id="priceInfo">💰 Total Price: ₹0</p>
+
       <button type="submit">Book Now</button>
     </form>
 
     <div id="bookingResult"></div>
     <a href="admin.html" class="admin-link">🔒 Admin Dashboard</a>
   </div>
-
   <script src="assets/script.js"></script>
 </body>
 </html>

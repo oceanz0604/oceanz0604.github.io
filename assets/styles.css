@@ -5,26 +5,16 @@ body {
   margin: 0;
   padding: 20px;
 }
-
 .container {
-  max-width: 600px;
+  max-width: 700px;
   margin: auto;
   background: #1a1a1a;
   padding: 20px;
   border-radius: 12px;
   box-shadow: 0 0 15px #00ff99;
 }
-
-h1 {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-label {
-  display: block;
-  margin-top: 10px;
-}
-
+h1 { text-align: center; margin-bottom: 20px; }
+label { display: block; margin-top: 10px; }
 input, select, button {
   width: 100%;
   padding: 8px;
@@ -32,7 +22,6 @@ input, select, button {
   border: none;
   border-radius: 5px;
 }
-
 button {
   background-color: #00ff99;
   color: #000;
@@ -40,26 +29,17 @@ button {
   margin-top: 15px;
   cursor: pointer;
 }
-
-#bookingResult {
-  margin-top: 20px;
-  background: #333;
-  padding: 10px;
-  border-radius: 8px;
-}
-
+#bookingResult { margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; }
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
 }
-
 th, td {
   border: 1px solid #555;
   padding: 8px;
   text-align: center;
 }
-
 .admin-link {
   display: inline-block;
   margin-top: 20px;
