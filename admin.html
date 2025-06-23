@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🛠 Admin Dashboard - Bookings</h1>
+    <button onclick="fetchBookings()">🔄 Refresh</button>
+    <table id="bookingsTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>PC</th>
+          <th>Start Time</th>
+          <th>End Time</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <a href="index.html" class="admin-link">⬅ Back to Booking</a>
+  </div>
+  <script src="assets/admin.js"></script>
+</body>
+</html>

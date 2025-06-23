@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gaming Café Booking</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Gaming Café - Book Your PC</h1>
+    <form id="bookingForm">
+      <label for="userName">Name:</label>
+      <input type="text" id="userName" required />
+
+      <label for="pcNumber">Select PC:</label>
+      <select id="pcNumber" required>
+        <option value="">--Choose PC--</option>
+        <option value="PC1">PC1</option>
+        <option value="PC2">PC2</option>
+        <option value="PC3">PC3</option>
+        <option value="PC4">PC4</option>
+      </select>
+
+      <label for="startTime">Start Time:</label>
+      <input type="datetime-local" id="startTime" required />
+
+      <label for="endTime">End Time:</label>
+      <input type="datetime-local" id="endTime" required />
+
+      <button type="submit">Book Now</button>
+    </form>
+
+    <div id="bookingResult"></div>
+    <a href="admin.html" class="admin-link">🔒 Admin Dashboard</a>
+  </div>
+
+  <script src="assets/script.js"></script>
+</body>
+</html>
