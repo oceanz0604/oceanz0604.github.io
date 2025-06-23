@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OceanZ Booking</title>
   <link rel="stylesheet" href="assets/styles.css" />
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -13,33 +14,29 @@
       <label for="userName">Name:</label>
       <input type="text" id="userName" required />
 
-      <label for="email">Email:</label>
-      <input type="email" id="email" required />
-
-      <label for="pcNumber">Select PC:</label>
-      <select id="pcNumber" multiple required>
-        <option value="">--Choose PC--</option>
-        <option value="T1">T-Room 1</option>
-        <option value="T2">T-Room 2</option>
-        <option value="T3">T-Room 3</option>
-        <option value="T4">T-Room 4</option>
-        <option value="T5">T-Room 5</option>
-        <option value="T6">T-Room 6</option>
-        <option value="T7">T-Room 7</option>
-        <option value="CT1">CT-Room 1</option>
-        <option value="CT2">CT-Room 2</option>
-        <option value="CT3">CT-Room 3</option>
-        <option value="CT4">CT-Room 4</option>
-        <option value="CT5">CT-Room 5</option>
-        <option value="CT6">CT-Room 6</option>
-        <option value="CT7">CT-Room 7</option>
-      </select>
+      <label>Select PCs:</label>
+      <div class="pc-checkboxes">
+        <label><input type="checkbox" class="pc-option" value="T1"> T-Room 1</label>
+        <label><input type="checkbox" class="pc-option" value="T2"> T-Room 2</label>
+        <label><input type="checkbox" class="pc-option" value="T3"> T-Room 3</label>
+        <label><input type="checkbox" class="pc-option" value="T4"> T-Room 4</label>
+        <label><input type="checkbox" class="pc-option" value="T5"> T-Room 5</label>
+        <label><input type="checkbox" class="pc-option" value="T6"> T-Room 6</label>
+        <label><input type="checkbox" class="pc-option" value="T7"> T-Room 7</label>
+        <label><input type="checkbox" class="pc-option" value="CT1"> CT-Room 1</label>
+        <label><input type="checkbox" class="pc-option" value="CT2"> CT-Room 2</label>
+        <label><input type="checkbox" class="pc-option" value="CT3"> CT-Room 3</label>
+        <label><input type="checkbox" class="pc-option" value="CT4"> CT-Room 4</label>
+        <label><input type="checkbox" class="pc-option" value="CT5"> CT-Room 5</label>
+        <label><input type="checkbox" class="pc-option" value="CT6"> CT-Room 6</label>
+        <label><input type="checkbox" class="pc-option" value="CT7"> CT-Room 7</label>
+      </div>
 
       <label for="startTime">Start Time:</label>
-      <input type="datetime-local" id="startTime" required />
+      <input type="time" id="startTime" required />
 
       <label for="endTime">End Time:</label>
-      <input type="datetime-local" id="endTime" required />
+      <input type="time" id="endTime" required />
 
       <p id="priceInfo">💰 Total Price: ₹0</p>
 
@@ -49,6 +46,6 @@
     <div id="bookingResult"></div>
     <a href="admin.html" class="admin-link">🔒 Admin Dashboard</a>
   </div>
-  <script src="assets/script.js"></script>
+  <script src="assets/jquery-script.js"></script>
 </body>
 </html>

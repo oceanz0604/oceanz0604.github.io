@@ -1,48 +1,102 @@
 body {
-  font-family: Arial, sans-serif;
-  background-color: #0e0e0e;
-  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #121212;
+  color: #f0f0f0;
   margin: 0;
   padding: 20px;
 }
+
 .container {
-  max-width: 700px;
+  max-width: 600px;
   margin: auto;
-  background: #1a1a1a;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 0 15px #00ff99;
+  background-color: #1e1e1e;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 255, 153, 0.15);
 }
-h1 { text-align: center; margin-bottom: 20px; }
-label { display: block; margin-top: 10px; }
-input, select, button {
+
+h1 {
+  text-align: center;
+  font-size: 1.8rem;
+  margin-bottom: 20px;
+  color: #00ff99;
+}
+
+label {
+  display: block;
+  margin-top: 15px;
+  font-size: 0.95rem;
+}
+
+input, button {
   width: 100%;
-  padding: 8px;
-  margin-top: 5px;
+  padding: 10px;
+  margin-top: 6px;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: #2b2b2b;
+  color: #f0f0f0;
 }
+
+input:focus {
+  outline: 2px solid #00ff99;
+}
+
 button {
   background-color: #00ff99;
   color: #000;
   font-weight: bold;
-  margin-top: 15px;
-  cursor: pointer;
-}
-#bookingResult { margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; }
-table {
-  width: 100%;
-  border-collapse: collapse;
   margin-top: 20px;
+  transition: background-color 0.2s ease;
 }
-th, td {
-  border: 1px solid #555;
-  padding: 8px;
-  text-align: center;
+
+button:hover {
+  background-color: #00cc7a;
 }
+
+#bookingResult {
+  margin-top: 20px;
+  background-color: #2b2b2b;
+  padding: 15px;
+  border-radius: 10px;
+  border-left: 4px solid #00ff99;
+}
+
 .admin-link {
-  display: inline-block;
-  margin-top: 20px;
+  display: block;
+  margin-top: 25px;
+  text-align: center;
   color: #00ff99;
   text-decoration: none;
+  font-weight: 500;
+}
+
+.admin-link:hover {
+  color: #00cc7a;
+}
+
+/* 🔲 Multi-checkbox PC selection */
+.pc-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.pc-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #2b2b2b;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pc-checkboxes input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
 }
