@@ -1,3 +1,6 @@
+// const apiURL = 'https://script.google.com/macros/s/AKfycbw2ntVhmvwpkRrTVal9CRxR-2yfXm5vRCUu5huY40VQO5t-N2bfZv6HRh-5kObmYI6J/exec';
+// const pcList = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CT1', 'CT2', 'CT3', 'CT4', 'CT5', 'CT6', 'CT7'];
+
 function doPost(e) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const data = JSON.parse(e.postData.contents);
