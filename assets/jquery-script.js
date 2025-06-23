@@ -24,7 +24,6 @@ $(document).ready(function () {
   $('#bookingForm').submit(function (e) {
     e.preventDefault();
     const name = $('#userName').val();
-    const email = $('#email').val();
     const pcs = $('.pc-option:checked').map(function () { return this.value; }).get();
     const start = getTodayTime($('#startTime').val());
     const end = getTodayTime($('#endTime').val());
@@ -38,7 +37,7 @@ $(document).ready(function () {
       url: scriptURL,
       method: "POST",
       contentType: "application/json",
-      data: JSON.stringify({ name, email, pcs, start: start.toISOString(), end: end.toISOString(), duration, price }),
+      data: JSON.stringify({ name, pcs, start: start.toISOString(), end: end.toISOString(), duration, price }),
       success: function (res) {
         const result = typeof res === "string" ? JSON.parse(res) : res;
         if (result.status === "error") {

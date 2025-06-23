@@ -18,7 +18,6 @@ document.getElementById('pcNumber').addEventListener('change', calculatePrice);
 document.getElementById('bookingForm').addEventListener('submit', function (e) {
   e.preventDefault();
   const name = document.getElementById('userName').value;
-  const email = document.getElementById('email').value;
   const selectedOptions = Array.from(document.getElementById('pcNumber').selectedOptions);
   const pcs = selectedOptions.map(option => option.value);
   const start = new Date(document.getElementById('startTime').value);
@@ -31,7 +30,7 @@ document.getElementById('bookingForm').addEventListener('submit', function (e) {
     return;
   }
 
-  const data = { name, email, pcs, start: start.toISOString(), end: end.toISOString(), duration, price };
+  const data = { name, pcs, start: start.toISOString(), end: end.toISOString(), duration, price };
 
   fetch(scriptURL, {
     method: 'POST',
