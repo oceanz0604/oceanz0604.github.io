@@ -38,7 +38,8 @@ $(document).ready(function () {
       method: "POST",
       contentType: "application/json",
       crossDomain: true,
-      dataType: 'jsonp',
+      dataType: 'json',
+      headers: { 'Access-Control-Allow-Origin': '*'},
       data: JSON.stringify({ name, pcs, start: start.toISOString(), end: end.toISOString(), duration, price }),
       success: function (res) {
         const result = typeof res === "string" ? JSON.parse(res) : res;
