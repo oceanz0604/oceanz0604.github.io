@@ -37,6 +37,8 @@ $(document).ready(function () {
       url: scriptURL,
       method: "POST",
       contentType: "application/json",
+      crossDomain: true,
+      dataType: 'jsonp',
       data: JSON.stringify({ name, pcs, start: start.toISOString(), end: end.toISOString(), duration, price }),
       success: function (res) {
         const result = typeof res === "string" ? JSON.parse(res) : res;
