@@ -1,37 +1,53 @@
-const scriptURL = 'https://script.google.com/macros/s/AKfycbxnn3V5ImVKI4NWhH1toKAJiF7IdsnhcX32HCYarnJOJcAqGqjNNWfr-ufnpry-x-G-/exec';
+const scriptURL = 'https://script.google.com/macros/s/AKfycbw2ntVhmvwpkRrTVal9CRxR-2yfXm5vRCUu5huY40VQO5t-N2bfZv6HRh-5kObmYI6J/exec'; // Replace this
+const pricePerMinute = 40 / 60;
+const priceInfo = document.getElementById('priceInfo');
+
+function calculatePrice() {
+  const start = new Date(document.getElementById('startTime').value);
+  const end = new Date(document.getElementById('endTime').value);
+  const minutes = Math.abs((end - start) / (1000 * 60));
+  const pcCount = document.getElementById('pcNumber').selectedOptions.length;
+  const price = Math.ceil(minutes) * pricePerMinute * pcCount;
+  if (!isNaN(price)) priceInfo.innerText = `💰 Total Price: ₹${price} for ${pcCount} PC(s)`;
+}
+
+document.getElementById('startTime').addEventListener('change', calculatePrice);
+document.getElementById('endTime').addEventListener('change', calculatePrice);
+document.getElementById('pcNumber').addEventListener('change', calculatePrice);
 
 document.getElementById('bookingForm').addEventListener('submit', function (e) {
   e.preventDefault();
-
   const name = document.getElementById('userName').value;
-  const pc = document.getElementById('pcNumber').value;
+  const email = document.getElementById('email').value;
+  const selectedOptions = Array.from(document.getElementById('pcNumber').selectedOptions);
+  const pcs = selectedOptions.map(option => option.value);
   const start = new Date(document.getElementById('startTime').value);
   const end = new Date(document.getElementById('endTime').value);
   const duration = Math.abs((end - start) / (1000 * 60));
+  const price = Math.ceil(duration * pricePerMinute * pcs.length);
 
   if (start >= end) {
     alert('End time must be after start time!');
     return;
   }
 
-  const data = {
-    name,
-    pc,
-    start: start.toLocaleString(),
-    end: end.toLocaleString(),
-    duration
-  };
+  const data = { name, email, pcs, start: start.toISOString(), end: end.toISOString(), duration, price };
 
   fetch(scriptURL, {
     method: 'POST',
     body: JSON.stringify(data),
     headers: { 'Content-Type': 'application/json' }
   })
-  .then(response => response.text())
-  .then(res => {
-    document.getElementById('bookingResult').innerHTML =
-      `<strong>✅ Booking Saved!</strong><br>Name: ${name}<br>PC: ${pc}<br>Start: ${data.start}<br>End: ${data.end}<br>Duration: ${duration} mins`;
-    document.getElementById('bookingForm').reset();
-  })
-  .catch(error => alert('Error saving booking: ' + error));
+    .then(response => response.json())
+    .then(res => {
+      if (res.status === "error") {
+        alert("❌ " + res.message);
+      } else {
+        document.getElementById('bookingResult').innerHTML =
+          `<strong>✅ Booking Confirmed!</strong><br>Name: ${name}<br>PCs: ${pcs.join(", ")}<br>Start: ${start}<br>End: ${end}<br>Duration: ${duration} mins<br>Total: ₹${price}`;
+        document.getElementById('bookingForm').reset();
+        priceInfo.innerText = "💰 Total Price: ₹0";
+      }
+    })
+    .catch(error => alert('Error saving booking: ' + error));
 });
