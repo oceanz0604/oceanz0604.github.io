@@ -1,4 +1,4 @@
-const apiURL = 'https://script.google.com/macros/s/AKfycbwACR9Vy3r-66sZtywSYId4BKRGDHv69PxP2TQm6GHuRYBt4cGyPakiwjEVeJd1YGcq/exec'; // Replace this
+const apiURL = 'https://script.google.com/macros/s/AKfycbyBxN7KdwYj0pgR0x4um0BfRtJ4r9-Pg6j2Tb5MUUT_qkTfftYdMoqSHD66bANn8fNg/exec'; // Replace this
 
 function fetchBookings() {
   fetch(apiURL)
@@ -15,7 +15,6 @@ function fetchBookings() {
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${row.name}</td>
-          <td>${row.email}</td>
           <td>${row.pc}</td>
           <td>${new Date(row.start).toLocaleString()}</td>
           <td>${new Date(row.end).toLocaleString()}</td>
