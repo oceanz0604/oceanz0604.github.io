@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ Terminals</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .alert { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { background-color: rgba(255, 0, 0, 0.4); }
+      50% { background-color: rgba(255, 0, 0, 0.8); }
+    }
+    .sidebar-item-active {
+    @apply text-white font-semibold border-l-4 border-blue-500 pl-3;
+    }
+    .booking-card {
+    @apply bg-gray-800 border border-gray-700 rounded-2xl p-5 shadow-md transition hover:shadow-lg hover:scale-[1.01];
+    }
+    .booking-card h3 {
+      @apply text-lg font-semibold text-blue-400;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex">
+
+  <!-- Login Page -->
+  <div id="login-view" class="flex flex-col items-center justify-center w-full h-screen">
+    <h1 class="text-4xl font-bold mb-6">OceanZ Login</h1>
+    <div class="bg-gray-800 p-6 rounded-xl shadow-lg w-full max-w-sm space-y-4">
+      <input type="email" id="email" placeholder="Email" class="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 border border-gray-600"/>
+      <input type="password" id="password" placeholder="Password" class="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 border border-gray-600"/>
+      <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded">Login</button>
+      <p id="login-error" class="text-red-400 text-sm text-center hidden"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div id="dashboard-view" class="hidden flex w-full">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 p-6 hidden md:block">
+      <h2 class="text-xl font-bold mb-6">OceanZ</h2>
+      <ul class="space-y-2">
+        <li>
+          <a id="nav-dashboard" href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-white bg-gray-700">
+            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+            Dashboard
+          </a>
+        </li>
+        <li>
+          <a id="nav-bookings" href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
+            <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+            Bookings
+          </a>
+        </li>
+        <li>
+          <a href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+            Settings
+          </a>
+        </li>
+        <li>
+          <button id="logout-btn"
+             class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 text-red-400">
+            <i data-lucide="log-out" class="w-5 h-5"></i>
+            Logout
+          </button>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6">
+      <div class="max-w-7xl mx-auto space-y-12">
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+          <h1 class="text-4xl font-bold mb-2 text-center">OceanZ Terminals</h1>
+          <p id="timestamp" class="text-sm text-gray-300 mb-4 text-center"></p>
+          <input id="search" type="text" placeholder="Search terminal or user..." class="mb-6 w-full p-3 rounded bg-gray-800 text-white placeholder-gray-400 border border-gray-700"/>
+          <div id="group-container" class="space-y-12"></div>
+        </div>
+
+        <!-- Bookings Section -->
+        <div id="bookings-section" class="hidden">
+          <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
+            <i data-lucide="calendar-clock" class="w-6 h-6"></i> Bookings
+          </h2>
+
+          <!-- Filter and Actions -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div class="flex gap-2">
+              <button
+                onclick="fetchBookings()"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-1"
+              >
+                <i data-lucide="refresh-ccw" class="w-4 h-4"></i> Refresh
+              </button>
+              <button
+                onclick="downloadCSV()"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-1"
+              >
+                <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+              </button>
+            </div>
+          </div>
+
+          <!-- Booking Cards -->
+          <div id="bookingCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- JS Bundle -->
+  <script type="module" src="assets/dashboard.js"></script>
+  <script type="module" src="assets/bookings.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>
