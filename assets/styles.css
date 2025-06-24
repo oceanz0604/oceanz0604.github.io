@@ -77,29 +77,69 @@ button:hover {
   color: #2b7ae4;
 }
 
-/* 🔲 Multi-checkbox PC selection */
 .pc-checkboxes {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
   margin-top: 8px;
 }
 
 .pc-checkboxes label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #2b2b2b;
+  background-color: #1a1a1a;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid #333;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #f0f0f0;
   cursor: pointer;
+  transition: all 0.2s ease;
   user-select: none;
-  color: #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-.pc-checkboxes input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: #4da6ff;
+.pc-checkboxes label:hover {
+  background-color: #222;
+  border-color: #4da6ff;
 }
+
+/* Hide the checkbox */
+.pc-checkboxes input[type="checkbox"] {
+  display: none;
+}
+
+/* Active selected label */
+.pc-checkboxes label.selected {
+  background-color: #4da6ff;
+  color: #000;
+  font-weight: bold;
+  border-color: #4da6ff;
+}
+
+.time-inputs {
+  display: flex;
+  gap: 50px;
+  justify-content: space-between;
+  margin-top: 15px;
+  margin-right: 25px;
+  flex-wrap: wrap;
+}
+
+.time-group {
+  flex: 1 1 45%;
+  min-width: 150px;
+}
+
+.time-group label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Optional: tighter layout on very small screens */
+@media (max-width: 480px) {
+  .time-group {
+    flex: 1 1 100%;
+  }
+}
+
+

@@ -18,6 +18,12 @@ const form = document.getElementById("bookingForm");
 const resultDiv = document.getElementById("bookingResult");
 const priceDisplay = document.getElementById("priceInfo");
 
+document.querySelectorAll('.pc-checkboxes input[type="checkbox"]').forEach(checkbox => {
+  checkbox.addEventListener('change', () => {
+    checkbox.parentElement.classList.toggle('selected', checkbox.checked);
+  });
+});
+
 form.addEventListener("submit", function(e) {
   e.preventDefault();
 
@@ -37,8 +43,8 @@ form.addEventListener("submit", function(e) {
   const endTime = new Date(today + "T" + endValue);
 
   const duration = (endTime - startTime) / (1000 * 60); // in minutes
-  if (duration <= 0) {
-    alert("End time must be after start time.");
+  if (duration < 60) {
+    alert("Booking should be done for at least 1 hour");
     return;
   }
 
