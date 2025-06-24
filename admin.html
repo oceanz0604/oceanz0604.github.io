@@ -5,6 +5,107 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Dashboard</title>
   <link rel="stylesheet" href="assets/styles.css" />
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0e0e10;
+      padding: 2rem;
+      color: #f0f0f0;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: auto;
+      background: #121218;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: #4da6ff;
+    }
+
+    label, input, button {
+      font-size: 1rem;
+      color: #e0e0e0;
+    }
+
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+
+    input[type="date"] {
+      padding: 0.5rem;
+      width: 200px;
+      margin-right: 1rem;
+      background: #1a1a1f;
+      color: #f0f0f0;
+      border: 1px solid #333;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      margin-top: 1rem;
+      margin-right: 0.5rem;
+      border: none;
+      background: #1f6feb;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #155ab6;
+    }
+
+    .booking-card {
+      background: #1c1c22;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 1rem 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+
+    .booking-card h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.2rem;
+      color: #4da6ff;
+    }
+
+    .booking-details {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .booking-details div {
+      flex: 1 1 150px;
+      color: #ccc;
+    }
+
+    .booking-details strong {
+      color: #f0f0f0;
+    }
+
+    .admin-link {
+      display: block;
+      text-align: center;
+      margin-top: 2rem;
+      text-decoration: none;
+      color: #4da6ff;
+    }
+
+    .admin-link:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -14,21 +115,13 @@
     <button onclick="fetchBookings()">🔄 Refresh</button>
     <button onclick="downloadCSV()">📥 Export CSV</button>
 
-    <table id="bookingsTable">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>PC</th>
-          <th>Start Time</th>
-          <th>End Time</th>
-          <th>Duration</th>
-          <th>Price</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div id="bookingCards"></div>
+
     <a href="index.html" class="admin-link">⬅ Back to Booking</a>
   </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="assets/admin.js"></script>
 </body>
 </html>
