@@ -22,6 +22,7 @@
         <label><input type="checkbox" class="pc-option" value="T5"> T-Room 5</label>
         <label><input type="checkbox" class="pc-option" value="T6"> T-Room 6</label>
         <label><input type="checkbox" class="pc-option" value="T7"> T-Room 7</label>
+        <br>
         <label><input type="checkbox" class="pc-option" value="CT1"> CT-Room 1</label>
         <label><input type="checkbox" class="pc-option" value="CT2"> CT-Room 2</label>
         <label><input type="checkbox" class="pc-option" value="CT3"> CT-Room 3</label>
@@ -31,11 +32,16 @@
         <label><input type="checkbox" class="pc-option" value="CT7"> CT-Room 7</label>
       </div>
 
-      <label for="startTime">Start Time:</label>
-      <input type="time" id="startTime" required />
-
-      <label for="endTime">End Time:</label>
-      <input type="time" id="endTime" required />
+      <div class="time-inputs">
+        <div class="time-group">
+          <label for="startTime">Start Time:</label>
+          <input type="time" id="startTime" required />
+        </div>
+        <div class="time-group">
+          <label for="endTime">End Time:</label>
+          <input type="time" id="endTime" required />
+        </div>
+      </div>
 
       <p id="priceInfo">💰 Total Price: ₹0</p>
 
@@ -48,5 +54,18 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="assets/firebase.js"></script>
+  <script>
+  // Set default time values for booking
+  window.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const startHour = now.getHours();
+    const endHour = (startHour + 1) % 24;
+
+    const pad = n => n.toString().padStart(2, '0');
+
+    document.getElementById("startTime").value = `${pad(startHour)}:00`;
+    document.getElementById("endTime").value = `${pad(endHour)}:00`;
+  });
+  </script>
 </body>
 </html>
