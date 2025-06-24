@@ -12,20 +12,21 @@ body {
   background-color: #1e1e1e;
   padding: 25px;
   border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 255, 153, 0.15);
+  box-shadow: 0 4px 20px rgba(80, 150, 255, 0.15); /* blueish glow */
 }
 
 h1 {
   text-align: center;
   font-size: 1.8rem;
   margin-bottom: 20px;
-  color: #00ff99;
+  color: #4da6ff; /* bright blue title */
 }
 
 label {
   display: block;
   margin-top: 15px;
   font-size: 0.95rem;
+  color: #ccc;
 }
 
 input, button {
@@ -40,11 +41,11 @@ input, button {
 }
 
 input:focus {
-  outline: 2px solid #00ff99;
+  outline: 2px solid #4da6ff;
 }
 
 button {
-  background-color: #00ff99;
+  background-color: #4da6ff;
   color: #000;
   font-weight: bold;
   margin-top: 20px;
@@ -52,7 +53,7 @@ button {
 }
 
 button:hover {
-  background-color: #00cc7a;
+  background-color: #2b7ae4;
 }
 
 #bookingResult {
@@ -60,20 +61,20 @@ button:hover {
   background-color: #2b2b2b;
   padding: 15px;
   border-radius: 10px;
-  border-left: 4px solid #00ff99;
+  border-left: 4px solid #4da6ff;
 }
 
 .admin-link {
   display: block;
   margin-top: 25px;
   text-align: center;
-  color: #00ff99;
+  color: #4da6ff;
   text-decoration: none;
   font-weight: 500;
 }
 
 .admin-link:hover {
-  color: #00cc7a;
+  color: #2b7ae4;
 }
 
 /* 🔲 Multi-checkbox PC selection */
@@ -94,9 +95,11 @@ button:hover {
   border: 1px solid #333;
   cursor: pointer;
   user-select: none;
+  color: #e0e0e0;
 }
 
 .pc-checkboxes input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  accent-color: #4da6ff;
 }
