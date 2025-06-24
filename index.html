@@ -7,48 +7,48 @@
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
+
   <div class="container">
     <h1>🎮 OceanZ - Book Your PC</h1>
+
     <form id="bookingForm">
-      <label for="userName">Name:</label>
-      <input type="text" id="userName" required />
+      <!-- Step 1 -->
+      <div id="step1">
+        <label for="userName">Name:</label>
+        <input type="text" id="userName" required />
 
-      <label>Select PCs:</label>
-      <div class="pc-checkboxes">
-        <label><input type="checkbox" class="pc-option" value="T1"> T-Room 1</label>
-        <label><input type="checkbox" class="pc-option" value="T2"> T-Room 2</label>
-        <label><input type="checkbox" class="pc-option" value="T3"> T-Room 3</label>
-        <label><input type="checkbox" class="pc-option" value="T4"> T-Room 4</label>
-        <label><input type="checkbox" class="pc-option" value="T5"> T-Room 5</label>
-        <label><input type="checkbox" class="pc-option" value="T6"> T-Room 6</label>
-        <label><input type="checkbox" class="pc-option" value="T7"> T-Room 7</label>
-        <br>
-        <label><input type="checkbox" class="pc-option" value="CT1"> CT-Room 1</label>
-        <label><input type="checkbox" class="pc-option" value="CT2"> CT-Room 2</label>
-        <label><input type="checkbox" class="pc-option" value="CT3"> CT-Room 3</label>
-        <label><input type="checkbox" class="pc-option" value="CT4"> CT-Room 4</label>
-        <label><input type="checkbox" class="pc-option" value="CT5"> CT-Room 5</label>
-        <label><input type="checkbox" class="pc-option" value="CT6"> CT-Room 6</label>
-        <label><input type="checkbox" class="pc-option" value="CT7"> CT-Room 7</label>
+        <div class="time-inputs">
+          <div class="time-group">
+            <label for="startTime">Start Time:</label>
+            <input type="time" id="startTime" required />
+          </div>
+          <div class="time-group">
+            <label for="endTime">End Time:</label>
+            <input type="time" id="endTime" required />
+          </div>
+        </div>
+
+        <button type="button" id="nextBtn">Next</button>
       </div>
 
-      <div class="time-inputs">
-        <div class="time-group">
-          <label for="startTime">Start Time:</label>
-          <input type="time" id="startTime" required />
+      <!-- Step 2 -->
+      <div id="step2" style="display: none;">
+        <label>Select Available PCs:</label>
+        <div class="pc-checkboxes" id="availablePCs">
+          <!-- Filled by JS -->
         </div>
-        <div class="time-group">
-          <label for="endTime">End Time:</label>
-          <input type="time" id="endTime" required />
+
+        <p id="priceInfo">💰 Total Price: ₹0</p>
+
+        <div class="button-row">
+          <button type="button" id="backBtn">⬅ Back</button>
+          <button type="submit">Book Now</button>
         </div>
       </div>
 
-      <p id="priceInfo">💰 Total Price: ₹0</p>
-
-      <button type="submit">Book Now</button>
     </form>
 
-    <div id="bookingResult"></div>
+    <div id="bookingResult" style="display: none;"></div>
     <a href="admin.html" class="admin-link">🔒 Admin Dashboard</a>
   </div>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
