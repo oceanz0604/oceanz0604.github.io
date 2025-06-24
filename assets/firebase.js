@@ -81,10 +81,9 @@ form.addEventListener("submit", function(e) {
     return;
   }
 
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const startTime = new Date(today + "T" + startValue);
-  const endTime = new Date(today + "T" + endValue);
+  const today = new Date();
+  const startTime = new Date(today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T" + startValue + ":00");
+  const endTime = new Date(today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T" + endValue + ":00");
 
   const duration = (endTime - startTime) / (1000 * 60); // in minutes
   if (duration < 60) {
@@ -154,8 +153,8 @@ function fetchAvailablePCsFromFirebase(startTime, endTime, callback) {
     const unavailablePCs = new Set();
 
     const today = new Date();
-    const selectedStart = new Date(today.toISOString().split("T")[0] + "T" + startTime + ":00");
-    const selectedEnd = new Date(today.toISOString().split("T")[0] + "T" + endTime + ":00");
+    const selectedStart = new Date(today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T" + startTime + ":00");
+    const selectedEnd = new Date(today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T" + endTime + ":00");
 
     Object.values(bookings).forEach(entry => {
       const bookedStart = new Date(entry.start);
