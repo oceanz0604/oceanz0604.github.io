@@ -24,6 +24,50 @@ document.querySelectorAll('.pc-checkboxes input[type="checkbox"]').forEach(check
   });
 });
 
+const allPCs = [
+    "T1", "T2", "T3", "T4", "T5", "T6", "T7",
+    "CT1", "CT2", "CT3", "CT4", "CT5", "CT6", "CT7"
+  ];
+
+// Set default time
+window.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const startHour = now.getHours();
+    const endHour = (startHour + 1) % 24;
+    const pad = n => n.toString().padStart(2, '0');
+    document.getElementById("startTime").value = `${pad(startHour)}:00`;
+    document.getElementById("endTime").value = `${pad(endHour)}:00`;
+    });
+
+// Next button logic
+document.getElementById("nextBtn").addEventListener("click", () => {
+    const name = document.getElementById("userName").value.trim();
+    const startTime = document.getElementById("startTime").value;
+    const endTime = document.getElementById("endTime").value;
+
+    if (!name || !startTime || !endTime) {
+      alert("Please fill all fields.");
+      return;
+    }
+    // Move to Step 2
+    document.getElementById("step1").style.display = "none";
+    document.getElementById("step2").style.display = "block";
+    // Simulate available PC filter here
+    showAvailablePCs(); // Call dynamic filter
+});
+
+// Back button logic
+document.getElementById("backBtn").addEventListener("click", () => {
+    document.getElementById("priceInfo").textContent = `💰 Total Price: ₹0`;
+    resultDiv.style.display = "none";
+    resultDiv.textContent = "";
+    document.getElementById("step2").style.display = "none";
+    document.getElementById("step1").style.display = "block";
+});
+
+document.getElementById("startTime").addEventListener("input", updatePriceDisplay);
+document.getElementById("endTime").addEventListener("input", updatePriceDisplay);
+
 form.addEventListener("submit", function(e) {
   e.preventDefault();
 
@@ -82,10 +126,12 @@ form.addEventListener("submit", function(e) {
     }
 
     if (conflict) {
+      resultDiv.style.display = "block";
       resultDiv.innerHTML = "<p style='color:red;'>⚠ One or more PCs are already booked for the selected time.</p>";
     } else {
       const newRef = db.ref("bookings").push();
       newRef.set(bookingData, () => {
+        resultDiv.style.display = "block";
         resultDiv.innerHTML = "<p style='color:green;'>✅ Booking successful!</p>";
         form.reset();
         updatePriceDisplay();
@@ -94,27 +140,91 @@ form.addEventListener("submit", function(e) {
   });
 });
 
+function logout() {
+  firebase.auth().signOut().then(() => {
+    window.location.href = "login.html";
+  });
+}
+
+function fetchAvailablePCsFromFirebase(startTime, endTime, callback) {
+  const dbRef = firebase.database().ref("bookings");
+
+  dbRef.once("value", snapshot => {
+    const bookings = snapshot.val() || {};
+    const unavailablePCs = new Set();
+
+    const today = new Date();
+    const selectedStart = new Date(today.toISOString().split("T")[0] + "T" + startTime + ":00");
+    const selectedEnd = new Date(today.toISOString().split("T")[0] + "T" + endTime + ":00");
+
+    Object.values(bookings).forEach(entry => {
+      const bookedStart = new Date(entry.start);
+      const bookedEnd = new Date(entry.end);
+      const pcs = entry.pcs || [];
+
+      // Check for overlap
+      const overlaps = selectedStart < bookedEnd && selectedEnd > bookedStart;
+      if (overlaps) {
+        pcs.forEach(pc => unavailablePCs.add(pc));
+      }
+    });
+
+    callback(unavailablePCs);
+  });
+}
+
+// Simulated logic to show all PCs (you can filter based on Firebase data here)
+function showAvailablePCs() {
+  const pcContainer = document.getElementById("availablePCs");
+  pcContainer.innerHTML = "";
+
+  const startTime = document.getElementById("startTime").value;
+  const endTime = document.getElementById("endTime").value;
+
+  fetchAvailablePCsFromFirebase(startTime, endTime, (unavailablePCs) => {
+    allPCs.forEach(pc => {
+      if (!unavailablePCs.has(pc)) {
+        const label = document.createElement("label");
+        label.className = "pc-label";
+        label.innerHTML = `
+          <input type="checkbox" class="pc-option" value="${pc}" />
+          ${pc.replace(/^T/, "T-Room ").replace(/^CT/, "CT-Room ")}
+        `;
+        pcContainer.appendChild(label);
+      }
+    });
+
+    // Add event listener to update price
+    document.querySelectorAll(".pc-option").forEach(cb => {
+      cb.addEventListener("change", () => {
+        cb.parentElement.classList.toggle("selected", cb.checked);
+        updatePriceDisplay();
+      });
+    });
+
+    updatePriceDisplay(); // initial price update
+  });
+}
+
 // Auto update price
 function updatePriceDisplay() {
-  const selectedPCs = Array.from(document.querySelectorAll(".pc-option:checked")).length;
-  const startValue = document.getElementById("startTime").value;
-  const endValue = document.getElementById("endTime").value;
-  if (!startValue || !endValue || selectedPCs === 0) {
-    priceDisplay.textContent = "💰 Total Price: ₹0";
+  const startTime = document.getElementById("startTime").value;
+  const endTime = document.getElementById("endTime").value;
+  const pcCount = document.querySelectorAll(".pc-option:checked").length;
+
+  if (!startTime || !endTime || pcCount === 0) {
+    document.getElementById("priceInfo").textContent = "💰 Total Price: ₹0";
     return;
   }
 
-  const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const startTime = new Date(today + "T" + startValue);
-  const endTime = new Date(today + "T" + endValue);
-  const duration = (endTime - startTime) / (1000 * 60);
-  const price = duration * selectedPCs;
-  priceDisplay.textContent = `💰 Total Price: ₹${price}`;
-}
+  const [startHour, startMin] = startTime.split(":").map(Number);
+  const [endHour, endMin] = endTime.split(":").map(Number);
 
-document.getElementById("startTime").addEventListener("input", updatePriceDisplay);
-document.getElementById("endTime").addEventListener("input", updatePriceDisplay);
-document.querySelectorAll(".pc-option").forEach(cb => {
-  cb.addEventListener("change", updatePriceDisplay);
-});
+  let duration = (endHour + endMin / 60) - (startHour + startMin / 60);
+  if (duration <= 0) duration += 24; // Handle overnight booking
+
+  const ratePerHour = 40; // 💡 Your price per PC per hour
+  const price = Math.ceil(duration * pcCount * ratePerHour);
+
+  document.getElementById("priceInfo").textContent = `💰 Total Price: ₹${price}`;
+}

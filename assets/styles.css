@@ -118,28 +118,79 @@ button:hover {
 
 .time-inputs {
   display: flex;
-  gap: 50px;
-  justify-content: space-between;
-  margin-top: 15px;
-  margin-right: 25px;
+  gap: 20px;
   flex-wrap: wrap;
+  margin-top: 15px;
+  align-items: center;
 }
 
 .time-group {
+  display: flex;
+  align-items: center; /* ✅ vertically center label and input */
+  gap: 10px;
   flex: 1 1 45%;
-  min-width: 150px;
+  min-width: 160px;
 }
 
 .time-group label {
-  display: block;
-  margin-bottom: 6px;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  margin: 0; /* remove default spacing */
+  line-height: 1; /* tighter vertical spacing */
 }
 
-/* Optional: tighter layout on very small screens */
+/* Responsive stack on small screens */
 @media (max-width: 480px) {
   .time-group {
-    flex: 1 1 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .time-group label {
+    margin-bottom: 4px;
   }
 }
 
+/* Transparent input style with underline */
+input[type="text"],
+input[type="time"] {
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid #4da6ff;
+  border-radius: 0;
+  padding: 10px 5px;
+  color: #f0f0f0;
+  font-size: 0.95rem;
+  transition: border-color 0.3s ease;
+}
 
+input[type="text"]::placeholder,
+input[type="time"]::placeholder {
+  color: #888;
+}
+
+input[type="text"]:focus,
+input[type="time"]:focus {
+  outline: none;
+  border-bottom-color: #2b7ae4;
+}
+
+#step1, #step2 {
+  animation: fade 0.2s ease;
+}
+
+@keyframes fade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.button-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.button-row button {
+  flex: 1;
+}
