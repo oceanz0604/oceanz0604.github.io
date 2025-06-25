@@ -16,6 +16,7 @@
       <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="profile">👤 Profile</button>
       <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="leaderboard">🏆 Leaderboard</button>
       <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="booking">🖥️ Book a PC</button>
+      <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="history">📜 History</button>
       <button id="logoutBtn" class="flex-1 py-3 px-4 text-center hover:bg-red-600 transition-all text-red-400 font-bold">🚪 Logout</button>
     </div>
 
@@ -84,6 +85,17 @@
           </div>
         </form>
         <div id="bookingResult" class="hidden bg-green-800 text-white p-4 rounded-xl shadow-lg text-center font-medium mt-4"></div>
+      </div>
+
+      <!-- ✅ NEW: History Tab -->
+      <div class="tab-pane hidden" data-tab="history">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
+          <h2 class="text-xl font-bold text-purple-400 flex items-center gap-2"><i data-lucide="scroll-text"></i> Member History</h2>
+          <div id="memberHistoryList" class="space-y-4 text-sm text-gray-300">
+            <!-- You can populate this dynamically with JS -->
+            <p>🔍 Loading your history...</p>
+          </div>
+        </div>
       </div>
 
     </div>
