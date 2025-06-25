@@ -34,6 +34,9 @@
     .stale-alert {
       animation: flicker 1.5s infinite;
     }
+    .glow {
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex">
@@ -95,7 +98,7 @@
         <div id="dashboard-section">
           <h1 class="text-4xl font-bold mb-2 text-center">OceanZ Terminals</h1>
           <p id="timestamp" class="text-sm text-gray-300 mb-4 text-center"></p>
-          <div id="group-container" class="space-y-12"></div>
+          <div id="group-container" class="space-y-12 overflow-x-hidden px-2"></div>
         </div>
 
         <!-- Bookings Section -->
