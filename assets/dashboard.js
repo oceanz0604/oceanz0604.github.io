@@ -144,15 +144,15 @@ function renderTerminals(data) {
   timestampEl.textContent = "Last updated: " + new Date().toLocaleString("en-IN");
 
   const groups = {
-    "T-room": [],
-    "CT-room": [],
+    "T-ROOM": [],
+    "CT-ROOM": [],
     "PS/XBOX": []
   };
 
   for (const [name, info] of Object.entries(data)) {
     const group =
-      name.includes("CT") ? "CT-room" :
-      name.includes("T-") ? "T-room" : "PS/XBOX";
+      name.includes("CT") ? "CT-ROOM" :
+      name.includes("T-") ? "T-ROOM" : "PS/XBOX";
     groups[group].push({ name, ...info });
   }
 
