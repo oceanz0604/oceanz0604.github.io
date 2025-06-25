@@ -106,32 +106,161 @@ function loadProfile() {
 
     loadRecentActivity(member.USERNAME);
     loadMemberBookings(member.USERNAME);
+
+    secondDb.ref(`history/${member.USERNAME}`).once("value").then(snapshot => {
+      const history = snapshot.val() || {};
+      const entries = Object.values(history);
+      const streak = calculateStreak(entries);
+      const streakDiv = document.getElementById("streakInfo");
+      if (streakDiv) {
+        if (streak >= 2) {
+          streakDiv.innerHTML = `<span class="inline-block text-orange-500 text-sm font-semibold">${streak}🔥</span>`;
+        } else {
+          streakDiv.innerHTML = "";
+        }
+      }
+    });
+
 }
 
-function loadLeaderboard() {
-  secondDb.ref('fdb/MEMBERS').once("value").then(snapshot => {
-    const members = Object.values(snapshot.val() || {});
-    const top = members
-      .filter(m => m.TOTALACTMINUTE)
-      .sort((a, b) => b.TOTALACTMINUTE - a.TOTALACTMINUTE)
-      .slice(0, 10);
+function getMemberSince(member) {
+  if (member.RECDATE) {
+    try {
+      const date = new Date(member.RECDATE);
+      return date.toLocaleString("default", { month: "long", year: "numeric" });
+    } catch {
+      return "Unknown";
+    }
+  }
+  return "Unknown";
+}
 
-    const list = document.getElementById("leaderboardList");
-    list.innerHTML = "";
-    top.forEach((m, i) => {
-      const medal = ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
-      const avatar = `https://api.dicebear.com/7.x/thumbs/svg?seed=${m.USERNAME}`;
-      const row = document.createElement("div");
-      row.className = "flex items-center justify-between p-3 rounded-lg bg-gray-800";
-      row.innerHTML = `
-        <div class="flex items-center gap-3">
-          <img src="${avatar}" class="w-8 h-8 rounded-full">
-          <span>${medal} <strong>${m.USERNAME}</strong></span>
+function calculateStreak(historyEntries) {
+  const dateSet = new Set();
+
+  // Collect all unique session dates, ignoring today
+  const todayStr = getISTDate(0).toISOString().split("T")[0];
+  historyEntries.forEach(entry => {
+    const dateStr = entry.DATE;
+    if (dateStr !== todayStr) {
+      dateSet.add(dateStr);
+    }
+  });
+
+  let streak = 0;
+  let day = getISTDate(-1); // start from yesterday
+
+  while (true) {
+    const dateStr = day.toISOString().split("T")[0];
+    if (dateSet.has(dateStr)) {
+      streak++;
+      day.setDate(day.getDate() - 1); // go to previous day
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+async function loadLeaderboard() {
+  const membersSnap = await secondDb.ref('fdb/MEMBERS').once("value");
+  const historyRef = secondDb.ref("history");
+  const members = Object.values(membersSnap.val() || {});
+  const now = new Date();
+
+  // Compute leaderboard stats
+  const leaderboard = members
+    .filter(m => m.TOTALACTMINUTE)
+    .sort((a, b) => b.TOTALACTMINUTE - a.TOTALACTMINUTE)
+    .slice(0, 10);
+
+  // Get spent for each member
+  const historyData = await Promise.all(
+    leaderboard.map(async m => {
+      const snapshot = await historyRef.child(m.USERNAME).once("value");
+      const entries = Object.values(snapshot.val() || {});
+      const spent = entries.reduce((sum, h) => sum + (h.CHARGE < 0 ? -h.CHARGE : 0), 0);
+      const lastDate = entries
+        .map(h => new Date(`${h.DATE}T${h.TIME.split('.')[0]}`))
+        .sort((a, b) => b - a)[0];
+      const streak = calculateStreak(entries);
+      return {
+        username: m.USERNAME,
+        spent,
+        lastDate,
+        streak,
+      };
+    })
+  );
+
+  const maxSpent = Math.max(...historyData.map(h => h.spent));
+  const maxMinutes = leaderboard[0]?.TOTALACTMINUTE ?? 0;
+
+  const list = document.getElementById("leaderboardList");
+  list.innerHTML = "";
+
+  leaderboard.forEach((m, i) => {
+    const avatar = `https://api.dicebear.com/7.x/thumbs/svg?seed=${m.USERNAME}`;
+    const timeInHours = Math.round(m.TOTALACTMINUTE / 60);
+    const since = m.RECDATE ? new Date(m.RECDATE).toLocaleDateString("en-IN", { year: 'numeric', month: 'short' }) : "N/A";
+
+    const { spent, lastDate, streak } = historyData.find(h => h.username === m.USERNAME) || {};
+    const isBigSpender = spent === maxSpent;
+    const isGrinder = m.TOTALACTMINUTE === maxMinutes;
+
+    // Avatar ring color
+    let ringColor = "border-gray-500"; // default
+    if (lastDate) {
+      const diffDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 2) ringColor = "border-green-400";
+      else if (diffDays <= 7) ringColor = "border-yellow-400";
+    }
+
+    // Dynamic badge/title
+    let badge = "";
+    if (i === 0) badge = "🥇 Champion";
+    else if (i === 1) badge = "🥈 Runner Up";
+    else if (i === 2) badge = "🥉 Third Place";
+    if (isGrinder) badge += (badge ? " • " : "") + "👑 Grinder";
+    if (isBigSpender) badge += (badge ? " • " : "") + "🏅 Big Spender";
+    if (lastDate) {
+      const inactiveDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+      if (inactiveDays > 7) badge += (badge ? " • " : "") + "🐢 Ghost";
+    }
+
+    const flame = `<span class="animate-pulse text-orange-500">🔥</span>`;
+    const streakBadge = streak > 0 ? `
+      <span class="text-sm flex items-center gap-1">
+      ${flame}<span class="text-orange-400">${streak}-Day Streak</span></span>
+    `: "";
+
+    const row = document.createElement("div");
+    row.className = "flex items-start justify-between p-4 rounded-xl bg-gray-800";
+    row.innerHTML = `
+      <div class="flex items-center gap-4">
+        <img src="${avatar}" class="w-10 h-10 rounded-full border-2 ${ringColor}">
+        <div>
+           <div class="font-bold text-white flex items-center gap-2">
+             ${m.USERNAME}
+             ${streakBadge}
+          </div>
+          <div class="text-sm text-gray-400">⏱️ ${timeInHours} hrs • 🗓️ Since: ${since}</div>
+          <div class="text-sm text-gray-500">Last Active: ${lastDate?.toLocaleDateString("en-IN") || "N/A"}</div>
         </div>
-        <span class="text-gray-300">${Math.round(m.TOTALACTMINUTE)} mins</span>
-      `;
-      list.appendChild(row);
-    });
+      </div>
+      ${badge
+        ? `<div class="mt-2 sm:mt-0 flex flex-col items-end gap-1">
+          ${badge.split(" • ").map(b => `
+            <span class="inline-block text-xs bg-yellow-800 text-yellow-200 rounded-full px-2 py-0.5 font-medium">
+              ${b}
+            </span>
+            `).join("")}
+          </div>`
+          : ""
+        }
+    `;
+    list.appendChild(row);
   });
 }
 
