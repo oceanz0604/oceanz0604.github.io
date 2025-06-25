@@ -20,11 +20,11 @@
         <div class="time-inputs">
           <div class="time-group">
             <label for="startTime">Start Time:</label>
-            <input type="time" id="startTime" required />
+            <select id="startTime" required></select>
           </div>
           <div class="time-group">
             <label for="endTime">End Time:</label>
-            <input type="time" id="endTime" required />
+            <select id="endTime" required></select>
           </div>
         </div>
 
@@ -56,13 +56,40 @@
   <script src="assets/firebase.js"></script>
   <script>
   // Set default time values for booking
+  const timeOptions = [];
+  for (let h = 0; h < 24; h++) {
+    const hour12 = ((h + 11) % 12 + 1);
+    const suffix = h < 12 ? "AM" : "PM";
+    timeOptions.push({
+      value: `${h.toString().padStart(2, '0')}:00`,
+      label: `${hour12}:00 ${suffix}`
+    });
+  }
+  const startSelect = document.getElementById("startTime");
+  const endSelect = document.getElementById("endTime");
+  function populateTimeDropdowns() {
+    [startSelect, endSelect].forEach(select => {
+      select.innerHTML = "";
+      timeOptions.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt.value;
+        option.textContent = opt.label;
+        select.appendChild(option);
+      });
+    });
+    // Default to current hour and +1 hour
+    const now = new Date();
+    const currentHour = now.getHours();
+    const nextHour = (currentHour + 1) % 24;
+    startSelect.value = `${currentHour.toString().padStart(2, '0')}:00`;
+    endSelect.value = `${nextHour.toString().padStart(2, '0')}:00`;
+  }
+  window.addEventListener("DOMContentLoaded", populateTimeDropdowns);
   window.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     const startHour = now.getHours();
     const endHour = (startHour + 1) % 24;
-
     const pad = n => n.toString().padStart(2, '0');
-
     document.getElementById("startTime").value = `${pad(startHour)}:00`;
     document.getElementById("endTime").value = `${pad(endHour)}:00`;
   });

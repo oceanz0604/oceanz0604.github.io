@@ -16,13 +16,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
-const terminalsRef = ref(db, "fdb/TERMINALS");
+const terminalsRef = ref(db, "status");
 const membersRef = ref(db, "fdb/MEMBERS");
 
 // UI elements
 const timestampEl = document.getElementById("timestamp");
 const groupContainer = document.getElementById("group-container");
-const searchInput = document.getElementById("search");
 const loginView = document.getElementById("login-view");
 const dashboardView = document.getElementById("dashboard-view");
 const emailInput = document.getElementById("email");
@@ -124,17 +123,6 @@ onAuthStateChanged(auth, (user) => {
   }
 });
 
-// Search
-searchInput?.addEventListener("input", applySearch);
-
-function applySearch() {
-  const query = searchInput.value.toLowerCase();
-  const filtered = rawData.filter(t =>
-    t.NAME?.toLowerCase().includes(query) || t.MEMBERID?.toLowerCase().includes(query)
-  );
-  render(filtered);
-}
-
 function formatTime(timestamp) {
   if (!timestamp) return "-";
   const date = new Date(timestamp);
@@ -163,17 +151,18 @@ async function getMemberById(memberId) {
   }
 }
 
-function render(data) {
+function renderTerminals(data) {
   const now = new Date();
-  timestampEl.textContent = "Last updated: " + now.toLocaleString();
+  timestampEl.textContent = "Last updated: " + now.toLocaleString("en-IN");
 
-  const groups = { "T-room": [], "CT-room": [], "PS/XBOX": [] };
-  data.forEach(t => {
-    const name = t.NAME?.toUpperCase() || "";
-    if (name.includes("CT-")) groups["CT-room"].push(t);
-    else if (name.includes("T-")) groups["T-room"].push(t);
-    else if (name.includes("PS") || name.includes("XBOX")) groups["PS/XBOX"].push(t);
-  });
+  const groups = { "T-ROOM": [], "CT-ROOM": [], "PS/XBOX": [] };
+
+  for (const [name, info] of Object.entries(data)) {
+    const group =
+      name.includes("CT") ? "CT-ROOM" :
+      name.includes("T-") ? "T-ROOM" : "PS/XBOX";
+    groups[group].push({ name, ...info });
+  }
 
   groupContainer.innerHTML = "";
 
@@ -184,38 +173,58 @@ function render(data) {
     const grid = document.createElement("div");
     grid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4";
 
-    terminals
-      .sort((a, b) => a.NAME.localeCompare(b.NAME))
-      .forEach((terminal) => {
-        const isOccupied = terminal.TERMINALSTATUS === 1;
-        const { text: durationText, minutes: durationMinutes } = calculateDuration(terminal.STARTDATE + "T" + terminal.STARTTIME);
-        const longSession = isOccupied && durationMinutes > 120;
+    terminals.sort((a, b) => a.name.localeCompare(b.name)).forEach(terminal => {
+        const isOccupied = terminal.status === "occupied";
+        const lastUpdated = new Date(terminal.last_updated);
+        const ageMinutes = Math.floor((Date.now() - lastUpdated.getTime()) / 60000);
+        const isStale = ageMinutes > 5;
 
         const card = document.createElement("div");
-        card.className = `p-4 rounded-2xl shadow-lg ${
-          isOccupied ? "bg-red-600" : "bg-green-600"
-        } text-white transition hover:scale-[1.01] ${longSession ? "alert" : ""}`;
+        card.className = `
+          p-4 rounded-2xl shadow-lg transition hover:scale-[1.01]
+          ${isOccupied ? "bg-gray-700 text-white" : "bg-gray-300 text-black"}
+          ${isStale ? "border-4 border-yellow-400" : "border border-green-500"}
+          ${!isStale ? "glow" : ""}
+          relative
+        `;
 
-        getMemberById(terminal.MEMBERID).then((member) => {
-          const username = member?.USERNAME || "Guest";
-          card.innerHTML = `
-            <div class="flex items-center justify-between">
-              <h2 class="text-xl font-bold">${terminal.NAME}</h2>
-              <span class="text-2xl">${isOccupied ? "🔴" : "🟢"}</span>
-            </div>
-            <p class="mt-1 text-sm">Status: <strong>${isOccupied ? "Occupied" : "Available"}</strong></p>
-            <p class="text-sm">User: <b>${username}</b></p>
-            <p class="text-sm">Start Time: ${formatTime(terminal.STARTDATE + "T" + terminal.STARTTIME)}</p>
-            <p class="text-sm">Duration: ${durationText}</p>
-            <p class="text-sm">Session Price: ₹${terminal.SESSIONPRICE || terminal.MEMBERSESSIONPRICE || 0}</p>
-          `;
-          grid.appendChild(card);
-        });
-      });
+        const statusIcon = isOccupied
+          ? `<i data-lucide="lock" class="w-5 h-5 text-red-400"></i>`
+          : `<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>`;
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-bold">${terminal.name}</h2>
+            ${statusIcon}
+          </div>
+
+          <p class="mt-1 text-sm">
+            <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+              isOccupied ? "bg-red-500 text-white" : "bg-green-500 text-white"
+            }">${terminal.status.toUpperCase()}</span>
+          </p>
+
+          <p class="text-sm"><strong>IP:</strong> ${terminal.ip || "-"}</p>
+          <p class="text-sm"><strong>MAC:</strong> ${terminal.mac || "-"}</p>
+          <p class="text-sm">
+            <strong>Last Updated:</strong> ${lastUpdated.toLocaleString("en-IN")}
+          </p>
+
+          ${
+            isStale
+              ? `<div class="absolute top-2 right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded shadow">
+                  ⚠ Stale (${ageMinutes} min ago)
+                </div>`
+              : ""
+          }
+        `;
+        grid.appendChild(card);
+    });
 
     section.appendChild(grid);
     groupContainer.appendChild(section);
   }
+  lucide.createIcons();
 }
 
 function startDataSync() {
@@ -226,7 +235,8 @@ function startDataSync() {
 
 function fetchData() {
   onValue(terminalsRef, (snapshot) => {
-    rawData = Object.values(snapshot.val() || {});
-    applySearch();
+    const terminalsData = snapshot.val() || {};
+    rawData = Object.entries(terminalsData).map(([name, info]) => ({ name, ...info }));
+    renderTerminals(terminalsData);
   });
 }
