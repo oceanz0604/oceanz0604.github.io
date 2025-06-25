@@ -162,6 +162,52 @@ function showPCs() {
   });
 }
 
+function loadMemberHistory(username) {
+  const list = document.getElementById("memberHistoryList");
+  list.innerHTML = `<p class="text-gray-400">⏳ Loading your history...</p>`;
+
+  secondDb.ref(`history/${username}`).once("value").then(snapshot => {
+    const history = snapshot.val();
+
+    if (!history || Object.keys(history).length === 0) {
+      list.innerHTML = `<p class="text-gray-400">No history available.</p>`;
+      return;
+    }
+
+    // Sort entries by ID (descending)
+    const sortedEntries = Object.values(history).sort((a, b) => b.ID - a.ID);
+
+    list.innerHTML = "";
+
+    sortedEntries.forEach(entry => {
+      const div = document.createElement("div");
+      div.className = "bg-gray-700 p-4 rounded-lg shadow space-y-1";
+
+      const chargeColor = entry.CHARGE > 0
+        ? "text-green-400"
+        : entry.CHARGE < 0
+        ? "text-red-400"
+        : "text-gray-300";
+
+      div.innerHTML = `
+        <div class="flex justify-between items-center">
+          <span class="font-semibold text-white">${entry.NOTE}</span>
+          <span class="text-sm ${chargeColor}">${entry.CHARGE > 0 ? '+' : ''}${entry.CHARGE} ₹</span>
+        </div>
+        <div class="text-sm text-gray-400">
+          ${entry.DATE} ${entry.TIME.split('.')[0]}${entry.TERMINALNAME ? ` | 🖥️ ${entry.TERMINALNAME}` : ""}
+        </div>
+        <div class="text-xs text-gray-500">Balance: ₹${entry.BALANCE}</div>
+      `;
+
+      list.appendChild(div);
+    });
+  }).catch(err => {
+    list.innerHTML = `<p class="text-red-400">⚠️ Failed to load history.</p>`;
+    console.error("Error loading history:", err);
+  });
+}
+
 document.getElementById("nextBtn").addEventListener("click", () => {
   showPCs();
   document.getElementById("step1").style.display = "none";
@@ -254,6 +300,7 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
   window.location.href = "member-login.html";
 });
 window.addEventListener("DOMContentLoaded", () => {
+  loadMemberHistory(member.USERNAME);
   loadLeaderboard();
   loadProfile();
   lucide.createIcons();
