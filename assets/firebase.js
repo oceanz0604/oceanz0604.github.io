@@ -11,8 +11,22 @@ const firebaseConfig = {
     measurementId: "G-PSLG65XMBT"
 };
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const secondAppConfig = {
+  apiKey: "AIzaSyCaC558bQ7mhYlhjmthvZZX9SBVvNe6wYg",
+  authDomain: "fdb-dataset.firebaseapp.com",
+  databaseURL: "https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "fdb-dataset",
+  storageBucket: "fdb-dataset.appspot.com",
+  messagingSenderId: "497229278574",
+  appId: "1:497229278574:web:c8f127aad76b8ed004657f",
+  measurementId: "G-4FLTSGLWBR"
+};
+
+const secondApp = firebase.initializeApp(secondAppConfig, "SECOND_APP");
+const secondDb = secondApp.database();
+
+const app = firebase.initializeApp(firebaseConfig);
+const db = app.database();
 
 const form = document.getElementById("bookingForm");
 const resultDiv = document.getElementById("bookingResult");
@@ -227,3 +241,54 @@ function updatePriceDisplay() {
 
   document.getElementById("priceInfo").textContent = `💰 Total Price: ₹${price}`;
 }
+
+function renderLeaderboard(members) {
+  const leaderboardList = document.getElementById("leaderboardList");
+  leaderboardList.innerHTML = "";
+
+  members.forEach((member, index) => {
+    let medal = "";
+    let medalColor = "";
+
+    if (index === 0) {
+      medal = "🥇";
+      medalColor = "text-yellow-400";
+    } else if (index === 1) {
+      medal = "🥈";
+      medalColor = "text-gray-300";
+    } else if (index === 2) {
+      medal = "🥉";
+      medalColor = "text-orange-400";
+    }
+
+    const row = document.createElement("div");
+    row.className = `flex justify-between items-center bg-gray-700 p-3 rounded-lg`;
+
+    row.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="text-xl ${medalColor}">${medal}</span>
+        <span class="font-semibold">${member.USERNAME || member.ID}</span>
+      </div>
+      <span class="text-sm text-gray-300">${Math.round(member.TOTALACTMINUTE)} mins</span>
+    `;
+    leaderboardList.appendChild(row);
+  });
+  lucide.createIcons(); // Refresh icons
+}
+
+function loadLeaderboard() {
+    secondDb.ref('fdb/MEMBERS').once("value").then(snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+      const memberArray = Object.values(data)
+        .filter(m => m.TOTALACTMINUTE !== undefined)
+        .sort((a, b) => b.TOTALACTMINUTE - a.TOTALACTMINUTE)
+        .slice(0, 10); // top 10
+
+      renderLeaderboard(memberArray);
+    }).catch(err => {
+      console.error("Leaderboard load failed:", err);
+    });
+  }
+
+window.addEventListener("DOMContentLoaded", loadLeaderboard);
