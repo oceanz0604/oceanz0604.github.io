@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ Member Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+  <div class="bg-gray-800 p-6 rounded-xl shadow-lg w-full max-w-md space-y-5">
+    <h1 class="text-3xl font-bold text-center">🎮 Member Login</h1>
+    <form id="memberLoginForm">
+      <input type="text" id="username" placeholder="Username" class="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 border border-gray-600"/>
+      <input type="password" id="password" placeholder="Password" class="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 border border-gray-600"/>
+      <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded">
+        Login
+      </button>
+      <p id="login-error" class="text-red-400 text-sm text-center hidden">Invalid credentials. Please try again.</p>
+    </form>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="assets/member-login.js"></script>
+</body>
+</html>

@@ -95,7 +95,6 @@ navHistory?.addEventListener("click", (e) => {
   e.preventDefault();
   switchView("history");
 });
-
 loginBtn?.addEventListener("click", () => {
   const email = emailInput.value;
   const password = passwordInput.value;
@@ -106,7 +105,6 @@ loginBtn?.addEventListener("click", () => {
       loginError.classList.remove("hidden");
     });
 });
-
 logoutBtn?.addEventListener("click", () => {
   signOut(auth).then(() => {
     dashboardSection.classList.add("hidden");
@@ -128,6 +126,23 @@ onAuthStateChanged(auth, (user) => {
     dashboardView.classList.add("hidden");
   }
 });
+
+function toggleSidebar() {
+  const sidebar = document.getElementById("mobile-sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+
+  const isOpen = sidebar.classList.contains("translate-x-0");
+
+  if (isOpen) {
+    sidebar.classList.replace("translate-x-0", "-translate-x-full");
+    overlay.classList.add("hidden");
+    document.body.classList.remove("overflow-hidden");
+  } else {
+    sidebar.classList.replace("-translate-x-full", "translate-x-0");
+    overlay.classList.remove("hidden");
+    document.body.classList.add("overflow-hidden");
+  }
+}
 
 function parseActiveSessions(snapshot) {
   const sessions = snapshot.val() || {};
