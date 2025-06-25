@@ -101,6 +101,23 @@ def process_member_history(records):
     return history_by_user
 
 
+def upload_sessions_by_member(sessions):
+    grouped = {}
+    for s in sessions:
+        mid = str(s.get("MEMBERID", "unknown"))
+        if int(mid) != 0:
+            sid = str(s["ID"])
+            if mid not in grouped:
+                grouped[mid] = {}
+            grouped[mid][sid] = s
+
+    print(f"Uploading sessions grouped by member (total members: {len(grouped)})...")
+    for member_id, session_map in grouped.items():
+        ref = db.reference(f"sessions-by-member/{member_id}")
+        ref.set(session_map)
+    print("Upload complete.")
+
+
 def upload_user_history(username, records):
     """Uploads individual user's history to Firebase."""
     print(f"Uploading {len(records)} records for user: {username}")
@@ -143,6 +160,13 @@ def main():
             upload_table_to_firebase("MEMBERS", members)
         except Exception as e:
             print(f"Failed to process MEMBERS: {e}")
+
+        # 3. Upload SESSIONS table
+        try:
+            sessions_raw = fetch_table(cursor, "SESSIONS")
+            upload_sessions_by_member(sessions_raw)
+        except Exception as e:
+            print(f"Error processing SESSIONS: {e}")
 
         print("All data synced successfully.")
 
