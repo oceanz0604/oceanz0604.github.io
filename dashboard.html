@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -74,6 +75,13 @@
           </a>
         </li>
         <li>
+          <a id="nav-history" href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
+            <i data-lucide="history" class="w-5 h-5"></i>
+            Session History
+          </a>
+        </li>
+        <li>
           <a href="#"
              class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
             <i data-lucide="settings" class="w-5 h-5"></i>
@@ -106,37 +114,35 @@
           <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
             <i data-lucide="calendar-clock" class="w-6 h-6"></i> Bookings
           </h2>
-
-          <!-- Filter and Actions -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div class="flex gap-2">
-              <button
-                onclick="fetchBookings()"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-1"
-              >
+              <button onclick="fetchBookings()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-1">
                 <i data-lucide="refresh-ccw" class="w-4 h-4"></i> Refresh
               </button>
-              <button
-                onclick="downloadCSV()"
-                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-1"
-              >
+              <button onclick="downloadCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-1">
                 <i data-lucide="download" class="w-4 h-4"></i> Export CSV
               </button>
             </div>
           </div>
-
-          <!-- Booking Cards -->
           <div id="bookingCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- Session History Section -->
+        <div id="history-section" class="hidden">
+          <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
+            <i data-lucide="clock" class="w-6 h-6"></i> Session History
+          </h2>
+          <div id="history-cards">
         </div>
 
       </div>
     </main>
-
   </div>
 
   <!-- JS Bundle -->
   <script type="module" src="assets/dashboard.js"></script>
   <script type="module" src="assets/bookings.js"></script>
+  <script type="module" src="assets/history.js"></script>
   <script>
     lucide.createIcons();
   </script>
