@@ -11,13 +11,15 @@
 
   <div class="w-full max-w-3xl space-y-8">
 
-    <!-- Tabs -->
-    <div class="flex overflow-x-auto bg-gray-800 rounded-xl shadow-lg mb-4 text-sm sm:text-base">
-      <button class="tab-btn flex-1 min-w-[100px] py-3 px-4 text-center hover:bg-gray-700 transition-all whitespace-nowrap" data-tab="profile">👤 Profile</button>
-      <button class="tab-btn flex-1 min-w-[100px] py-3 px-4 text-center hover:bg-gray-700 transition-all whitespace-nowrap" data-tab="leaderboard">🏆 Leaderboard</button>
-      <button class="tab-btn flex-1 min-w-[100px] py-3 px-4 text-center hover:bg-gray-700 transition-all whitespace-nowrap" data-tab="booking">🖥️ Book a PC</button>
-      <button class="tab-btn flex-1 min-w-[100px] py-3 px-4 text-center hover:bg-gray-700 transition-all whitespace-nowrap" data-tab="history">📜 History</button>
-      <button id="logoutBtn" class="flex-1 min-w-[100px] py-3 px-4 text-center hover:bg-red-600 transition-all text-red-400 font-bold whitespace-nowrap">🚪 Logout</button>
+    <!-- Mobile-Optimized Tab Bar -->
+    <div class="overflow-x-auto hide-scrollbar">
+      <div class="flex gap-2 bg-gray-800 rounded-xl shadow-lg mb-4 px-2 py-2 sm:justify-around sm:gap-0">
+        <button class="tab-btn px-4 py-2 rounded font-medium whitespace-nowrap hover:bg-gray-700 transition" data-tab="profile">👤 Profile</button>
+        <button class="tab-btn px-4 py-2 rounded font-medium whitespace-nowrap hover:bg-gray-700 transition" data-tab="leaderboard">🏆 Leaderboard</button>
+        <button class="tab-btn px-4 py-2 rounded font-medium whitespace-nowrap hover:bg-gray-700 transition" data-tab="booking">🖥️ Book a PC</button>
+        <button class="tab-btn px-4 py-2 rounded font-medium whitespace-nowrap hover:bg-gray-700 transition" data-tab="history">📜 History</button>
+        <button id="logoutBtn" class="px-4 py-2 rounded font-bold text-red-400 whitespace-nowrap hover:bg-red-600 transition">🚪 Logout</button>
+      </div>
     </div>
 
     <!-- Tabs Content -->
