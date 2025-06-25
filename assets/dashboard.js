@@ -155,12 +155,12 @@ function renderTerminals(data) {
   const now = new Date();
   timestampEl.textContent = "Last updated: " + now.toLocaleString("en-IN");
 
-  const groups = { "T-ROOM": [], "CT-ROOM": [], "PS/XBOX": [] };
+  const groups = { "T-room": [], "CT-room": [], "PS/XBOX": [] };
 
   for (const [name, info] of Object.entries(data)) {
     const group =
-      name.includes("CT") ? "CT-ROOM" :
-      name.includes("T-") ? "T-ROOM" : "PS/XBOX";
+      name.includes("CT") ? "CT-room" :
+      name.includes("T-") ? "T-room" : "PS/XBOX";
     groups[group].push({ name, ...info });
   }
 
@@ -171,59 +171,63 @@ function renderTerminals(data) {
     section.innerHTML = `<h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-1">${groupName}</h2>`;
 
     const grid = document.createElement("div");
-    grid.className = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4";
+    grid.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
 
     terminals.sort((a, b) => a.name.localeCompare(b.name)).forEach(terminal => {
-        const isOccupied = terminal.status === "occupied";
-        const lastUpdated = new Date(terminal.last_updated);
-        const ageMinutes = Math.floor((Date.now() - lastUpdated.getTime()) / 60000);
-        const isStale = ageMinutes > 5;
+      const isOccupied = terminal.status === "occupied";
+      const lastUpdated = new Date(terminal.last_updated);
+      const ageMinutes = Math.floor((Date.now() - lastUpdated.getTime()) / 60000);
+      const isStale = ageMinutes > 5;
 
-        const card = document.createElement("div");
-        card.className = `
-          p-4 rounded-2xl shadow-lg transition hover:scale-[1.01]
-          ${isOccupied ? "bg-gray-700 text-white" : "bg-gray-300 text-black"}
-          ${isStale ? "border-4 border-yellow-400" : "border border-green-500"}
-          ${!isStale ? "glow" : ""}
-          relative
-        `;
+      const bgColor = isOccupied ? "bg-gray-700 text-white" : "bg-gray-200 text-black";
+      const glowBorder = isStale ? "border-4 border-yellow-400" : "border-2 border-blue-400";
+      const shadowClass = "shadow-lg hover:shadow-xl hover:scale-[1.01] transition";
 
-        const statusIcon = isOccupied
-          ? `<i data-lucide="lock" class="w-5 h-5 text-red-400"></i>`
-          : `<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>`;
+      const card = document.createElement("div");
+      card.className = `
+        p-4 rounded-2xl ${shadowClass} ${bgColor} ${glowBorder}
+        relative break-words
+      `;
 
-        card.innerHTML = `
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold">${terminal.name}</h2>
-            ${statusIcon}
-          </div>
+      const statusBadge = `
+        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide
+          ${isOccupied ? "bg-red-500 text-white" : "bg-green-500 text-white"}">
+          ${terminal.status}
+        </span>
+      `;
 
-          <p class="mt-1 text-sm">
-            <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-              isOccupied ? "bg-red-500 text-white" : "bg-green-500 text-white"
-            }">${terminal.status.toUpperCase()}</span>
-          </p>
+      const statusIcon = isOccupied
+        ? `<i data-lucide="x-circle" class="w-5 h-5 text-red-400"></i>`
+        : `<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>`;
 
-          <p class="text-sm"><strong>IP:</strong> ${terminal.ip || "-"}</p>
-          <p class="text-sm"><strong>MAC:</strong> ${terminal.mac || "-"}</p>
-          <p class="text-sm">
-            <strong>Last Updated:</strong> ${lastUpdated.toLocaleString("en-IN")}
-          </p>
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xl font-bold truncate">${terminal.name}</h2>
+          ${statusIcon}
+        </div>
 
-          ${
-            isStale
-              ? `<div class="absolute top-2 right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded shadow">
-                  ⚠ Stale (${ageMinutes} min ago)
-                </div>`
-              : ""
-          }
-        `;
-        grid.appendChild(card);
+        <p class="text-sm mb-1"><strong>Status:</strong> ${statusBadge}</p>
+        <p class="text-sm mb-1"><strong>IP:</strong> ${terminal.ip || "-"}</p>
+        <p class="text-sm mb-1"><strong>MAC:</strong> ${terminal.mac || "-"}</p>
+        <p class="text-sm"><strong>Last Updated:</strong> ${lastUpdated.toLocaleString("en-IN")}</p>
+
+        ${
+          isStale
+            ? `<div class="absolute top-2 right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded shadow stale-alert">
+                ⚠ ${ageMinutes} min old
+              </div>`
+            : ""
+        }
+      `;
+
+      grid.appendChild(card);
     });
 
     section.appendChild(grid);
     groupContainer.appendChild(section);
   }
+
+  // Refresh lucide icons inside dynamic content
   lucide.createIcons();
 }
 
