@@ -30,16 +30,28 @@ const allPCs = ["T1","T2","T3","T4","T5","T6","T7","CT1","CT2","CT3","CT4","CT5"
 const now = new Date();
 const startSelect = document.getElementById("startTime");
 const endSelect = document.getElementById("endTime");
+const bookingDate = document.getElementById("bookingDate");
+let selectedPCSet = new Set();
 
-for (let h = 0; h < 24; h++) {
-  const hour = h.toString().padStart(2, "0") + ":00";
-  const label = `${((h + 11) % 12 + 1)}:00 ${h < 12 ? "AM" : "PM"}`;
-  startSelect.innerHTML += `<option value="${hour}">${label}</option>`;
-  endSelect.innerHTML += `<option value="${hour}">${label}</option>`;
+function getISTDate(offsetDays = 0) {
+    const utc = new Date();
+    const ist = new Date(utc.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    ist.setDate(ist.getDate() + offsetDays);
+    return ist;
+  }
+
+function populateTimeDropdowns() {
+  startSelect.innerHTML = "";
+  endSelect.innerHTML = "";
+  for (let hour = 10; hour <= 22; hour++) {
+    const value = hour.toString().padStart(2, "0") + ":00";
+    const label = `${(hour % 12 || 12)}:00 ${hour < 12 ? "AM" : "PM"}`;
+    startSelect.innerHTML += `<option value="${value}">${label}</option>`;
+    endSelect.innerHTML += `<option value="${value}">${label}</option>`;
+  }
+  startSelect.value = "10:00";
+  endSelect.value = "11:00";
 }
-const pad = n => n.toString().padStart(2, "0");
-startSelect.value = `${pad(now.getHours())}:00`;
-endSelect.value = `${pad((now.getHours() + 1) % 24)}:00`;
 
 function loadMemberBookings(username) {
   db.ref("bookings").once("value").then(snapshot => {
@@ -77,11 +89,22 @@ function loadMemberBookings(username) {
   });
 }
 
-function loadProfile(){
+function loadProfile() {
     const profileDiv = document.getElementById("tab-content").querySelector('[data-tab="profile"]');
+
     document.getElementById("memberName").textContent = `${member.NAME} ${member.LASTNAME}`;
-    document.getElementById("memberInfo").textContent = `Username: ${member.USERNAME} | Balance: ₹${member.BAKIYE ?? 0}`;
+    document.getElementById("memberUsername").textContent = `👤 Username: ${member.USERNAME}`;
     document.getElementById("avatar").src = `https://api.dicebear.com/7.x/thumbs/svg?seed=${member.USERNAME}`;
+
+    const detailList = document.getElementById("memberDetailsList");
+    detailList.innerHTML = `
+    <li><strong>🆔 Member ID:</strong> ${member.ID ?? 'N/A'}</li>
+    <li><strong>💰 Balance:</strong> ₹${member.BAKIYE ?? 0}</li>
+    <li><strong>⏱️ Total Active Time:</strong> ${Math.round(member.TOTALACTMINUTE ?? 0)} minutes</li>
+    <li><strong>📆 Created On:</strong> ${member.RECDATE ?? 'N/A'}</li>
+    `;
+
+    loadRecentActivity(member.USERNAME);
     loadMemberBookings(member.USERNAME);
 }
 
@@ -113,7 +136,7 @@ function loadLeaderboard() {
 }
 
 function updatePrice() {
-  const pcCount = document.querySelectorAll(".pc-option:checked").length;
+  const pcCount = selectedPCSet.size;
   const [sh, sm] = startSelect.value.split(":").map(Number);
   const [eh, em] = endSelect.value.split(":").map(Number);
   let hours = (eh + em / 60) - (sh + sm / 60);
@@ -126,8 +149,9 @@ function fetchUnavailablePCs(start, end, cb) {
   db.ref("bookings").once("value", snap => {
     const bookings = snap.val() || {};
     const unavailable = new Set();
-    const startTime = new Date(`${now.toLocaleDateString("en-CA")}T${start}:00`);
-    const endTime = new Date(`${now.toLocaleDateString("en-CA")}T${end}:00`);
+    const selectedDate = document.getElementById("bookingDate").value;
+    const startTime = new Date(`${selectedDate}T${start}:00+05:30`);
+    const endTime = new Date(`${selectedDate}T${end}:00+05:30`);
 
     Object.values(bookings).forEach(b => {
       const bStart = new Date(b.start);
@@ -141,24 +165,48 @@ function fetchUnavailablePCs(start, end, cb) {
 
 function showPCs() {
   const pcDiv = document.getElementById("availablePCs");
-  pcDiv.innerHTML = ""; // Clear previous checkboxes
-
-  // Reset price display
-  const priceInfo = document.getElementById("priceInfo");
-  if (priceInfo) priceInfo.textContent = "💰 Total Price: ₹0";
+  pcDiv.innerHTML = "";
+  selectedPCSet.clear();
   fetchUnavailablePCs(startSelect.value, endSelect.value, (unavailable) => {
-    allPCs.forEach(pc => {
-      if (!unavailable.has(pc)) {
-        const label = document.createElement("label");
-        label.className = "flex gap-2 items-center bg-gray-700 p-2 rounded cursor-pointer";
-        label.innerHTML = `<input type="checkbox" value="${pc}" class="pc-option"/> ${pc}`;
-        pcDiv.appendChild(label);
-      }
-      document.querySelectorAll(".pc-option").forEach(cb => {
-        cb.addEventListener("change", updatePrice);
+    const groups = {
+      "T-ROOM": allPCs.filter(pc => pc.startsWith("T")),
+      "CT-ROOM": allPCs.filter(pc => pc.startsWith("CT"))
+    };
+    for (const [groupName, pcs] of Object.entries(groups)) {
+      const groupWrapper = document.createElement("div");
+      groupWrapper.className = "mb-4";
+      const groupTitle = document.createElement("h3");
+      groupTitle.textContent = `🎮 ${groupName}`;
+      groupTitle.className = "text-white font-bold mb-2";
+      groupWrapper.appendChild(groupTitle);
+      const grid = document.createElement("div");
+      grid.className = "grid grid-cols-2 sm:grid-cols-3 gap-3";
+      pcs.forEach(pc => {
+        if (!unavailable.has(pc)) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "pc-btn w-full px-4 py-2 rounded bg-gray-700 text-gray-200 hover:bg-blue-600 transition";
+          btn.textContent = pc;
+          btn.dataset.pc = pc;
+          btn.addEventListener("click", () => {
+            if (selectedPCSet.has(pc)) {
+              selectedPCSet.delete(pc);
+              btn.classList.remove("bg-blue-600", "text-white");
+              btn.classList.add("bg-gray-700", "text-gray-200");
+            } else {
+              selectedPCSet.add(pc);
+              btn.classList.remove("bg-gray-700", "text-gray-200");
+              btn.classList.add("bg-blue-600", "text-white");
+            }
+            updatePrice();
+          });
+          grid.appendChild(btn);
+        }
       });
-      updatePrice();
-    });
+      groupWrapper.appendChild(grid);
+      pcDiv.appendChild(groupWrapper);
+    }
+    updatePrice();
   });
 }
 
@@ -208,6 +256,97 @@ function loadMemberHistory(username) {
   });
 }
 
+function loadBookingDates(){
+    const today = getISTDate(0);
+    const tomorrow = getISTDate(1);
+    bookingDate.innerHTML = `
+      <option value="${today.toISOString().split('T')[0]}">Today (${today.toDateString().slice(0, 10)})</option>
+      <option value="${tomorrow.toISOString().split('T')[0]}">Tomorrow (${tomorrow.toDateString().slice(0, 10)})</option>
+    `;
+    populateTimeDropdowns();
+}
+
+function setupDateButtons() {
+  const nowIST = getISTDate();
+  const hourIST = nowIST.getHours();
+
+  const dates = [];
+
+  if (hourIST < 21) {
+    dates.push(getISTDate()); // Today
+    dates.push(getISTDate(1)); // Tomorrow
+  } else {
+    dates.push(getISTDate(1)); // Tomorrow
+    dates.push(getISTDate(2)); // Day After
+  }
+
+  const container = document.getElementById("dateButtons");
+  const hiddenInput = document.getElementById("bookingDate");
+  container.innerHTML = "";
+
+  dates.forEach((d, i) => {
+    const label = i === 0 ? "📅 " + (hourIST < 21 ? "Today" : "Tomorrow") : "📅 " + (hourIST < 21 ? "Tomorrow" : "Day After");
+    const isoDate = d.toISOString().split("T")[0]; // yyyy-mm-dd
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "date-btn px-4 py-2 rounded bg-gray-700 hover:bg-blue-600 transition-colors";
+    btn.dataset.date = isoDate;
+    btn.textContent = label;
+
+    btn.addEventListener("click", () => {
+      // Remove active class from all
+      document.querySelectorAll(".date-btn").forEach(b => {
+        b.classList.remove("bg-blue-600", "text-white");
+        b.classList.add("bg-gray-700", "text-gray-200");
+      });
+      // Set active class on this button
+      btn.classList.remove("bg-gray-700", "text-gray-200");
+      btn.classList.add("bg-blue-600", "text-white");
+      // Set hidden input
+      hiddenInput.value = isoDate;
+    });
+    container.appendChild(btn);
+  });
+
+  // Auto-select first button
+  container.querySelector(".date-btn")?.click();
+}
+
+function loadRecentActivity(username) {
+  secondDb.ref(`history/${username}`).once("value").then(snapshot => {
+    const data = snapshot.val();
+    const recentDiv = document.getElementById("recentActivity");
+
+    if (!data || Object.keys(data).length === 0) {
+      recentDiv.innerHTML = `<p class="text-gray-400">No recent activity found.</p>`;
+      return;
+    }
+
+    const entries = Object.values(data).sort((a, b) => b.ID - a.ID).slice(0, 5); // latest 5
+
+    const getIcon = note => {
+      if (note.includes("created")) return "🆕";
+      if (note.includes("deposited")) return "💰";
+      if (note.includes("withdrawn")) return "📤";
+      if (note.includes("started")) return "🎮";
+      if (note.includes("closed")) return "🛑";
+      return "ℹ️";
+    };
+
+    recentDiv.innerHTML = entries.map(event => `
+      <div class="flex items-start gap-3">
+        <div class="text-xl">${getIcon(event.NOTE)}</div>
+        <div>
+          <div class="text-gray-100">${event.NOTE}</div>
+          <div class="text-xs text-gray-400">
+            ${event.DATE} @ ${event.TIME.slice(0, 8)} ${event.TERMINALNAME ? `on ${event.TERMINALNAME}` : `Change in balance ₹ ${event.CHARGE}`}</div>
+        </div>
+      </div>
+    `).join("");
+  });
+}
+
 document.getElementById("nextBtn").addEventListener("click", () => {
   showPCs();
   document.getElementById("step1").style.display = "none";
@@ -219,17 +358,18 @@ document.getElementById("backBtn").addEventListener("click", () => {
 });
 document.getElementById("bookingForm").addEventListener("submit", e => {
   e.preventDefault();
+  const selectedDate = document.getElementById("bookingDate").value;
   const start = startSelect.value;
   const end = endSelect.value;
-  const selectedPCs = Array.from(document.querySelectorAll(".pc-option:checked")).map(cb => cb.value);
+  const selectedPCs = Array.from(selectedPCSet);
 
   if (!selectedPCs.length) {
     alert("Select at least one PC.");
     return;
   }
 
-  const startTime = new Date(`${now.toLocaleDateString("en-CA")}T${start}:00`);
-  const endTime = new Date(`${now.toLocaleDateString("en-CA")}T${end}:00`);
+  const startTime = new Date(`${selectedDate}T${start}:00+05:30`);
+  const endTime = new Date(`${selectedDate}T${end}:00+05:30`);
   const duration = (endTime - startTime) / (1000 * 60);
 
   if (duration < 60) {
@@ -253,12 +393,11 @@ document.getElementById("bookingForm").addEventListener("submit", e => {
 
       // Reset form
       document.getElementById("bookingForm").reset();
+      selectedPCSet.clear();
 
       // Reset time selects to default
-      const now = new Date();
-      const pad = n => n.toString().padStart(2, "0");
-      startSelect.value = `${pad(now.getHours())}:00`;
-      endSelect.value = `${pad((now.getHours() + 1) % 24)}:00`;
+      startSelect.value = "10:00";
+      endSelect.value = "11:00";
 
       // Clear PC checkboxes
       document.getElementById("availablePCs").innerHTML = "";
@@ -303,5 +442,7 @@ window.addEventListener("DOMContentLoaded", () => {
   loadMemberHistory(member.USERNAME);
   loadLeaderboard();
   loadProfile();
+  loadBookingDates();
+  setupDateButtons();
   lucide.createIcons();
 });
