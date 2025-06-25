@@ -238,27 +238,36 @@ async function loadLeaderboard() {
     const row = document.createElement("div");
     row.className = "flex items-start justify-between p-4 rounded-xl bg-gray-800";
     row.innerHTML = `
-      <div class="flex items-center gap-4">
-        <img src="${avatar}" class="w-10 h-10 rounded-full border-2 ${ringColor}">
-        <div>
-           <div class="font-bold text-white flex items-center gap-2">
-             ${m.USERNAME}
-             ${streakBadge}
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-4">
+        <!-- Left: Avatar and Info -->
+        <div class="flex items-center gap-4 w-full sm:w-auto">
+          <img src="${avatar}" class="w-12 h-12 rounded-full border-2 ${ringColor}" />
+          <div class="flex flex-col">
+            <div class="font-bold text-white flex items-center flex-wrap gap-2">
+              ${m.USERNAME}
+              ${streakBadge}
+            </div>
+            <div class="text-sm text-gray-400">
+              ⏱️ ${timeInHours} hrs • 🗓️ Since: ${since}
+            </div>
+            <div class="text-xs text-gray-500">
+              Last Active: ${lastDate?.toLocaleDateString("en-IN") || "N/A"}
+            </div>
           </div>
-          <div class="text-sm text-gray-400">⏱️ ${timeInHours} hrs • 🗓️ Since: ${since}</div>
-          <div class="text-sm text-gray-500">Last Active: ${lastDate?.toLocaleDateString("en-IN") || "N/A"}</div>
         </div>
-      </div>
-      ${badge
-        ? `<div class="mt-2 sm:mt-0 flex flex-col items-end gap-1">
-          ${badge.split(" • ").map(b => `
-            <span class="inline-block text-xs bg-yellow-800 text-yellow-200 rounded-full px-2 py-0.5 font-medium">
-              ${b}
-            </span>
-            `).join("")}
-          </div>`
+
+        <!-- Right: Badges -->
+        ${badge
+          ? `<div class="flex flex-wrap gap-1 justify-center sm:justify-end text-xs text-yellow-200">
+              ${badge.split(" • ").map(b => `
+                <span class="inline-block bg-yellow-800 rounded-full px-2 py-0.5 font-medium">
+                  ${b}
+                </span>
+              `).join("")}
+            </div>`
           : ""
         }
+      </div>
     `;
     list.appendChild(row);
   });
