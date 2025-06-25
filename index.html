@@ -6,14 +6,28 @@
   <title>OceanZ Booking</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+  const member = sessionStorage.getItem("member");
+  if (member) {
+    window.location.href = "members.html";
+  } else {
+    // Optional: redirect to login instead
+    window.location.href = "member-login.html";
+  }
+</script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-12 px-4">
 
   <div class="w-full max-w-2xl space-y-10">
 
-    <h1 class="text-4xl font-bold text-center">🎮 OceanZ - Book Your PC</h1>
+    <!-- 🔄 Toggle Buttons -->
+    <div class="text-center">
+      <button id="show-booking" class="px-4 py-2 bg-blue-600 rounded text-white font-medium">📆 Book a PC</button>
+      <button id="show-member-login" class="ml-2 px-4 py-2 bg-purple-600 rounded text-white font-medium">👤 Member Login</button>
+    </div>
 
-    <form id="bookingForm" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
+    <!-- 🎟️ Booking Form -->
+     <form id="bookingForm" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
 
       <!-- Step 1 -->
       <div id="step1" class="space-y-4">
@@ -67,66 +81,55 @@
         </div>
       </div>
     </form>
+    <!-- ✅ Booking result -->
+    <div id="bookingResult" class="hidden bg-green-800 text-white p-4 rounded-xl shadow-lg text-center font-medium"></div>
 
-    <!-- Booking Result -->
-    <div id="bookingResult"
-         class="hidden bg-green-800 text-white p-4 rounded-xl shadow-lg text-center font-medium"></div>
-
-    <!-- Leaderboard -->
+    <!-- 🏆 Leaderboard -->
     <div id="leaderboard" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
       <h2 class="text-2xl font-bold flex items-center gap-2 text-yellow-400">
         <i class="lucide" data-lucide="trophy"></i> Top Members Leaderboard
       </h2>
-      <div id="leaderboardList" class="space-y-2">
-        <!-- Leader rows inserted by JS -->
+      <div id="leaderboardList" class="space-y-2"></div>
+    </div>
+
+    <!-- 👤 Member Login Form -->
+    <div id="member-login" class="hidden bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
+      <h2 class="text-2xl font-bold text-center">🔐 Member Login</h2>
+      <input type="text" id="member-username" placeholder="Username"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white placeholder-gray-400">
+      <input type="password" id="member-password" placeholder="Password"
+             class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white placeholder-gray-400">
+      <button id="login-member-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded">Login</button>
+      <p id="member-login-error" class="text-red-400 text-center text-sm hidden"></p>
+    </div>
+
+    <!-- 👤 Member Dashboard -->
+    <div id="member-dashboard" class="hidden bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
+      <div class="flex justify-between items-center">
+        <h2 class="text-2xl font-bold">👤 Welcome, <span id="member-name" class="text-blue-400"></span></h2>
+        <button id="logout-member-btn" class="text-sm bg-red-600 hover:bg-red-700 px-3 py-1 rounded">Logout</button>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-sm text-gray-300">
+        <div>🪪 ID: <span id="mem-id"></span></div>
+        <div>💰 Balance: ₹<span id="mem-bakiye"></span></div>
+        <div>🕒 Total Minutes: <span id="mem-mins"></span></div>
+        <div>📅 Last Login: <span id="mem-lastlog"></span></div>
       </div>
     </div>
 
+    <!-- 🔒 Admin -->
     <div class="text-center pt-4">
       <a href="admin.html" class="text-sm text-blue-400 hover:underline">🔒 Go to Admin Dashboard</a>
     </div>
-
   </div>
 
-  <!-- Firebase and Scripts -->
+  <!-- Firebase + JS -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="assets/firebase.js"></script>
+  <script src="assets/members.js" type="module"></script>
   <script>
-    // Populate time dropdowns
-    const timeOptions = [];
-    for (let h = 0; h < 24; h++) {
-      const hour12 = ((h + 11) % 12 + 1);
-      const suffix = h < 12 ? "AM" : "PM";
-      timeOptions.push({ value: `${h.toString().padStart(2, '0')}:00`, label: `${hour12}:00 ${suffix}` });
-    }
-
-    const startSelect = document.getElementById("startTime");
-    const endSelect = document.getElementById("endTime");
-
-    function populateTimeDropdowns() {
-      [startSelect, endSelect].forEach(select => {
-        select.innerHTML = "";
-        timeOptions.forEach(opt => {
-          const option = document.createElement("option");
-          option.value = opt.value;
-          option.textContent = opt.label;
-          select.appendChild(option);
-        });
-      });
-
-      const now = new Date();
-      const pad = n => n.toString().padStart(2, '0');
-      const startHour = now.getHours();
-      const endHour = (startHour + 1) % 24;
-      startSelect.value = `${pad(startHour)}:00`;
-      endSelect.value = `${pad(endHour)}:00`;
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      populateTimeDropdowns();
-      lucide.createIcons();
-    });
+    lucide.createIcons();
   </script>
 </body>
 </html>

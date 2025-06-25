@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ Member Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center px-4 py-6">
+
+  <div class="w-full max-w-3xl space-y-8">
+
+    <!-- Tabs -->
+    <div class="flex justify-around bg-gray-800 rounded-xl shadow-lg overflow-hidden mb-4 text-sm sm:text-base">
+      <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="profile">👤 Profile</button>
+      <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="leaderboard">🏆 Leaderboard</button>
+      <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="booking">🖥️ Book a PC</button>
+      <button id="logoutBtn" class="flex-1 py-3 px-4 text-center hover:bg-red-600 transition-all text-red-400 font-bold">🚪 Logout</button>
+    </div>
+
+    <!-- Tabs Content -->
+    <div id="tab-content" class="space-y-8">
+
+      <!-- Profile Tab -->
+      <div class="tab-pane" data-tab="profile">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg flex items-center gap-4">
+          <img id="avatar" src="" alt="avatar" class="w-16 h-16 rounded-full border-2 border-blue-400">
+          <div>
+            <h2 id="memberName" class="text-2xl font-bold text-blue-400">Member Name</h2>
+            <p id="memberInfo" class="text-sm text-gray-300"></p>
+          </div>
+        </div>
+        <!-- Inside Profile Tab -->
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg mt-6">
+          <h3 class="text-lg font-bold mb-3 text-yellow-400">📅 Your Bookings</h3>
+          <div id="myBookingsList" class="space-y-4">
+            <!-- Bookings will be populated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Tab -->
+      <div class="tab-pane hidden" data-tab="leaderboard">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
+          <h2 class="text-xl font-bold text-yellow-400 flex items-center gap-2"><i data-lucide="trophy"></i> Leaderboard</h2>
+          <div id="leaderboardList" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Booking Tab -->
+      <div class="tab-pane hidden" data-tab="booking">
+        <form id="bookingForm" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
+          <!-- Step 1 -->
+          <div id="step1" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="startTime" class="block text-sm font-medium mb-1">Start Time:</label>
+                <select id="startTime" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white"></select>
+              </div>
+              <div>
+                <label for="endTime" class="block text-sm font-medium mb-1">End Time:</label>
+                <select id="endTime" required class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white"></select>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button type="button" id="nextBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold">
+                Next
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div id="step2" style="display: none;" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Select Available PCs:</label>
+              <div id="availablePCs" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+            </div>
+            <p id="priceInfo" class="text-lg font-semibold text-yellow-400">💰 Total Price: ₹0</p>
+            <div class="flex justify-between">
+              <button type="button" id="backBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded font-medium">⬅ Back</button>
+              <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-semibold">Book Now</button>
+            </div>
+          </div>
+        </form>
+        <div id="bookingResult" class="hidden bg-green-800 text-white p-4 rounded-xl shadow-lg text-center font-medium mt-4"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="assets/member.js" type="module"></script>
+  <script>lucide.createIcons();</script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Initial active tab
+      const defaultTab = "profile";
+      switchTab(defaultTab);
+
+      // Switch tabs
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.tab;
+          switchTab(target);
+        });
+      });
+
+      function switchTab(tabName) {
+        document.querySelectorAll(".tab-pane").forEach(pane => {
+          pane.classList.toggle("hidden", pane.dataset.tab !== tabName);
+        });
+
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+          btn.classList.remove("bg-blue-600", "text-white");
+          if (btn.dataset.tab === tabName) {
+            btn.classList.add("bg-blue-600", "text-white");
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
