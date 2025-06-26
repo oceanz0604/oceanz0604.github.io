@@ -32,6 +32,11 @@ const startSelect = document.getElementById("startTime");
 const endSelect = document.getElementById("endTime");
 const bookingDate = document.getElementById("bookingDate");
 let selectedPCSet = new Set();
+let fullDateMap = {};
+let fullSpendMap = {};
+let pcChart = null;
+let sessionChart = null;
+let spendChart = null;
 
 function getISTDate(offsetDays = 0) {
     const utc = new Date();
@@ -485,6 +490,28 @@ function loadRecentActivity(username) {
   });
 }
 
+function filterToCurrentMonth(dataMap) {
+  const thisMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+  return Object.fromEntries(
+    Object.entries(dataMap).filter(([date, _]) => date.startsWith(thisMonth))
+  );
+}
+
+function updateChart(chart, dataMap, color = "#10b981") {
+  const labels = Object.keys(dataMap).sort();
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = labels.map(d => dataMap[d]);
+  chart.update();
+}
+
+function setActiveToggle(activeBtn, inactiveBtn) {
+  activeBtn.classList.add("bg-blue-600", "text-white");
+  activeBtn.classList.remove("bg-gray-700", "text-gray-300");
+
+  inactiveBtn.classList.add("bg-gray-700", "text-gray-300");
+  inactiveBtn.classList.remove("bg-blue-600", "text-white");
+}
+
 async function loadAnalytics(memberId) {
   const snapshot = await secondDb.ref(`sessions-by-member/${memberId}`).once("value");
   if (!snapshot.exists()) return;
@@ -497,16 +524,15 @@ async function loadAnalytics(memberId) {
   const totalSpent = sessions.reduce((sum, s) => sum + (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0), 0);
 
   const terminalCount = {};
-  const dateMap = {}; // ✅ make sure this is declared before usage
+  fullDateMap = {};
+  fullSpendMap = {};
+
   sessions.forEach(s => {
     terminalCount[s.TERMINALNAME] = (terminalCount[s.TERMINALNAME] || 0) + 1;
     // Aggregate per date
     const date = new Date(s.ENDPOINT).toISOString().split("T")[0];
-    if (!dateMap[date]) {
-      dateMap[date] = { minutes: 0, price: 0 };
-    }
-    dateMap[date].minutes += s.USINGMIN || 0;
-    dateMap[date].price += (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0);
+    fullDateMap[date] = (fullDateMap[date] || 0) + 1;
+    fullSpendMap[date] = (fullSpendMap[date] || 0) + (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0);
   });
 
   const mostUsedPC = Object.entries(terminalCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
@@ -517,73 +543,75 @@ async function loadAnalytics(memberId) {
   document.getElementById("totalSpent").textContent = `₹${totalSpent}`;
   document.getElementById("mostUsedPC").textContent = mostUsedPC;
 
-  console.log("✅ Sessions loaded:", sessions);
-  // Chart: Most Used PCs
-  const pcUsageCtx = document.getElementById("pcUsageChart")?.getContext("2d");
-  new Chart(pcUsageCtx, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(terminalCount),
-      datasets: [{
-        label: "Session Count",
-        data: Object.values(terminalCount),
-        backgroundColor: "#3b82f6"
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { beginAtZero: true }
-      }
-    }
-  });
+  if (pcChart) pcChart.destroy();
+  if (sessionChart) sessionChart.destroy();
+  if (spendChart) spendChart.destroy();
 
-  // Chart: Sessions Over Time
-  const sessionTimeCtx = document.getElementById("sessionTimeChart")?.getContext("2d");
-  new Chart(sessionTimeCtx, {
-    type: 'line',
-    data: {
-      labels: Object.keys(dateMap),
-      datasets: [{
-        label: "Total Minutes",
-        data: Object.values(dateMap).map(d => d.minutes),
-        borderColor: "#10b981",
-        backgroundColor: "rgba(16, 185, 129, 0.3)",
-        fill: true,
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true }
-      }
-    }
-  });
-
-  // Chart: Spend Over Time
+  const pcCtx = document.getElementById("pcUsageChart")?.getContext("2d");
+  const sessionCtx = document.getElementById("sessionTimeChart")?.getContext("2d");
   const spendCtx = document.getElementById("spendChart")?.getContext("2d");
-  new Chart(spendCtx, {
-    type: 'line',
-    data: {
-      labels: Object.keys(dateMap),
-      datasets: [{
-        label: "₹ Spent",
-        data: Object.values(dateMap).map(d => d.price),
-        borderColor: "#f97316",
-        backgroundColor: "rgba(249, 115, 22, 0.3)",
-        fill: true,
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { beginAtZero: true }
+
+  if (pcCtx) {
+    pcChart = new Chart(pcCtx, {
+      type: "bar",
+      data: {
+        labels: Object.keys(terminalCount),
+        datasets: [{
+          label: "Sessions",
+          data: Object.values(terminalCount),
+          backgroundColor: "#38bdf8"
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } }
       }
-    }
-  });
+    });
+  }
+
+  const monthSessionData = filterToCurrentMonth(fullDateMap);
+  const sessionLabels = Object.keys(monthSessionData).sort();
+  if (sessionCtx) {
+    sessionChart = new Chart(sessionCtx, {
+      type: "line",
+      data: {
+        labels: sessionLabels,
+        datasets: [{
+          label: "Sessions",
+          data: sessionLabels.map(d => monthSessionData[d]),
+          borderColor: "#10b981",
+          backgroundColor: "#10b98133",
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  const monthSpendData = filterToCurrentMonth(fullSpendMap);
+  const spendLabels = Object.keys(monthSpendData).sort();
+  if (spendCtx) {
+    spendChart = new Chart(spendCtx, {
+      type: "line",
+      data: {
+        labels: spendLabels,
+        datasets: [{
+          label: "₹ Spent",
+          data: spendLabels.map(d => monthSpendData[d]),
+          borderColor: "#f97316",
+          backgroundColor: "#f9731633",
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
 
   // Recent sessions
   const recentList = document.getElementById("recentSessionsList");
@@ -597,6 +625,37 @@ async function loadAnalytics(memberId) {
         <div class="text-xs text-gray-400">Ended: ${new Date(s.ENDPOINT).toLocaleString()}</div>
       </li>
     `).join("");
+
+  setActiveToggle(
+    document.getElementById("sessionToggleMonth"),
+    document.getElementById("sessionToggleAll")
+  );
+  setActiveToggle(
+    document.getElementById("spendToggleMonth"),
+    document.getElementById("spendToggleAll")
+  );
+
+  document.getElementById("sessionToggleMonth").onclick = () => {
+    const filtered = filterToCurrentMonth(fullDateMap);
+    updateChart(sessionChart, filtered, "#10b981");
+    setActiveToggle(sessionToggleMonth, sessionToggleAll);
+  };
+
+  document.getElementById("sessionToggleAll").onclick = () => {
+    updateChart(sessionChart, fullDateMap, "#10b981");
+    setActiveToggle(sessionToggleAll, sessionToggleMonth);
+  };
+
+  document.getElementById("spendToggleMonth").onclick = () => {
+    const filtered = filterToCurrentMonth(fullSpendMap);
+    updateChart(spendChart, filtered, "#f97316");
+    setActiveToggle(spendToggleMonth, spendToggleAll);
+  };
+
+  document.getElementById("spendToggleAll").onclick = () => {
+    updateChart(spendChart, fullSpendMap, "#f97316");
+    setActiveToggle(spendToggleAll, spendToggleMonth);
+  };
 
 }
 
@@ -685,6 +744,11 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     );
     document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("bg-blue-600"));
     if (target) btn.classList.add("bg-blue-600");
+    if (target === "analytics") {
+      setTimeout(() => {
+        loadAnalytics(member.ID);  // 🔁 Reload charts only when Analytics tab is shown
+      }, 100); // Delay to ensure DOM is rendered
+    }
   });
 });
 document.getElementById("logoutBtn").addEventListener("click", () => {
@@ -698,5 +762,9 @@ window.addEventListener("DOMContentLoaded", () => {
   loadProfile();
   loadBookingDates();
   setupDateButtons();
+  // Optional: Preload analytics if analytics tab is default
+  if (document.querySelector('.tab-btn[data-tab="analytics"]').classList.contains("bg-blue-600")) {
+    loadAnalytics(member.ID);
+  }
   lucide.createIcons();
 });
