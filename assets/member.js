@@ -485,6 +485,121 @@ function loadRecentActivity(username) {
   });
 }
 
+async function loadAnalytics(memberId) {
+  const snapshot = await secondDb.ref(`sessions-by-member/${memberId}`).once("value");
+  if (!snapshot.exists()) return;
+
+  const sessions = Object.values(snapshot.val());
+
+  // Summary stats
+  const totalSessions = sessions.length;
+  const totalMinutes = sessions.reduce((sum, s) => sum + (s.USINGMIN || 0), 0);
+  const totalSpent = sessions.reduce((sum, s) => sum + (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0), 0);
+
+  const terminalCount = {};
+  const dateMap = {}; // ✅ make sure this is declared before usage
+  sessions.forEach(s => {
+    terminalCount[s.TERMINALNAME] = (terminalCount[s.TERMINALNAME] || 0) + 1;
+    // Aggregate per date
+    const date = new Date(s.ENDPOINT).toISOString().split("T")[0];
+    if (!dateMap[date]) {
+      dateMap[date] = { minutes: 0, price: 0 };
+    }
+    dateMap[date].minutes += s.USINGMIN || 0;
+    dateMap[date].price += (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0);
+  });
+
+  const mostUsedPC = Object.entries(terminalCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
+
+  // Populate DOM
+  document.getElementById("totalSessions").textContent = totalSessions;
+  document.getElementById("totalMinutes").textContent = totalMinutes;
+  document.getElementById("totalSpent").textContent = `₹${totalSpent}`;
+  document.getElementById("mostUsedPC").textContent = mostUsedPC;
+
+  console.log("✅ Sessions loaded:", sessions);
+  // Chart: Most Used PCs
+  const pcUsageCtx = document.getElementById("pcUsageChart")?.getContext("2d");
+  new Chart(pcUsageCtx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(terminalCount),
+      datasets: [{
+        label: "Session Count",
+        data: Object.values(terminalCount),
+        backgroundColor: "#3b82f6"
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  // Chart: Sessions Over Time
+  const sessionTimeCtx = document.getElementById("sessionTimeChart")?.getContext("2d");
+  new Chart(sessionTimeCtx, {
+    type: 'line',
+    data: {
+      labels: Object.keys(dateMap),
+      datasets: [{
+        label: "Total Minutes",
+        data: Object.values(dateMap).map(d => d.minutes),
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16, 185, 129, 0.3)",
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  // Chart: Spend Over Time
+  const spendCtx = document.getElementById("spendChart")?.getContext("2d");
+  new Chart(spendCtx, {
+    type: 'line',
+    data: {
+      labels: Object.keys(dateMap),
+      datasets: [{
+        label: "₹ Spent",
+        data: Object.values(dateMap).map(d => d.price),
+        borderColor: "#f97316",
+        backgroundColor: "rgba(249, 115, 22, 0.3)",
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  // Recent sessions
+  const recentList = document.getElementById("recentSessionsList");
+  recentList.innerHTML = sessions
+    .sort((a, b) => new Date(b.ENDPOINT) - new Date(a.ENDPOINT))
+    .slice(0, 5)
+    .map(s => `
+      <li class="bg-gray-700 rounded-lg p-3">
+        <div class="font-semibold text-white">${s.TERMINALNAME}</div>
+        <div>🕒 ${s.USINGMIN} min | 💰 ₹${s.TOTALPRICE}</div>
+        <div class="text-xs text-gray-400">Ended: ${new Date(s.ENDPOINT).toLocaleString()}</div>
+      </li>
+    `).join("");
+
+}
+
 document.getElementById("nextBtn").addEventListener("click", () => {
   showPCs();
   document.getElementById("step1").style.display = "none";
@@ -578,6 +693,7 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
 });
 window.addEventListener("DOMContentLoaded", () => {
   loadMemberHistory(member.USERNAME);
+  loadAnalytics(member.ID);
   loadLeaderboard();
   loadProfile();
   loadBookingDates();

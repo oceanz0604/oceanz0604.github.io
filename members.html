@@ -15,6 +15,7 @@
   </style>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center px-4 py-6">
 
@@ -25,6 +26,7 @@
       <div class="flex w-full sm:justify-around gap-2 px-2 py-2 whitespace-nowrap">
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="profile">👤 Profile</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="leaderboard">🏆 Leaderboard</button>
+        <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="analytics">📊 Analytics</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="booking">🖥️ Book a PC</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="history">📜 History</button>
         <button id="logoutBtn" class="px-4 py-2 rounded font-bold text-red-400 hover:bg-red-600 transition">🚪 Logout</button>
@@ -77,6 +79,57 @@
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
           <h2 class="text-xl font-bold text-yellow-400 flex items-center gap-2"><i data-lucide="trophy"></i> Leaderboard</h2>
           <div id="leaderboardList" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Analytics Tab -->
+      <div class="tab-pane hidden" data-tab="analytics">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
+          <h2 class="text-xl font-bold text-cyan-400 flex items-center gap-2"><i data-lucide="bar-chart-3"></i> Analytics</h2>
+
+          <!-- Summary Grid -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center text-sm">
+            <div class="bg-gray-700 p-4 rounded-lg">
+              <div class="text-gray-400">Sessions</div>
+              <div id="totalSessions" class="text-xl font-bold text-white">-</div>
+            </div>
+            <div class="bg-gray-700 p-4 rounded-lg">
+              <div class="text-gray-400">Minutes</div>
+              <div id="totalMinutes" class="text-xl font-bold text-white">-</div>
+            </div>
+            <div class="bg-gray-700 p-4 rounded-lg">
+              <div class="text-gray-400">Total Spent</div>
+              <div id="totalSpent" class="text-xl font-bold text-green-400">-</div>
+            </div>
+            <div class="bg-gray-700 p-4 rounded-lg">
+              <div class="text-gray-400">Most Used PC</div>
+              <div id="mostUsedPC" class="text-xl font-bold text-yellow-400">-</div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="space-y-8">
+            <div>
+              <h3 class="text-lg font-semibold mb-2 text-blue-400">🎮 Most Used PCs</h3>
+              <canvas id="pcUsageChart" class="w-full max-w-2xl mx-auto"></canvas>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold mb-2 text-emerald-400">📅 Sessions Over Time</h3>
+              <canvas id="sessionTimeChart" class="w-full max-w-2xl mx-auto"></canvas>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold mb-2 text-orange-400">💰 Spend Over Time</h3>
+              <canvas id="spendChart" class="w-full max-w-2xl mx-auto"></canvas>
+            </div>
+          </div>
+
+          <!-- Recent Sessions -->
+          <div>
+            <h3 class="text-lg font-semibold mb-2 text-purple-400">🕒 Recent Sessions</h3>
+            <ul id="recentSessionsList" class="space-y-2 text-sm text-gray-300">
+              <!-- JS will populate this -->
+            </ul>
+          </div>
         </div>
       </div>
 
