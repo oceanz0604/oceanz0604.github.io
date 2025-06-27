@@ -46,21 +46,46 @@ const loginBtn = document.getElementById("login-btn");
 const loginError = document.getElementById("login-error");
 const logoutBtn = document.getElementById("logout-btn");
 const navDashboard = document.getElementById("nav-dashboard");
+const navMembers = document.getElementById("nav-members");
 const navBookings = document.getElementById("nav-bookings");
 const dashboardSection = document.getElementById("dashboard-section");
 const bookingsSection = document.getElementById("bookings-section");
 const navHistory = document.getElementById("nav-history");
 const historySection = document.getElementById("history-section");
+const membersSection = document.getElementById("members-section");
 
 let activeSessions = {};
 let autoRefreshInterval = null;
+
+function loadAllMembers() {
+  const container = document.getElementById("membersList");
+  container.innerHTML = "🔄 Loading...";
+  get(membersRef).then(snapshot => {
+    if (!snapshot.exists()) {
+      container.innerHTML = "<p>No members found.</p>";
+      return;
+    }
+    const members = Object.values(snapshot.val());
+    container.innerHTML = members.map(member => `
+      <div class="bg-gray-800 p-4 rounded-xl shadow-md border border-gray-700 hover:shadow-lg transition">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="text-lg font-bold text-yellow-400">${member.NAME}</h3>
+          <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">${member.USERNAME}</span>
+        </div>
+        <p class="text-sm text-gray-300">📧 ${member.EMAIL || "-"}</p>
+        <p class="text-sm text-gray-300">🕐 Joined: ${member.RECDATE || "-"}</p>
+        <p class="text-sm text-gray-300">🎮 Last Active: ${member.LLOGDATE || "-"}</p>
+      </div>
+    `).join("");
+  });
+}
 
 function switchView(view) {
   const activeClass = ["bg-gray-700", "text-white", "font-semibold"];
   const inactiveClass = ["text-gray-300"];
 
-  const allSections = [dashboardSection, bookingsSection, historySection];
-  const allNavs = [navDashboard, navBookings, navHistory];
+  const allSections = [dashboardSection, bookingsSection, historySection, membersSection];
+  const allNavs = [navDashboard, navBookings, navHistory, navMembers];
 
   allSections.forEach(sec => sec?.classList.add("hidden"));
   allNavs.forEach(nav => {
@@ -80,12 +105,19 @@ function switchView(view) {
     historySection?.classList.remove("hidden");
     navHistory?.classList.add(...activeClass);
     navHistory?.classList.remove(...inactiveClass);
+  } else if (view === "members-section") {
+    membersSection?.classList.remove("hidden");
+    navMembers?.classList.add(...activeClass);
   }
 }
 
 navDashboard?.addEventListener("click", (e) => {
   e.preventDefault();
   switchView("dashboard");
+});
+navMembers?.addEventListener("click", () => {
+  switchView("members-section");
+  loadAllMembers();
 });
 navBookings?.addEventListener("click", (e) => {
   e.preventDefault();

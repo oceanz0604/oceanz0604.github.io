@@ -67,6 +67,13 @@
           </a>
         </li>
         <li>
+          <a id="nav-members" href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
+            <i data-lucide="users" class="w-5 h-5"></i>
+            Members
+          </a>
+        </li>
+        <li>
           <a id="nav-bookings" href="#"
              class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
             <i data-lucide="calendar-clock" class="w-5 h-5"></i>
@@ -108,6 +115,14 @@
           <div id="group-container" class="space-y-12 overflow-x-hidden px-2"></div>
         </div>
 
+        <!-- Members Section -->
+        <div id="members-section" class="hidden">
+          <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
+            <i data-lucide="users" class="w-6 h-6"></i> Members
+          </h2>
+          <div id="membersList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
         <!-- Bookings Section -->
         <div id="bookings-section" class="hidden">
           <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
@@ -123,7 +138,7 @@
               </button>
             </div>
           </div>
-          <div id="bookingCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          <div id="bookingCards" class="flex flex-col gap-6"></div>
         </div>
 
         <!-- Session History Section -->
