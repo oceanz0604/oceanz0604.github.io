@@ -370,20 +370,25 @@ function showPCs() {
   const pcDiv = document.getElementById("availablePCs");
   pcDiv.innerHTML = "";
   selectedPCSet.clear();
+
   fetchUnavailablePCs(startSelect.value, endSelect.value, (unavailable) => {
     const groups = {
       "T-ROOM": allPCs.filter(pc => pc.startsWith("T")),
       "CT-ROOM": allPCs.filter(pc => pc.startsWith("CT"))
     };
+
     for (const [groupName, pcs] of Object.entries(groups)) {
       const groupWrapper = document.createElement("div");
       groupWrapper.className = "mb-4";
+
       const groupTitle = document.createElement("h3");
       groupTitle.textContent = `🎮 ${groupName}`;
       groupTitle.className = "text-white font-bold mb-2";
       groupWrapper.appendChild(groupTitle);
+
       const grid = document.createElement("div");
       grid.className = "grid grid-cols-2 sm:grid-cols-3 gap-3";
+
       pcs.forEach(pc => {
         if (!unavailable.has(pc)) {
           const btn = document.createElement("button");
@@ -391,16 +396,20 @@ function showPCs() {
           btn.className = "pc-btn w-full px-4 py-2 rounded bg-gray-700 text-gray-200 hover:bg-blue-600 transition";
           btn.textContent = pc;
           btn.dataset.pc = pc;
+
           btn.addEventListener("click", () => {
-            if (selectedPCSet.has(pc)) {
-              selectedPCSet.delete(pc);
-              btn.classList.remove("bg-blue-600", "text-white");
-              btn.classList.add("bg-gray-700", "text-gray-200");
-            } else {
-              selectedPCSet.add(pc);
-              btn.classList.remove("bg-gray-700", "text-gray-200");
-              btn.classList.add("bg-blue-600", "text-white");
-            }
+            // Remove all selections
+            document.querySelectorAll(".pc-btn").forEach(b => {
+              b.classList.remove("bg-blue-600", "text-white");
+              b.classList.add("bg-gray-700", "text-gray-200");
+            });
+            selectedPCSet.clear(); // only one allowed
+
+            // Mark the clicked one
+            selectedPCSet.add(pc);
+            btn.classList.remove("bg-gray-700", "text-gray-200");
+            btn.classList.add("bg-blue-600", "text-white");
+
             updatePrice();
           });
           grid.appendChild(btn);
@@ -735,8 +744,14 @@ document.getElementById("bookingForm").addEventListener("submit", e => {
   const end = endSelect.value;
   const selectedPCs = Array.from(selectedPCSet);
 
-  if (!selectedPCs.length) {
-    alert("Select at least one PC.");
+  const termsAccepted = document.getElementById("termsAccepted")?.checked;
+  if (!termsAccepted) {
+    alert("Please accept the Terms & Conditions to continue.");
+    return;
+  }
+
+  if (selectedPCSet.size !== 1) {
+    alert("Please select exactly one PC.");
     return;
   }
 
