@@ -69,40 +69,89 @@ function populateTimeDropdowns() {
   endSelect.value = "11:00";
 }
 
-function loadMemberBookings(username) {
-  db.ref("bookings").once("value").then(snapshot => {
-    const allBookings = snapshot.val() || {};
-    const myBookings = Object.values(allBookings).filter(b => {
-      return b.name?.toLowerCase() === username.toLowerCase();
-    });
+function loadMemberBookings(memberUsername) {
+  const container = document.getElementById("myBookingsList");
+  container.innerHTML = "<p class='text-sm text-gray-400'>Loading your bookings...</p>";
 
-    const listDiv = document.getElementById("myBookingsList");
-    if (myBookings.length === 0) {
-      listDiv.innerHTML = `<div class="text-gray-400">You have no bookings yet.</div>`;
+  db.ref("bookings").once("value").then(snapshot => {
+    const data = snapshot.val();
+    if (!data) {
+      container.innerHTML = "<p class='text-sm text-gray-400'>No bookings found.</p>";
       return;
     }
 
-    // Sort by start time, newest first
-    myBookings.sort((a, b) => new Date(b.start) - new Date(a.start));
+    const now = new Date();
+    const upcoming = [];
+    const ongoing = [];
+    const past = [];
 
-    myBookings.forEach(booking => {
+    Object.entries(data).forEach(([id, booking]) => {
+      if (booking.name !== memberUsername) return;
+
       const start = new Date(booking.start);
       const end = new Date(booking.end);
+      const isUpcoming = start > now;
+      const isOngoing = start <= now && end > now;
+      const group = isUpcoming ? "upcoming" : isOngoing ? "ongoing" : "past";
+      const status = group === "past" ? "Expired" : (booking.status || "Pending");
+
       const card = document.createElement("div");
-      card.className = "bg-gray-700 p-4 rounded-lg shadow";
+      card.className = "booking-card border border-gray-700 bg-gray-900 rounded-xl p-4";
 
       card.innerHTML = `
-        <div class="flex justify-between items-center">
-          <div>
-            <div class="text-white font-semibold">${start.toLocaleDateString()} - ${booking.pcs.join(", ")}</div>
-            <div class="text-sm text-gray-300">${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} → ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-          </div>
-          <div class="text-yellow-400 font-medium">₹${booking.price}</div>
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="text-blue-400 font-semibold">${booking.name}</h3>
+          <span class="text-xs font-bold px-2 py-1 rounded-full ${
+            status === "Approved"
+              ? "bg-green-600 text-white"
+              : status === "Declined"
+              ? "bg-red-600 text-white"
+              : status === "Expired"
+              ? "bg-gray-600 text-white"
+              : "bg-yellow-500 text-black"
+          }">${status}</span>
+        </div>
+        <div class="text-sm text-gray-300 space-y-1">
+          <div><strong>Start:</strong> ${new Date(booking.start).toLocaleString("en-IN")}</div>
+          <div><strong>End:</strong> ${new Date(booking.end).toLocaleString("en-IN")}</div>
+          <div><strong>Duration:</strong> ${booking.duration} mins</div>
+          <div><strong>Terminals:</strong> ${booking.pcs.join(", ")}</div>
+          <div><strong>Price:</strong> ₹${booking.price}</div>
+          ${booking.note ? `<div><strong>Note:</strong> ${booking.note}</div>` : ""}
         </div>
       `;
-      listDiv.appendChild(card);
+
+      if (group === "upcoming") upcoming.push(card);
+      else if (group === "ongoing") ongoing.push(card);
+      else past.push(card);
     });
+
+    container.innerHTML = "";
+    if (upcoming.length) container.appendChild(createBookingGroup("Upcoming Bookings", upcoming));
+    if (ongoing.length) container.appendChild(createBookingGroup("Ongoing Bookings", ongoing));
+    if (past.length) container.appendChild(createBookingGroup("Past Bookings", past, true));
+
+    lucide.createIcons();
   });
+}
+
+function createBookingGroup(title, cards, collapsed = false) {
+  const group = document.createElement("div");
+  const contentId = `member-${title.replace(/\s+/g, "-").toLowerCase()}`;
+
+  group.innerHTML = `
+    <button onclick="document.getElementById('${contentId}').classList.toggle('hidden')"
+      class="w-full flex justify-between items-center bg-gray-700 px-4 py-2 rounded-t-lg text-white font-semibold hover:bg-gray-600">
+      <span>${title}</span>
+      <i data-lucide="chevron-down" class="w-5 h-5"></i>
+    </button>
+    <div id="${contentId}" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-800 p-4 rounded-b-lg ${collapsed ? "hidden" : ""}">
+    </div>
+  `;
+
+  const content = group.querySelector(`#${contentId}`);
+  cards.forEach(card => content.appendChild(card));
+  return group;
 }
 
 function loadProfile() {

@@ -114,10 +114,18 @@ function renderBookings(bookingsData) {
 
   sortedEntries.forEach(([key, booking]) => {
     const startTime = new Date(booking.start);
-    const isUpcoming = startTime > now;
-    const status = isUpcoming ? "Upcoming" : "Past";
+    const endTime = new Date(booking.end);
+    const now = new Date();
+
+    let group = "past"; // default
+    if (startTime > now) {
+      group = "upcoming";
+    } else if (startTime <= now && endTime > now) {
+      group = "ongoing";
+    }
+
     let statusText = booking.status || "Pending";
-    if (!isUpcoming) {
+    if (group === "past") {
       statusText = "Expired";
     }
 
@@ -157,7 +165,7 @@ function renderBookings(bookingsData) {
       </div>
 
       <div class="flex flex-wrap gap-2 mt-4">
-        ${isUpcoming && statusText === "Pending" ? `
+        ${(group === "upcoming" || group === "ongoing") && statusText === "Pending" ? `
           <button onclick="approveBooking('${key}')" class="flex items-center gap-1 text-sm px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-white">
             <i data-lucide='check-circle' class='w-4 h-4'></i> Approve
           </button>
@@ -171,11 +179,20 @@ function renderBookings(bookingsData) {
       </div>
     `;
 
-    isUpcoming ? upcomingCards.push(card) : pastCards.push(card);
+    if (group === "upcoming") {
+      upcomingCards.push(card);
+    } else if (group === "ongoing") {
+      ongoingCards.push(card);
+    } else {
+      pastCards.push(card);
+    }
   });
 
   if (upcomingCards.length > 0) {
     createSection("Upcoming Bookings", upcomingCards, false);
+  }
+  if (ongoingCards.length > 0) {
+    createSection("Ongoing Bookings", ongoingCards, false);
   }
   if (pastCards.length > 0) {
     createSection("Past Bookings", pastCards, true); // collapsed by default
