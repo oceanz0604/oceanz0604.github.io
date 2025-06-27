@@ -48,12 +48,23 @@ function getISTDate(offsetDays = 0) {
 function populateTimeDropdowns() {
   startSelect.innerHTML = "";
   endSelect.innerHTML = "";
+
   for (let hour = 10; hour <= 22; hour++) {
-    const value = hour.toString().padStart(2, "0") + ":00";
-    const label = `${(hour % 12 || 12)}:00 ${hour < 12 ? "AM" : "PM"}`;
-    startSelect.innerHTML += `<option value="${value}">${label}</option>`;
-    endSelect.innerHTML += `<option value="${value}">${label}</option>`;
+    // For each hour, add both :00 and :30
+    for (let min of [0, 30]) {
+      const value = `${hour.toString().padStart(2, "0")}:${min === 0 ? "00" : "30"}`;
+
+      const displayHour = hour % 12 || 12;
+      const displayMin = min === 0 ? "00" : "30";
+      const ampm = hour < 12 ? "AM" : "PM";
+      const label = `${displayHour}:${displayMin} ${ampm}`;
+
+      startSelect.innerHTML += `<option value="${value}">${label}</option>`;
+      endSelect.innerHTML += `<option value="${value}">${label}</option>`;
+    }
   }
+
+  // Optional: default selections
   startSelect.value = "10:00";
   endSelect.value = "11:00";
 }
