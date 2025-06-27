@@ -67,7 +67,6 @@
 
         <!-- Bookings -->
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg mt-6">
-          <h3 class="text-lg font-bold mb-3 text-yellow-400">📅 Your Bookings</h3>
           <div id="myBookingsList" class="space-y-4">
             <!-- Bookings will be populated here -->
           </div>
@@ -186,10 +185,26 @@
           <!-- Step 2 -->
           <div id="step2" style="display: none;" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-1">Select Available PCs:</label>
+              <label class="block text-sm font-medium mb-1">Select Available PC:</label>
               <div id="availablePCs" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
             </div>
             <p id="priceInfo" class="text-lg font-semibold text-yellow-400">💰 Total Price: ₹0</p>
+            <!-- ✅ Terms & Conditions -->
+            <div class="mt-4 bg-gray-900 p-4 rounded-xl text-sm text-gray-300 border border-gray-700">
+              <h3 class="text-yellow-400 font-bold mb-2">📜 Terms & Conditions</h3>
+              <ul class="list-disc pl-5 space-y-1">
+                <li>Once your booking is confirmed by us, it cannot be cancelled or refunded under any circumstances.</li>
+                <li>Your session will automatically begin at the scheduled start time and should continue uninterrupted until the end time.</li>
+                <li>If your account balance is insufficient, additional balance will be added. You must settle the amount before starting your session.</li>
+                <li>If another user’s session ends exactly at your start time and their game is still in progress, you may be required to wait up to 15 minutes for them to finish.</li>
+              </ul>
+              <div class="mt-4">
+                <label class="flex items-center space-x-2">
+                  <input type="checkbox" id="termsAccepted" required class="form-checkbox h-4 w-4 text-blue-500">
+                  <span>I accept the Terms & Conditions</span>
+                </label>
+              </div>
+            </div>
             <div class="flex justify-between">
               <button type="button" id="backBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded font-medium">⬅ Back</button>
               <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-semibold">Book Now</button>
