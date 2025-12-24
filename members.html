@@ -26,6 +26,7 @@
       <div class="flex w-full sm:justify-around gap-2 px-2 py-2 whitespace-nowrap">
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="profile">👤 Profile</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="leaderboard">🏆 Leaderboard</button>
+        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="monthly">📅 Monthly Top</button>
         <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="analytics">📊 Analytics</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="booking">🖥️ Book a PC</button>
         <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="history">📜 History</button>
@@ -69,6 +70,20 @@
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg mt-6">
           <div id="myBookingsList" class="space-y-4">
             <!-- Bookings will be populated here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Leaderboard Tab -->
+      <div class="tab-pane hidden" data-tab="monthly">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
+          <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
+            <i data-lucide="calendar"></i> Monthly Leaderboard
+          </h2>
+          <p class="text-gray-400 text-sm mb-3">Top 10 members based on total playtime this month.</p>
+
+          <div id="monthlyLeaderboard" class="space-y-2">
+            <!-- JS will populate -->
           </div>
         </div>
       </div>

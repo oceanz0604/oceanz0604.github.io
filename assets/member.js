@@ -581,6 +581,87 @@ function setActiveToggle(activeBtn, inactiveBtn) {
   inactiveBtn.classList.remove("bg-blue-600", "text-white");
 }
 
+function minutesToHours(mins) {
+    const hours = mins / 60;
+    if (hours >= 1) return hours.toFixed(1) + "h";    // e.g. 14.2h
+    return mins + "m";                                // for small values
+}
+
+async function loadMonthlyLeaderboard(loggedUserName) {
+    if (!loggedUserName) {
+        console.warn("No loggedUserName supplied to Monthly Leaderboard.");
+        return;
+    }
+
+    loggedUserName = loggedUserName.toString().trim();
+
+    const monthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    const ref = secondDb.ref(`leaderboards/monthly/${monthKey}`);
+    const snap = await ref.get();
+
+    if (!snap.exists()) {
+        document.getElementById("monthlyLeaderboard").innerHTML =
+            "<p class='text-gray-400'>No data for this month.</p>";
+        return;
+    }
+
+    let data = snap.val();
+
+    // Convert mapping → array
+    let list = Object.entries(data).map(([memberId, info]) => ({
+        memberId,
+        username: info.username,
+        minutes: info.total_minutes,
+        hoursLabel: minutesToHours(info.total_minutes),
+        count: info.sessions_count
+    }));
+
+    // Sort by playtime desc
+    list.sort((a, b) => b.minutes - a.minutes);
+
+    // SAFELY FIND USER
+    const userEntry = list.find(x =>
+        x.username &&
+        x.username.toLowerCase() === loggedUserName.toLowerCase()
+    );
+
+    const top10 = list.slice(0, 10);
+    let pinned = null;
+
+    if (userEntry && !top10.includes(userEntry)) {
+        pinned = userEntry;
+    }
+
+    let html = "";
+
+    if (pinned) {
+        html += `
+        <div class="p-4 mb-4 rounded-lg bg-yellow-200 border-l-4 border-yellow-500 shadow">
+            <div class="font-bold text-yellow-900">${pinned.username} (YOU)</div>
+            <div class="text-yellow-800">Your Rank: ${list.indexOf(pinned)+1}</div>
+            <div class="text-yellow-800">Playtime: ${pinned.hoursLabel}</div>
+        </div>`;
+    }
+
+    top10.forEach((row, i) => {
+        const isUser = row.username.toLowerCase() === loggedUserName.toLowerCase();
+
+        html += `
+        <div class="p-4 mb-3 rounded-lg
+                    ${isUser ? "bg-blue-200 border-l-4 border-blue-500" : "bg-gray-100"}">
+            <div class="flex justify-between items-center">
+                <div class="font-bold ${isUser ? "text-blue-800" : "text-gray-800"}">
+                    #${i+1} ${row.username} ${isUser ? "(YOU)" : ""}
+                </div>
+                <div class="font-semibold text-gray-900">${row.hoursLabel}</div>
+            </div>
+            <div class="text-gray-600 text-sm">Sessions: ${row.count}</div>
+        </div>`;
+    });
+
+    document.getElementById("monthlyLeaderboard").innerHTML = html;
+}
+
 async function loadAnalytics(memberId) {
   const snapshot = await secondDb.ref(`sessions-by-member/${memberId}`).once("value");
   if (!snapshot.exists()) return;
@@ -833,6 +914,7 @@ document.getElementById("logoutBtn").addEventListener("click", () => {
 window.addEventListener("DOMContentLoaded", () => {
   loadMemberHistory(member.USERNAME);
   loadAnalytics(member.ID);
+  loadMonthlyLeaderboard(member.USERNAME);
   loadLeaderboard();
   loadProfile();
   loadBookingDates();
