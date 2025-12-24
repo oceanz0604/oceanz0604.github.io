@@ -907,10 +907,6 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     }
   });
 });
-document.getElementById("logoutBtn").addEventListener("click", () => {
-  sessionStorage.removeItem("member");
-  window.location.href = "member-login.html";
-});
 window.addEventListener("DOMContentLoaded", () => {
   loadMemberHistory(member.USERNAME);
   loadAnalytics(member.ID);
