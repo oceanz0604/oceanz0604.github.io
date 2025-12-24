@@ -22,16 +22,24 @@
   <div class="w-full max-w-3xl space-y-8">
 
     <!-- Mobile & Desktop Responsive Tab Bar -->
-    <div class="w-full bg-gray-800 rounded-xl shadow-lg mb-4 overflow-x-auto hide-scrollbar">
-      <div class="flex w-full sm:justify-around gap-2 px-2 py-2 whitespace-nowrap">
-        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="profile">👤 Profile</button>
-        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="leaderboard">🏆 Leaderboard</button>
-        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="monthly">📅 Monthly Top</button>
-        <button class="tab-btn flex-1 py-3 px-4 text-center hover:bg-gray-700 transition-all" data-tab="analytics">📊 Analytics</button>
-        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="booking">🖥️ Book a PC</button>
-        <button class="tab-btn px-4 py-2 rounded font-medium hover:bg-gray-700 transition" data-tab="history">📜 History</button>
-        <button id="logoutBtn" class="px-4 py-2 rounded font-bold text-red-400 hover:bg-red-600 transition">🚪 Logout</button>
+    <div class="w-full bg-gray-800 rounded-xl shadow-lg mb-4 flex items-center">
+
+      <!-- Scrollable tabs -->
+      <div id="topTabBar" class="flex gap-2 px-2 py-2 whitespace-nowrap min-w-0 overflow-x-auto hide-scrollbar flex-1">
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="profile">👤 Profile</button>
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="leaderboard">🏆 Leaderboard</button>
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="monthly">📅 Monthly</button>
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="analytics">📊 Analytics</button>
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="booking">🖥️ Book</button>
+        <button class="tab-btn shrink-0 px-4 py-2 rounded hover:bg-gray-700" data-tab="history">📜 History</button>
       </div>
+
+      <!-- Fixed Logout -->
+      <button id="logoutBtn"
+        class="shrink-0 px-4 py-2 mr-2 rounded font-bold text-red-400 hover:bg-red-600 transition">
+        🚪 Logout
+      </button>
+
     </div>
 
     <!-- Tabs Content -->
@@ -276,5 +284,77 @@
       }
     });
   </script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const logoutBtn = document.getElementById("logoutBtn");
+      const modal = document.getElementById("logoutModal");
+      const cancelBtn = document.getElementById("cancelLogout");
+      const confirmBtn = document.getElementById("confirmLogout");
+
+      if (!logoutBtn) return;
+
+      // Open modal
+      logoutBtn.addEventListener("click", () => {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      });
+
+      // Cancel logout
+      cancelBtn.addEventListener("click", closeModal);
+
+      // Click outside modal to close
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      // Confirm logout
+      confirmBtn.addEventListener("click", () => {
+        sessionStorage.clear();
+        localStorage.clear();
+        window.location.href = "index.html"; // adjust if needed
+      });
+
+      function closeModal() {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+    });
+    document.addEventListener("DOMContentLoaded", () => {
+      const tabBar = document.getElementById("topTabBar");
+      if (!tabBar) return;
+
+      tabBar.addEventListener("wheel", (e) => {
+        // Only act on vertical wheel
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          tabBar.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    });
+  </script>
+  <!-- Logout Confirmation Modal -->
+  <div id="logoutModal"
+       class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-60">
+
+    <div class="bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6">
+      <h3 class="text-lg font-bold text-white mb-2">Confirm Logout</h3>
+      <p class="text-sm text-gray-300 mb-6">
+        Are you sure you want to log out?
+      </p>
+
+      <div class="flex justify-end gap-3">
+        <button id="cancelLogout"
+                class="px-4 py-2 rounded bg-gray-600 hover:bg-gray-700 transition text-white">
+          Cancel
+        </button>
+
+        <button id="confirmLogout"
+                class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 transition text-white font-semibold">
+          Logout
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
