@@ -820,6 +820,34 @@
     </div>
   </div>
 
+  <!-- Install App Banner -->
+  <div id="installBanner" class="fixed bottom-4 left-4 right-4 mx-auto max-w-sm p-4 rounded-xl hidden z-50"
+    style="background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(0,240,255,0.5); backdrop-filter: blur(10px); animation: slideUp 0.3s ease-out;">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(0,240,255,0.2);">
+        <svg viewBox="0 0 100 100" class="w-8 h-8">
+          <polygon points="50,10 90,30 90,70 50,90 10,70 10,30" fill="none" stroke="#00f0ff" stroke-width="4"/>
+        </svg>
+      </div>
+      <div class="flex-1">
+        <p class="font-orbitron text-sm font-bold" style="color: #00f0ff;">Install OceanZ</p>
+        <p class="text-xs text-gray-400">Add to home screen</p>
+      </div>
+      <button id="installBtn" class="px-4 py-2 rounded-lg font-orbitron text-xs font-bold"
+        style="background: linear-gradient(135deg, #00f0ff, #b829ff); color: #000;">
+        Install
+      </button>
+      <button id="dismissInstall" class="text-gray-500 hover:text-white p-1">✕</button>
+    </div>
+  </div>
+
+  <style>
+    @keyframes slideUp {
+      from { transform: translateY(100px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -891,6 +919,45 @@
           .then(reg => console.log('SW registered:', reg.scope))
           .catch(err => console.log('SW registration failed:', err));
       }
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      const installBanner = document.getElementById('installBanner');
+      const installBtn = document.getElementById('installBtn');
+      const dismissBtn = document.getElementById('dismissInstall');
+
+      const installDismissed = localStorage.getItem('pwaInstallDismissed');
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        if (!installDismissed && !isStandalone) {
+          setTimeout(() => {
+            installBanner?.classList.remove('hidden');
+          }, 3000);
+        }
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installBanner?.classList.add('hidden');
+      });
+
+      dismissBtn?.addEventListener('click', () => {
+        installBanner?.classList.add('hidden');
+        localStorage.setItem('pwaInstallDismissed', 'true');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        installBanner?.classList.add('hidden');
+        deferredPrompt = null;
+      });
     });
   </script>
 </body>
