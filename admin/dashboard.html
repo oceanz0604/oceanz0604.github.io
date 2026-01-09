@@ -54,6 +54,130 @@
       background: var(--card-bg);
       border-right: 1px solid var(--card-border);
       backdrop-filter: blur(10px);
+      transition: transform 0.3s ease;
+    }
+
+    /* Mobile Sidebar */
+    @media (max-width: 767px) {
+      .sidebar {
+        transform: translateX(-100%);
+        display: flex !important;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+    }
+
+    /* Sidebar Backdrop */
+    .sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 35;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .sidebar-backdrop.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Mobile Header */
+    .mobile-header {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(10px);
+      z-index: 30;
+      padding: 0 1rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    @media (max-width: 767px) {
+      .mobile-header {
+        display: flex;
+      }
+      .main-content {
+        padding-top: 76px !important;
+      }
+    }
+
+    /* Hamburger Button */
+    .hamburger-btn {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      background: transparent;
+      border: 1px solid rgba(255, 0, 68, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .hamburger-btn:hover {
+      background: rgba(255, 0, 68, 0.1);
+      border-color: var(--neon-red);
+    }
+
+    .hamburger-btn span {
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: var(--neon-red);
+      transition: all 0.3s ease;
+    }
+
+    .hamburger-btn.active span:nth-child(1) {
+      transform: rotate(45deg) translate(5px, 5px);
+    }
+
+    .hamburger-btn.active span:nth-child(2) {
+      opacity: 0;
+    }
+
+    .hamburger-btn.active span:nth-child(3) {
+      transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    /* Close button for sidebar */
+    .sidebar-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 32px;
+      height: 32px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 0, 68, 0.1);
+      border: 1px solid rgba(255, 0, 68, 0.3);
+      border-radius: 8px;
+      color: var(--neon-red);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .sidebar-close:hover {
+      background: rgba(255, 0, 68, 0.2);
+    }
+
+    @media (max-width: 767px) {
+      .sidebar-close {
+        display: flex;
+      }
     }
 
     .nav-item {
@@ -348,8 +472,38 @@
 
   <!-- Main App -->
   <div id="app" class="hidden flex min-h-screen relative z-10">
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <button id="hamburger-btn" class="hamburger-btn" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="flex items-center gap-2">
+        <svg viewBox="0 0 100 100" class="w-8 h-8">
+          <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
+            fill="none" stroke="url(#mobileGradient)" stroke-width="3"/>
+          <defs>
+            <linearGradient id="mobileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#ff0044"/>
+              <stop offset="100%" style="stop-color:#b829ff"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="font-orbitron text-sm font-bold" style="color: var(--neon-red);">OCEANZ ADMIN</span>
+      </div>
+      <div class="w-11"></div><!-- Spacer for centering -->
+    </header>
+
+    <!-- Sidebar Backdrop -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
+    <aside id="sidebar" class="sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
+      <!-- Close button (mobile only) -->
+      <button id="sidebar-close" class="sidebar-close" aria-label="Close menu">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
       <!-- Logo -->
       <div class="mb-8 text-center py-4">
         <div class="w-12 h-12 mx-auto mb-2">
@@ -414,7 +568,7 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-6 ml-0 md:ml-64">
+    <main class="main-content flex-1 p-6 ml-0 md:ml-64">
       <div class="max-w-7xl mx-auto space-y-8">
 
         <!-- Dashboard Section -->
@@ -594,6 +748,53 @@
         auth.signOut().then(() => {
           window.location.replace("index.html");
         });
+      });
+
+      // Mobile Sidebar Toggle
+      const sidebar = document.getElementById("sidebar");
+      const backdrop = document.getElementById("sidebar-backdrop");
+      const hamburgerBtn = document.getElementById("hamburger-btn");
+      const closeBtn = document.getElementById("sidebar-close");
+
+      function openSidebar() {
+        sidebar?.classList.add("open");
+        backdrop?.classList.add("show");
+        hamburgerBtn?.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeSidebar() {
+        sidebar?.classList.remove("open");
+        backdrop?.classList.remove("show");
+        hamburgerBtn?.classList.remove("active");
+        document.body.style.overflow = "";
+      }
+
+      hamburgerBtn?.addEventListener("click", () => {
+        if (sidebar?.classList.contains("open")) {
+          closeSidebar();
+        } else {
+          openSidebar();
+        }
+      });
+
+      closeBtn?.addEventListener("click", closeSidebar);
+      backdrop?.addEventListener("click", closeSidebar);
+
+      // Close sidebar when nav item is clicked (mobile)
+      document.querySelectorAll(".sidebar .nav-item").forEach(item => {
+        item.addEventListener("click", () => {
+          if (window.innerWidth < 768) {
+            closeSidebar();
+          }
+        });
+      });
+
+      // Close sidebar on escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && sidebar?.classList.contains("open")) {
+          closeSidebar();
+        }
       });
     });
   </script>
