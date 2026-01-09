@@ -5,9 +5,6 @@ import {
   getDatabase,
   ref,
   onValue,
-  query,
-  orderByChild,
-  equalTo,
   get,
   off
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -17,6 +14,8 @@ import {
   onAuthStateChanged,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+/* ---------------- FIREBASE CONFIG ---------------- */
 
 const firebaseConfig = {
   apiKey: "AIzaSyCaC558bQ7mhYlhjmthvZZX9SBVvNe6wYg",
@@ -32,260 +31,245 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
+
+/* ---------------- DATABASE REFS ---------------- */
+
 const terminalsRef = ref(db, "status");
 const sessionsRef = ref(db, "sessions");
 const membersRef = ref(db, "fdb/MEMBERS");
 
+/* ---------------- DOM ELEMENTS ---------------- */
+
 const timestampEl = document.getElementById("timestamp");
 const groupContainer = document.getElementById("group-container");
+
 const loginView = document.getElementById("login-view");
 const dashboardView = document.getElementById("dashboard-view");
+
 const emailInput = document.getElementById("email");
 const passwordInput = document.getElementById("password");
 const loginBtn = document.getElementById("login-btn");
 const loginError = document.getElementById("login-error");
 const logoutBtn = document.getElementById("logout-btn");
+
+/* Sidebar navs */
 const navDashboard = document.getElementById("nav-dashboard");
 const navMembers = document.getElementById("nav-members");
 const navBookings = document.getElementById("nav-bookings");
-const dashboardSection = document.getElementById("dashboard-section");
-const bookingsSection = document.getElementById("bookings-section");
 const navHistory = document.getElementById("nav-history");
-const historySection = document.getElementById("history-section");
+const navRecharges = document.getElementById("nav-recharges");
+
+/* Sections */
+const dashboardSection = document.getElementById("dashboard-section");
 const membersSection = document.getElementById("members-section");
+const bookingsSection = document.getElementById("bookings-section");
+const historySection = document.getElementById("history-section");
+const rechargesSection = document.getElementById("recharges-section");
+
+/* ---------------- STATE ---------------- */
 
 let activeSessions = {};
 let autoRefreshInterval = null;
+let rechargesLoaded = false;
 
-function loadAllMembers() {
-  const container = document.getElementById("membersList");
-  container.innerHTML = "🔄 Loading...";
-  get(membersRef).then(snapshot => {
-    if (!snapshot.exists()) {
-      container.innerHTML = "<p>No members found.</p>";
-      return;
-    }
-    const members = Object.values(snapshot.val());
-    container.innerHTML = members.map(member => `
-      <div class="bg-gray-800 p-4 rounded-xl shadow-md border border-gray-700 hover:shadow-lg transition">
-        <div class="flex justify-between items-center mb-2">
-          <h3 class="text-lg font-bold text-yellow-400">${member.NAME}</h3>
-          <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded">${member.USERNAME}</span>
-        </div>
-        <p class="text-sm text-gray-300">📧 ${member.EMAIL || "-"}</p>
-        <p class="text-sm text-gray-300">🕐 Joined: ${member.RECDATE || "-"}</p>
-        <p class="text-sm text-gray-300">🎮 Last Active: ${member.LLOGDATE || "-"}</p>
-      </div>
-    `).join("");
-  });
-}
+/* ---------------- VIEW SWITCHER ---------------- */
 
 function switchView(view) {
   const activeClass = ["bg-gray-700", "text-white", "font-semibold"];
   const inactiveClass = ["text-gray-300"];
 
-  const allSections = [dashboardSection, bookingsSection, historySection, membersSection];
-  const allNavs = [navDashboard, navBookings, navHistory, navMembers];
+  const sections = [
+    dashboardSection,
+    membersSection,
+    bookingsSection,
+    historySection,
+    rechargesSection
+  ];
 
-  allSections.forEach(sec => sec?.classList.add("hidden"));
-  allNavs.forEach(nav => {
-    nav?.classList.remove(...activeClass);
-    nav?.classList.add(...inactiveClass);
+  const navs = [
+    navDashboard,
+    navMembers,
+    navBookings,
+    navHistory,
+    navRecharges
+  ];
+
+  sections.forEach(s => s?.classList.add("hidden"));
+  navs.forEach(n => {
+    n?.classList.remove(...activeClass);
+    n?.classList.add(...inactiveClass);
   });
 
   if (view === "dashboard") {
-    dashboardSection?.classList.remove("hidden");
-    navDashboard?.classList.add(...activeClass);
-    navDashboard?.classList.remove(...inactiveClass);
-  } else if (view === "bookings") {
-    bookingsSection?.classList.remove("hidden");
-    navBookings?.classList.add(...activeClass);
-    navBookings?.classList.remove(...inactiveClass);
-  } else if (view === "history") {
-    historySection?.classList.remove("hidden");
-    navHistory?.classList.add(...activeClass);
-    navHistory?.classList.remove(...inactiveClass);
-  } else if (view === "members-section") {
-    membersSection?.classList.remove("hidden");
-    navMembers?.classList.add(...activeClass);
+    dashboardSection.classList.remove("hidden");
+    navDashboard.classList.add(...activeClass);
+  }
+
+  if (view === "members") {
+    membersSection.classList.remove("hidden");
+    navMembers.classList.add(...activeClass);
+    loadAllMembers();
+  }
+
+  if (view === "bookings") {
+    bookingsSection.classList.remove("hidden");
+    navBookings.classList.add(...activeClass);
+  }
+
+  if (view === "history") {
+    historySection.classList.remove("hidden");
+    navHistory.classList.add(...activeClass);
+  }
+
+  if (view === "recharges") {
+    rechargesSection.classList.remove("hidden");
+    navRecharges.classList.add(...activeClass);
   }
 }
 
-navDashboard?.addEventListener("click", (e) => {
+/* ---------------- NAV EVENTS ---------------- */
+
+navDashboard?.addEventListener("click", e => {
   e.preventDefault();
   switchView("dashboard");
 });
-navMembers?.addEventListener("click", () => {
-  switchView("members-section");
-  loadAllMembers();
+
+navMembers?.addEventListener("click", e => {
+  e.preventDefault();
+  switchView("members");
 });
-navBookings?.addEventListener("click", (e) => {
+
+navBookings?.addEventListener("click", e => {
   e.preventDefault();
   switchView("bookings");
 });
-navHistory?.addEventListener("click", (e) => {
+
+navHistory?.addEventListener("click", e => {
   e.preventDefault();
   switchView("history");
 });
+
+navRecharges?.addEventListener("click", e => {
+  e.preventDefault();
+  switchView("recharges");
+});
+
+/* ---------------- AUTH ---------------- */
+
 loginBtn?.addEventListener("click", () => {
-  const email = emailInput.value;
-  const password = passwordInput.value;
-  signInWithEmailAndPassword(auth, email, password)
+  signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value)
     .then(() => loginError.classList.add("hidden"))
     .catch(() => {
       loginError.textContent = "Invalid email or password";
       loginError.classList.remove("hidden");
     });
 });
+
 logoutBtn?.addEventListener("click", () => {
   signOut(auth).then(() => {
-    dashboardSection.classList.add("hidden");
-    bookingsSection.classList.add("hidden");
+    dashboardView.classList.add("hidden");
+    loginView.classList.remove("hidden");
+
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
     off(terminalsRef);
     off(sessionsRef);
   });
 });
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, user => {
   if (user) {
     loginView.classList.add("hidden");
     dashboardView.classList.remove("hidden");
     switchView("dashboard");
     startDataSync();
   } else {
-    loginView.classList.remove("hidden");
     dashboardView.classList.add("hidden");
+    loginView.classList.remove("hidden");
   }
 });
 
-function toggleSidebar() {
-  const sidebar = document.getElementById("mobile-sidebar");
-  const overlay = document.getElementById("sidebar-overlay");
+/* ---------------- MEMBERS ---------------- */
 
-  const isOpen = sidebar.classList.contains("translate-x-0");
+function loadAllMembers() {
+  const container = document.getElementById("membersList");
+  container.innerHTML = "🔄 Loading...";
 
-  if (isOpen) {
-    sidebar.classList.replace("translate-x-0", "-translate-x-full");
-    overlay.classList.add("hidden");
-    document.body.classList.remove("overflow-hidden");
-  } else {
-    sidebar.classList.replace("-translate-x-full", "translate-x-0");
-    overlay.classList.remove("hidden");
-    document.body.classList.add("overflow-hidden");
-  }
+  get(membersRef).then(snapshot => {
+    if (!snapshot.exists()) {
+      container.innerHTML = "No members found";
+      return;
+    }
+
+    const members = Object.values(snapshot.val());
+
+    container.innerHTML = members.map(m => `
+      <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+        <h3 class="font-bold text-yellow-400">${m.NAME}</h3>
+        <p class="text-sm text-gray-300">@${m.USERNAME}</p>
+        <p class="text-xs text-gray-400">Joined: ${m.RECDATE || "-"}</p>
+      </div>
+    `).join("");
+  });
 }
+
+/* ---------------- TERMINALS ---------------- */
 
 function parseActiveSessions(snapshot) {
   const sessions = snapshot.val() || {};
   const latest = {};
-  for (const [key, session] of Object.entries(sessions)) {
-    if (session.active) {
-      latest[session.terminal] = session;
-    }
-  }
+  Object.values(sessions).forEach(s => {
+    if (s.active) latest[s.terminal] = s;
+  });
   activeSessions = latest;
 }
 
 function renderTerminals(data) {
-  timestampEl.textContent = "Last updated: " + new Date().toLocaleString("en-IN");
+  timestampEl.textContent =
+    "Last updated: " + new Date().toLocaleString("en-IN");
 
-  const groups = {
-    "T-ROOM": [],
-    "CT-ROOM": [],
-    "PS/XBOX": []
-  };
+  const groups = { "T-ROOM": [], "CT-ROOM": [], "PS/XBOX": [] };
 
-  for (const [name, info] of Object.entries(data)) {
-    const group =
-      name.includes("CT") ? "CT-ROOM" :
-      name.includes("T-") ? "T-ROOM" : "PS/XBOX";
-    groups[group].push({ name, ...info });
-  }
+  Object.entries(data).forEach(([name, info]) => {
+    const g = name.includes("CT") ? "CT-ROOM" :
+              name.includes("T-") ? "T-ROOM" : "PS/XBOX";
+    groups[g].push({ name, ...info });
+  });
 
   groupContainer.innerHTML = "";
 
-  for (const [groupName, terminals] of Object.entries(groups)) {
+  Object.entries(groups).forEach(([group, list]) => {
     const section = document.createElement("section");
-    section.innerHTML = `<h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-1">${groupName}</h2>`;
+    section.innerHTML = `<h2 class="text-2xl font-bold mb-4">${group}</h2>`;
 
     const grid = document.createElement("div");
-    grid.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+    grid.className = "grid sm:grid-cols-2 lg:grid-cols-3 gap-4";
 
-    terminals.sort((a, b) => a.name.localeCompare(b.name)).forEach(terminal => {
-      const isOccupied = terminal.status === "occupied";
-      const session = activeSessions[terminal.name];
-      const lastUpdated = new Date(terminal.last_updated);
-      const ageMinutes = Math.floor((Date.now() - lastUpdated.getTime()) / 60000);
-      const isStale = ageMinutes > 5;
-      const duration = session ? Math.round(session.duration_minutes) : null;
+    list.sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
+      const session = activeSessions[t.name];
+      const occupied = t.status === "occupied";
 
-      const bgColor = isOccupied ? "bg-gray-800 text-white" : "bg-gray-200 text-black";
-      const borderGlow = session ? "border-4 border-blue-400 animate-pulse" : "border border-gray-500";
-      const card = document.createElement("div");
-
-      card.className = `
-        p-4 rounded-2xl relative ${bgColor} ${borderGlow}
-        shadow-md hover:shadow-xl transition
-      `;
-
-      const statusBadge = `
-        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide
-          ${isOccupied ? "bg-red-500 text-white" : "bg-green-600 text-white"}">
-          ${terminal.status}
-        </span>
-      `;
-
-      const durationBadge = session
-        ? `<span class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full ml-2">🕒 ${duration}m</span>`
-        : "";
-
-      const statusIcon = isOccupied
-        ? `<i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>`
-        : `<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>`;
-
-      card.innerHTML = `
-        <div class="flex items-center justify-between mb-2">
-          <h2 class="text-xl font-bold truncate">${terminal.name}</h2>
-          ${statusIcon}
+      grid.innerHTML += `
+        <div class="p-4 rounded-xl border ${occupied ? "border-red-500" : "border-green-500"}">
+          <h3 class="text-xl font-bold">${t.name}</h3>
+          <p>Status: ${t.status}</p>
+          ${session ? `<p>🕒 ${Math.round(session.duration_minutes)} min</p>` : ""}
         </div>
-
-        <p class="text-sm mb-1"><strong>Status:</strong> ${statusBadge} ${durationBadge}</p>
-        <p class="text-sm mb-1"><strong>IP:</strong> ${terminal.ip || "-"}</p>
-        <p class="text-sm mb-1"><strong>MAC:</strong> ${terminal.mac || "-"}</p>
-        <p class="text-sm"><strong>Last Updated:</strong> ${lastUpdated.toLocaleString("en-IN")}</p>
-
-        ${
-          isStale
-            ? `<div class="absolute top-2 right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded shadow stale-alert">
-                ⚠ ${ageMinutes} min old
-              </div>` : ""
-        }
       `;
-
-      grid.appendChild(card);
     });
 
     section.appendChild(grid);
     groupContainer.appendChild(section);
-  }
-
-  lucide.createIcons();
+  });
 }
 
+/* ---------------- DATA SYNC ---------------- */
+
 function startDataSync() {
-  fetchData(); // Initial
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  fetchData();
   autoRefreshInterval = setInterval(fetchData, 30000);
 }
 
 function fetchData() {
-  onValue(terminalsRef, (snapshot) => {
-    const terminalsData = snapshot.val() || {};
-    renderTerminals(terminalsData);
-  });
-
-  onValue(sessionsRef, (snapshot) => {
-    parseActiveSessions(snapshot);
-  });
+  onValue(terminalsRef, snap => renderTerminals(snap.val() || {}));
+  onValue(sessionsRef, parseActiveSessions);
 }

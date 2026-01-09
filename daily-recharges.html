@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Admin • Daily Recharges</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-gray-900 text-white p-6">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- ================= HEADER ================= -->
+    <div class="flex flex-wrap justify-between gap-4 items-center">
+      <h1 class="text-2xl font-bold text-green-400">
+        💳 Daily Recharges
+      </h1>
+
+      <div class="flex flex-wrap gap-2">
+        <input
+          type="date"
+          id="datePicker"
+          class="bg-gray-700 px-3 py-2 rounded text-white"
+        />
+
+        <button
+          onclick="exportMonthCSV()"
+          class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+        >
+          📦 Export Month
+        </button>
+
+        <button
+          onclick="printSheet()"
+          class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded"
+        >
+          🖨 Print
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= ADD / EDIT ================= -->
+    <div class="bg-gray-800 p-4 rounded-xl space-y-4">
+      <h2 class="font-semibold">
+        ➕ Add / ✏ Edit Recharge
+      </h2>
+
+      <div class="grid md:grid-cols-5 gap-3">
+
+        <!-- Member -->
+        <div class="relative">
+          <input
+            id="memberInput"
+            placeholder="Member username"
+            autocomplete="off"
+            class="w-full bg-gray-700 px-3 py-2 rounded"
+          />
+          <div
+            id="memberSuggestions"
+            class="absolute hidden w-full bg-gray-800 border border-gray-700 rounded mt-1 max-h-40 overflow-y-auto z-50"
+          ></div>
+        </div>
+
+        <!-- Amount -->
+        <input
+          id="amountInput"
+          type="number"
+          placeholder="₹ Amount"
+          class="bg-gray-700 px-3 py-2 rounded"
+        />
+
+        <!-- Mode -->
+        <select
+          id="modeInput"
+          class="bg-gray-700 px-3 py-2 rounded"
+        >
+          <option value="cash">Cash</option>
+          <option value="upi">UPI</option>
+          <option value="card">Card</option>
+        </select>
+
+        <!-- Note -->
+        <input
+          id="noteInput"
+          placeholder="Note (optional)"
+          class="bg-gray-700 px-3 py-2 rounded"
+        />
+
+        <!-- Save -->
+        <button
+          onclick="addRecharge()"
+          class="bg-green-600 hover:bg-green-700 rounded px-4 py-2 font-semibold"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= SUMMARY ================= -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+      <div class="bg-gray-800 p-4 rounded">
+        <div class="text-gray-400">Total</div>
+        <div id="totalAmount" class="text-xl font-bold text-green-400">
+          ₹0
+        </div>
+      </div>
+
+      <div class="bg-gray-800 p-4 rounded">
+        <div class="text-gray-400">Cash</div>
+        <div id="cashTotal" class="text-xl font-bold">
+          ₹0
+        </div>
+      </div>
+
+      <div class="bg-gray-800 p-4 rounded">
+        <div class="text-gray-400">UPI</div>
+        <div id="upiTotal" class="text-xl font-bold">
+          ₹0
+        </div>
+      </div>
+
+      <div class="bg-gray-800 p-4 rounded">
+        <div class="text-gray-400">Card</div>
+        <div id="cardTotal" class="text-xl font-bold">
+          ₹0
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= CHARTS ================= -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-gray-800 p-4 rounded">
+        <h3 class="mb-2 font-semibold">
+          📊 Today Breakdown
+        </h3>
+        <canvas id="dailyChart"></canvas>
+      </div>
+
+      <div class="bg-gray-800 p-4 rounded">
+        <h3 class="mb-2 font-semibold">
+          📊 Monthly Total
+        </h3>
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ================= RECHARGE LIST ================= -->
+    <div id="rechargeList" class="space-y-2"></div>
+
+    <!-- ================= AUDIT LOG ================= -->
+    <div class="bg-gray-800 p-4 rounded">
+      <h3 class="font-semibold mb-2">
+        🔐 Audit Log
+      </h3>
+      <div
+        id="auditLog"
+        class="text-sm text-gray-300 space-y-1"
+      ></div>
+    </div>
+
+  </div>
+
+  <!-- Firebase compat (matches your JS) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- Your merged JS -->
+  <script src="assets/admin-recharges.js"></script>
+</body>
+</html>

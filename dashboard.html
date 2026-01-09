@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/html">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -81,6 +81,13 @@
           </a>
         </li>
         <li>
+          <a id="nav-recharges" href="#"
+             class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
+            <i data-lucide="wallet" class="w-5 h-5"></i>
+            Daily Recharges
+          </a>
+        </li>
+        <li>
           <a id="nav-history" href="#"
              class="flex items-center gap-3 px-4 py-2 rounded-lg transition hover:bg-gray-700 font-medium text-gray-300">
             <i data-lucide="history" class="w-5 h-5"></i>
@@ -153,6 +160,99 @@
           <div id="bookingCards" class="flex flex-col gap-6"></div>
         </div>
 
+        <!-- Daily Recharges Section -->
+        <div id="recharges-section" class="hidden">
+          <div class="max-w-6xl mx-auto space-y-6">
+
+            <!-- Header -->
+            <div class="flex flex-wrap justify-between gap-4 items-center">
+              <h1 class="text-3xl font-bold text-green-400">💳 Daily Recharges</h1>
+
+              <div class="flex gap-2">
+                <input type="date" id="datePicker"
+                  class="bg-gray-700 px-3 py-2 rounded"/>
+                <button onclick="exportMonthCSV()"
+                  class="bg-blue-600 px-4 py-2 rounded">📦 Export Month</button>
+                <button onclick="printSheet()"
+                  class="bg-purple-600 px-4 py-2 rounded">🖨 Print</button>
+              </div>
+            </div>
+
+            <!-- Add / Edit -->
+            <div class="bg-gray-800 p-4 rounded-xl space-y-4">
+              <h2 class="font-semibold">➕ Add / ✏ Edit Recharge</h2>
+
+              <div class="grid md:grid-cols-5 gap-3">
+                <div class="relative">
+                  <input id="memberInput" placeholder="Member"
+                    class="w-full bg-gray-700 px-3 py-2 rounded"/>
+                  <div id="memberSuggestions"
+                    class="absolute hidden w-full bg-gray-800 border border-gray-700 rounded mt-1 max-h-40 overflow-y-auto z-50"></div>
+                </div>
+
+                <input id="amountInput" type="number" placeholder="₹ Amount"
+                  class="bg-gray-700 px-3 py-2 rounded"/>
+
+                <select id="modeInput" class="bg-gray-700 px-3 py-2 rounded">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                </select>
+
+                <input id="noteInput" placeholder="Note"
+                  class="bg-gray-700 px-3 py-2 rounded"/>
+
+                <button onclick="addRecharge()"
+                  class="bg-green-600 hover:bg-green-700 rounded px-4 py-2">
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div class="bg-gray-800 p-4 rounded">
+                <div class="text-gray-400">Total</div>
+                <div id="totalAmount" class="text-xl font-bold text-green-400">₹0</div>
+              </div>
+              <div class="bg-gray-800 p-4 rounded">
+                <div class="text-gray-400">Cash</div>
+                <div id="cashTotal" class="text-xl font-bold">₹0</div>
+              </div>
+              <div class="bg-gray-800 p-4 rounded">
+                <div class="text-gray-400">UPI</div>
+                <div id="upiTotal" class="text-xl font-bold">₹0</div>
+              </div>
+              <div class="bg-gray-800 p-4 rounded">
+                <div class="text-gray-400">Card</div>
+                <div id="cardTotal" class="text-xl font-bold">₹0</div>
+              </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="bg-gray-800 p-4 rounded">
+                <h3 class="mb-2 font-semibold">📊 Today</h3>
+                <canvas id="dailyChart"></canvas>
+              </div>
+              <div class="bg-gray-800 p-4 rounded">
+                <h3 class="mb-2 font-semibold">📊 This Month</h3>
+                <canvas id="monthlyChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Entries -->
+            <div id="rechargeList" class="space-y-2"></div>
+
+            <!-- Audit -->
+            <div class="bg-gray-800 p-4 rounded">
+              <h3 class="font-semibold mb-2">🔐 Audit Log</h3>
+              <div id="auditLog" class="text-sm text-gray-300 space-y-1"></div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- Session History Section -->
         <div id="history-section" class="hidden">
           <h2 class="text-3xl font-bold mb-4 text-center flex items-center justify-center gap-2">
@@ -164,12 +264,19 @@
     </main>
   </div>
 
-  <!-- JS Bundle -->
+  <!-- Firebase Compat FIRST -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- Then dashboard + other modules -->
   <script type="module" src="assets/dashboard.js"></script>
   <script type="module" src="assets/bookings.js"></script>
   <script type="module" src="assets/history.js"></script>
+  <script type="module" src="assets/admin-recharges.js"></script>
+
   <script>
     lucide.createIcons();
   </script>
+
 </body>
 </html>
