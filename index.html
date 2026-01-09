@@ -3,133 +3,19 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OceanZ Booking</title>
+  <title>OceanZ Gaming Cafe</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script>
-  const member = sessionStorage.getItem("member");
-  if (member) {
-    window.location.href = "members.html";
-  } else {
-    // Optional: redirect to login instead
-    window.location.href = "member-login.html";
-  }
-</script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-12 px-4">
-
-  <div class="w-full max-w-2xl space-y-10">
-
-    <!-- 🔄 Toggle Buttons -->
-    <div class="text-center">
-      <button id="show-booking" class="px-4 py-2 bg-blue-600 rounded text-white font-medium">📆 Book a PC</button>
-      <button id="show-member-login" class="ml-2 px-4 py-2 bg-purple-600 rounded text-white font-medium">👤 Member Login</button>
-    </div>
-
-    <!-- 🎟️ Booking Form -->
-     <form id="bookingForm" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-6">
-
-      <!-- Step 1 -->
-      <div id="step1" class="space-y-4">
-        <div>
-          <label for="userName" class="block text-sm font-medium mb-1">Name:</label>
-          <input type="text" id="userName" required
-            class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white placeholder-gray-400"/>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label for="startTime" class="block text-sm font-medium mb-1">Start Time:</label>
-            <select id="startTime" required
-              class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white"></select>
-          </div>
-          <div>
-            <label for="endTime" class="block text-sm font-medium mb-1">End Time:</label>
-            <select id="endTime" required
-              class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white"></select>
-          </div>
-        </div>
-
-        <div class="flex justify-end">
-          <button type="button" id="nextBtn"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold">
-            Next
-          </button>
-        </div>
-      </div>
-
-      <!-- Step 2 -->
-      <div id="step2" style="display: none;" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">Select Available PCs:</label>
-          <div id="availablePCs" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <!-- PC checkboxes inserted here -->
-          </div>
-        </div>
-
-        <p id="priceInfo" class="text-lg font-semibold text-yellow-400">💰 Total Price: ₹0</p>
-
-        <div class="flex justify-between">
-          <button type="button" id="backBtn"
-            class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded font-medium">
-            ⬅ Back
-          </button>
-          <button type="submit"
-            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-semibold">
-            Book Now
-          </button>
-        </div>
-      </div>
-    </form>
-    <!-- ✅ Booking result -->
-    <div id="bookingResult" class="hidden bg-green-800 text-white p-4 rounded-xl shadow-lg text-center font-medium"></div>
-
-    <!-- 🏆 Leaderboard -->
-    <div id="leaderboard" class="bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
-      <h2 class="text-2xl font-bold flex items-center gap-2 text-yellow-400">
-        <i class="lucide" data-lucide="trophy"></i> Top Members Leaderboard
-      </h2>
-      <div id="leaderboardList" class="space-y-2"></div>
-    </div>
-
-    <!-- 👤 Member Login Form -->
-    <div id="member-login" class="hidden bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
-      <h2 class="text-2xl font-bold text-center">🔐 Member Login</h2>
-      <input type="text" id="member-username" placeholder="Username"
-             class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white placeholder-gray-400">
-      <input type="password" id="member-password" placeholder="Password"
-             class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white placeholder-gray-400">
-      <button id="login-member-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded">Login</button>
-      <p id="member-login-error" class="text-red-400 text-center text-sm hidden"></p>
-    </div>
-
-    <!-- 👤 Member Dashboard -->
-    <div id="member-dashboard" class="hidden bg-gray-800 p-6 rounded-2xl shadow-lg space-y-4">
-      <div class="flex justify-between items-center">
-        <h2 class="text-2xl font-bold">👤 Welcome, <span id="member-name" class="text-blue-400"></span></h2>
-        <button id="logout-member-btn" class="text-sm bg-red-600 hover:bg-red-700 px-3 py-1 rounded">Logout</button>
-      </div>
-      <div class="grid grid-cols-2 gap-4 text-sm text-gray-300">
-        <div>🪪 ID: <span id="mem-id"></span></div>
-        <div>💰 Balance: ₹<span id="mem-bakiye"></span></div>
-        <div>🕒 Total Minutes: <span id="mem-mins"></span></div>
-        <div>📅 Last Login: <span id="mem-lastlog"></span></div>
-      </div>
-    </div>
-
-    <!-- 🔒 Admin -->
-    <div class="text-center pt-4">
-      <a href="admin.html" class="text-sm text-blue-400 hover:underline">🔒 Go to Admin Dashboard</a>
-    </div>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center">
+  <div class="text-center">
+    <h1 class="text-4xl font-bold mb-4">🎮 OceanZ Gaming Cafe</h1>
+    <p class="text-gray-400 mb-6">Redirecting...</p>
   </div>
 
-  <!-- Firebase + JS -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="assets/firebase.js"></script>
-  <script src="assets/members.js" type="module"></script>
   <script>
-    lucide.createIcons();
+    // Redirect based on login status
+    const member = sessionStorage.getItem("member");
+    window.location.href = member ? "member/dashboard.html" : "member/login.html";
   </script>
 </body>
 </html>
