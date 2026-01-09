@@ -11,6 +11,64 @@ if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
 
 const fdbDb = fdbApp.database();
 
+// ==================== MEMBER SESSION (localStorage for PWA persistence) ====================
+
+const MEMBER_SESSION_KEY = "oceanz_member_session";
+const MEMBER_SESSION_TIME_KEY = "oceanz_member_session_time";
+const SESSION_MAX_AGE_DAYS = 7; // Session expires after 7 days
+
+function getMemberSession() {
+  try {
+    const data = localStorage.getItem(MEMBER_SESSION_KEY);
+    if (!data) return null;
+    
+    // Check if session has expired
+    const timestamp = localStorage.getItem(MEMBER_SESSION_TIME_KEY);
+    if (timestamp) {
+      const lastActivity = new Date(timestamp);
+      const now = new Date();
+      const daysSinceActivity = (now - lastActivity) / (1000 * 60 * 60 * 24);
+      
+      if (daysSinceActivity > SESSION_MAX_AGE_DAYS) {
+        console.log("Member session expired due to inactivity");
+        clearMemberSession();
+        return null;
+      }
+    }
+    
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function setMemberSession(memberData) {
+  localStorage.setItem(MEMBER_SESSION_KEY, JSON.stringify(memberData));
+  localStorage.setItem(MEMBER_SESSION_TIME_KEY, new Date().toISOString());
+  // Also set in sessionStorage for backward compatibility
+  sessionStorage.setItem("member", JSON.stringify(memberData));
+}
+
+function clearMemberSession() {
+  localStorage.removeItem(MEMBER_SESSION_KEY);
+  localStorage.removeItem(MEMBER_SESSION_TIME_KEY);
+  sessionStorage.removeItem("member");
+}
+
+// Export for use in other files
+window.getMemberSession = getMemberSession;
+window.setMemberSession = setMemberSession;
+window.clearMemberSession = clearMemberSession;
+
+// ==================== CHECK EXISTING SESSION ====================
+
+// If already logged in, redirect to dashboard
+const existingSession = getMemberSession();
+if (existingSession) {
+  console.log("✅ Existing member session found:", existingSession.USERNAME);
+  window.location.replace("dashboard.html");
+}
+
 // ==================== LOGIN HANDLER ====================
 
 document.getElementById("memberLoginForm")?.addEventListener("submit", function(e) {
@@ -33,7 +91,8 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
       );
 
       if (match) {
-        sessionStorage.setItem("member", JSON.stringify(match));
+        // Use persistent localStorage session
+        setMemberSession(match);
         window.location.href = "dashboard.html";
       } else {
         showError(errorDiv, "❌ Invalid credentials. Please try again.");

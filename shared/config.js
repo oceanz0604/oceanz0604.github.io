@@ -41,6 +41,15 @@ export const BOOKING_APP_NAME = "OCEANZ_BOOKING";
 export const FDB_APP_NAME = "OCEANZ_FDB";
 export const AUTH_APP_NAME = "OCEANZ_AUTH";
 
+// ==================== TIMEZONE ====================
+
+/**
+ * India Standard Time (IST) - UTC+5:30
+ * All date/time operations should use this timezone
+ */
+export const TIMEZONE = "Asia/Kolkata";
+export const TIMEZONE_OFFSET = "+05:30";
+
 // ==================== APP CONSTANTS ====================
 
 export const CONSTANTS = {
@@ -69,6 +78,63 @@ export const CONSTANTS = {
   TIMETABLE_END_HOUR: 22,
   PC_COL_WIDTH: 140
 };
+
+// ==================== DATE UTILITIES ====================
+
+/**
+ * Get current date/time in IST
+ * @returns {Date} Date object adjusted to IST
+ */
+export function getISTDate() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: TIMEZONE }));
+}
+
+/**
+ * Format a date to IST timezone
+ * @param {Date|string} date - Date to format
+ * @param {Object} options - Intl.DateTimeFormat options
+ * @returns {string} Formatted date string in IST
+ */
+export function formatToIST(date, options = {}) {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d)) return "-";
+  
+  const defaultOptions = {
+    timeZone: TIMEZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true
+  };
+  
+  return d.toLocaleString("en-IN", { ...defaultOptions, ...options });
+}
+
+/**
+ * Get hours in IST from a date
+ * @param {Date|string} date - Date to extract hours from
+ * @returns {number} Hours with minutes as decimal in IST
+ */
+export function getISTHours(date) {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const istString = d.toLocaleString("en-US", { 
+    timeZone: TIMEZONE, 
+    hour: "2-digit", 
+    minute: "2-digit", 
+    hour12: false 
+  });
+  const [hours, minutes] = istString.split(":").map(Number);
+  return hours + minutes / 60;
+}
+
+/**
+ * Get today's date at midnight in IST
+ * @returns {Date} Today at 00:00:00 IST
+ */
+export function getISTToday() {
+  const now = getISTDate();
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
 
 // Legacy exports for backward compatibility
 export const PRIMARY_CONFIG = BOOKING_DB_CONFIG;

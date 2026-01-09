@@ -418,7 +418,21 @@
 </head>
 <body class="text-white min-h-screen relative">
 
-  <div class="relative z-10 w-full max-w-4xl mx-auto px-4 py-6 space-y-6">
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="min-h-screen flex items-center justify-center relative z-10">
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 border-3 border-transparent rounded-full animate-spin" 
+          style="border-top-color: #00f0ff; border-right-color: #b829ff;"></div>
+        <div class="absolute inset-2 border-2 border-transparent rounded-full animate-spin" 
+          style="border-bottom-color: #00f0ff; border-left-color: #b829ff; animation-direction: reverse; animation-duration: 0.8s;"></div>
+      </div>
+      <p class="text-gray-400 font-orbitron text-sm tracking-wider">LOADING...</p>
+    </div>
+  </div>
+
+  <!-- Main App (hidden until auth verified) -->
+  <div id="main-app" class="hidden relative z-10 w-full max-w-4xl mx-auto px-4 py-6 space-y-6">
 
     <!-- Header -->
     <header class="tab-bar rounded-2xl p-2 flex items-center gap-2">
@@ -807,6 +821,7 @@
       </div>
     </div>
   </div>
+  </div><!-- End of main-app -->
 
   <!-- Logout Modal -->
   <div id="logoutModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-bg">
@@ -899,8 +914,15 @@
       });
 
       confirmBtn?.addEventListener("click", () => {
-        sessionStorage.clear();
-        localStorage.clear();
+        // Clear member session (from both localStorage and sessionStorage)
+        if (window.clearMemberSession) {
+          window.clearMemberSession();
+        } else {
+          // Fallback if function not available
+          localStorage.removeItem("oceanz_member_session");
+          localStorage.removeItem("oceanz_member_session_time");
+          sessionStorage.removeItem("member");
+        }
         window.location.href = "../index.html";
       });
 

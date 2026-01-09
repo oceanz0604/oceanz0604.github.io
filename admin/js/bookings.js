@@ -4,7 +4,16 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, get, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { BOOKING_DB_CONFIG, BOOKING_APP_NAME, CONSTANTS } from "../../shared/config.js";
+import { 
+  BOOKING_DB_CONFIG, 
+  BOOKING_APP_NAME, 
+  CONSTANTS, 
+  TIMEZONE,
+  formatToIST,
+  getISTHours,
+  getISTDate,
+  getISTToday
+} from "../../shared/config.js";
 import { getStaffSession } from "./permissions.js";
 
 // Get admin name from staff session
@@ -25,18 +34,43 @@ const db = getDatabase(bookingApp);
 const { TIMETABLE_PCS, TIMETABLE_START_HOUR, TIMETABLE_END_HOUR, PC_COL_WIDTH } = CONSTANTS;
 const TIMETABLE_TOTAL_HOURS = TIMETABLE_END_HOUR - TIMETABLE_START_HOUR;
 
-// ==================== UTILITIES ====================
+// ==================== UTILITIES (IST TIMEZONE) ====================
 
 function formatDate(isoString) {
-  const date = new Date(isoString);
-  if (isNaN(date)) return "-";
-  return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", hour12: true });
+  return formatToIST(isoString);
 }
 
 function timetableTimeIndex(dateStr) {
-  const d = new Date(dateStr);
-  return d.getHours() + d.getMinutes() / 60;
+  return getISTHours(dateStr);
 }
+
+// ==================== TIMETABLE TOGGLE ====================
+
+function initTimetableToggle() {
+  const toggle = document.getElementById("timetableToggle");
+  const container = document.getElementById("timetableContainer");
+  const chevron = document.getElementById("timetableChevron");
+  const dateBadge = document.getElementById("timetableDateBadge");
+  
+  if (!toggle || !container) return;
+  
+  // Set today's date in badge (IST)
+  if (dateBadge) {
+    dateBadge.textContent = getISTDate().toLocaleDateString("en-IN", { 
+      weekday: "short", 
+      day: "numeric", 
+      month: "short" 
+    });
+  }
+  
+  toggle.addEventListener("click", () => {
+    const isHidden = container.classList.toggle("hidden");
+    chevron?.classList.toggle("rotate-180", !isHidden);
+  });
+}
+
+// Initialize toggle when DOM is ready
+document.addEventListener("DOMContentLoaded", initTimetableToggle);
 
 function timetableColor(status) {
   return status === "Approved" 
@@ -141,7 +175,7 @@ function renderBookings(bookingsData) {
   const container = document.getElementById("bookingCards");
   container.innerHTML = "";
 
-  const now = new Date();
+  const now = getISTDate();
   const groups = { upcoming: [], ongoing: [], past: [] };
 
   const sortedEntries = Object.entries(bookingsData || {}).sort(
@@ -221,8 +255,7 @@ function renderBookings(bookingsData) {
 function buildTimetableBookings(bookingsData) {
   if (!bookingsData) return [];
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getISTToday();
 
   return Object.values(bookingsData)
     .map(b => {
@@ -307,7 +340,8 @@ function renderCurrentTimeLine() {
   const oldLine = document.getElementById("currentTimeLine");
   if (oldLine) oldLine.remove();
 
-  const now = new Date();
+  // Use IST timezone for current time
+  const now = getISTDate();
   const hours = now.getHours() + now.getMinutes() / 60;
 
   if (hours < TIMETABLE_START_HOUR || hours > TIMETABLE_END_HOUR) return;

@@ -2,7 +2,15 @@
  * OceanZ Gaming Cafe - Daily Recharges Management
  */
 
-import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME } from "../../shared/config.js";
+import { 
+  BOOKING_DB_CONFIG, 
+  FDB_DATASET_CONFIG, 
+  BOOKING_APP_NAME, 
+  FDB_APP_NAME,
+  TIMEZONE,
+  getISTDate,
+  formatToIST
+} from "../../shared/config.js";
 import { getStaffSession } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
@@ -19,7 +27,16 @@ const fdbDb = fdbApp.database();
 
 // ==================== STATE ====================
 
-let selectedDate = new Date().toISOString().split("T")[0];
+// Get today's date in IST
+function getISTDateString() {
+  const now = getISTDate();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+let selectedDate = getISTDateString();
 let editId = null;
 let state = [];
 let allMembers = [];
@@ -236,13 +253,16 @@ function renderAllOutstandingCredits(credits) {
 
   if (elements.outstandingList) {
     elements.outstandingList.innerHTML = credits.map(r => {
+      // Use IST for date formatting
       const createdDate = r.createdAt 
-        ? new Date(r.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+        ? formatToIST(r.createdAt, { dateStyle: "medium", timeStyle: undefined })
         : r.date;
       
+      // Calculate days since in IST
+      const now = getISTDate();
       const daysSince = r.createdAt 
-        ? Math.floor((new Date() - new Date(r.createdAt)) / 86400000)
-        : Math.floor((new Date() - new Date(r.date)) / 86400000);
+        ? Math.floor((now - new Date(r.createdAt)) / 86400000)
+        : Math.floor((now - new Date(r.date)) / 86400000);
       
       const urgencyColor = daysSince > 7 ? "#ff0044" : daysSince > 3 ? "#ff6b00" : "#ffff00";
       const urgencyBg = daysSince > 7 ? "rgba(255,0,68,0.1)" : "rgba(255,107,0,0.1)";
@@ -757,8 +777,9 @@ function renderAudit() {
     
     const style = actionColors[a.action] || actionColors.ADD;
     const date = a.at ? new Date(a.at) : new Date();
-    const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const dateStr = date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    // Use IST for time display
+    const timeStr = date.toLocaleTimeString("en-IN", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit" });
+    const dateStr = date.toLocaleDateString("en-IN", { timeZone: TIMEZONE, day: "numeric", month: "short" });
     const relativeTime = getRelativeTime(date);
 
     return `
@@ -793,7 +814,8 @@ function renderAudit() {
 }
 
 function getRelativeTime(date) {
-  const now = new Date();
+  // Use IST for relative time calculation
+  const now = getISTDate();
   const diff = now - date;
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
@@ -803,7 +825,7 @@ function getRelativeTime(date) {
   if (mins < 60) return `${mins}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return date.toLocaleDateString("en-IN", { timeZone: TIMEZONE, day: "numeric", month: "short" });
 }
 
 window.filterAudit = (filter) => {

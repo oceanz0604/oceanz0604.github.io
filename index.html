@@ -13,8 +13,8 @@
   </div>
 
   <script>
-    // Redirect based on login status
-    const member = sessionStorage.getItem("member");
+    // Redirect based on login status (check localStorage for PWA persistence)
+    const member = localStorage.getItem("oceanz_member_session") || sessionStorage.getItem("member");
     window.location.href = member ? "member/dashboard.html" : "member/login.html";
   </script>
 </body>

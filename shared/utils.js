@@ -1,24 +1,28 @@
 /**
  * OceanZ Gaming Cafe - Shared Utilities
+ * All date/time functions use IST (India Standard Time - UTC+5:30)
  */
+
+import { TIMEZONE } from "./config.js";
 
 /**
  * Get current date in IST with optional offset
  */
 export function getISTDate(offsetDays = 0) {
   const utc = new Date();
-  const ist = new Date(utc.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const ist = new Date(utc.toLocaleString("en-US", { timeZone: TIMEZONE }));
   ist.setDate(ist.getDate() + offsetDays);
   return ist;
 }
 
 /**
- * Format ISO date string to readable format
+ * Format ISO date string to readable format in IST
  */
 export function formatDate(isoString, options = {}) {
   const date = new Date(isoString);
   if (isNaN(date)) return "-";
   return date.toLocaleString("en-IN", {
+    timeZone: TIMEZONE,
     dateStyle: options.dateStyle || "medium",
     timeStyle: options.timeStyle || "short",
     hour12: true,
@@ -86,10 +90,11 @@ export function getAvatarUrl(username) {
 }
 
 /**
- * Filter data to current month only
+ * Filter data to current month only (using IST)
  */
 export function filterToCurrentMonth(dataMap) {
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const now = getISTDate();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   return Object.fromEntries(
     Object.entries(dataMap).filter(([date]) => date.startsWith(thisMonth))
   );
