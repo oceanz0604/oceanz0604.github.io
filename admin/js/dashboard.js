@@ -6,6 +6,14 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { FDB_DATASET_CONFIG, FDB_APP_NAME } from "../../shared/config.js";
+import { 
+  getStaffSession, 
+  hasPermission, 
+  getCurrentRole, 
+  handleStaffLogout,
+  clearStaffSession,
+  ROLES 
+} from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -48,9 +56,51 @@ const elements = {
 let activeSessions = {};
 let autoRefreshInterval = null;
 
+// ==================== PERMISSIONS SETUP ====================
+
+function initializePermissions() {
+  const session = getStaffSession();
+  const roleInfo = getCurrentRole();
+  
+  if (!session || !roleInfo) {
+    console.warn("No staff session found");
+    return;
+  }
+  
+  // Update role badge
+  const currentUserNameEl = $("currentUserName");
+  const currentUserRoleEl = $("currentUserRole");
+  
+  if (currentUserNameEl) currentUserNameEl.textContent = session.name || session.email?.split("@")[0] || "Unknown";
+  if (currentUserRoleEl) {
+    currentUserRoleEl.textContent = `${roleInfo.icon} ${roleInfo.name}`;
+    currentUserRoleEl.style.background = `${roleInfo.color}20`;
+    currentUserRoleEl.style.color = roleInfo.color;
+    currentUserRoleEl.style.border = `1px solid ${roleInfo.color}50`;
+  }
+  
+  // Filter navigation based on permissions
+  const navItems = document.querySelectorAll("#mainNav [data-permission]");
+  navItems.forEach(item => {
+    const permission = item.dataset.permission;
+    if (!hasPermission(permission)) {
+      item.style.display = "none";
+    }
+  });
+  
+  console.log(`✅ Permissions loaded for ${session.name} (${session.role})`);
+}
+
 // ==================== VIEW SWITCHER ====================
 
 function switchView(view) {
+  // Check permission before switching
+  if (!hasPermission(view)) {
+    console.warn(`Access denied to ${view} - insufficient permissions`);
+    showAccessDenied(view);
+    return;
+  }
+
   const sections = [
     elements.dashboardSection,
     elements.membersSection,
@@ -94,6 +144,21 @@ function switchView(view) {
     config.nav?.classList.add("active");
     config.onShow?.();
   }
+}
+
+function showAccessDenied(view) {
+  // Show temporary access denied message
+  const toast = document.createElement("div");
+  toast.className = "fixed top-20 right-4 z-50 p-4 rounded-lg font-orbitron text-sm";
+  toast.style.cssText = "background: rgba(255,0,68,0.2); border: 1px solid #ff0044; color: #ff0044;";
+  toast.innerHTML = `
+    <div class="flex items-center gap-2">
+      <span>🚫</span>
+      <span>Access to <strong>${view}</strong> denied</span>
+    </div>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 // ==================== NAV EVENTS ====================
@@ -205,9 +270,149 @@ function fetchData() {
   onValue(sessionsRef, parseActiveSessions, { onlyOnce: false });
 }
 
+// ==================== LOGOUT HANDLER ====================
+
+function setupLogout() {
+  console.log("🔧 Setting up logout handler...");
+  
+  const logoutBtn = document.getElementById("logout-btn");
+  const logoutModal = document.getElementById("logoutModal");
+  const logoutCancelBtn = document.getElementById("logoutCancelBtn");
+  const logoutConfirmBtn = document.getElementById("logoutConfirmBtn");
+  const logoutBtnText = document.getElementById("logoutBtnText");
+  const logoutUserInfo = document.getElementById("logoutUserInfo");
+  
+  console.log("Logout elements found:", { 
+    logoutBtn: !!logoutBtn, 
+    logoutModal: !!logoutModal,
+    logoutCancelBtn: !!logoutCancelBtn,
+    logoutConfirmBtn: !!logoutConfirmBtn
+  });
+  
+  if (!logoutBtn) {
+    console.error("❌ Logout button not found!");
+    return;
+  }
+  
+  if (!logoutModal) {
+    console.error("❌ Logout modal not found!");
+    return;
+  }
+  
+  // Remove any existing listeners by cloning
+  const newLogoutBtn = logoutBtn.cloneNode(true);
+  logoutBtn.parentNode.replaceChild(newLogoutBtn, logoutBtn);
+  
+  // Show modal when logout button clicked
+  newLogoutBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("🚪 Logout button clicked - showing modal");
+    
+    // Show user info in modal
+    const session = getStaffSession();
+    if (logoutUserInfo && session) {
+      logoutUserInfo.textContent = `Logged in as: ${session.name || session.email}`;
+    }
+    
+    // Show modal
+    logoutModal.classList.remove("hidden");
+    logoutModal.classList.add("flex");
+  });
+  
+  // Cancel button - close modal
+  logoutCancelBtn?.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("❌ Cancel clicked - closing modal");
+    closeLogoutModal();
+  });
+  
+  // Click outside modal to close
+  logoutModal.addEventListener("click", function(e) {
+    if (e.target === logoutModal) {
+      closeLogoutModal();
+    }
+  });
+  
+  // Escape key to close
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape" && !logoutModal.classList.contains("hidden")) {
+      closeLogoutModal();
+    }
+  });
+  
+  // Confirm logout
+  logoutConfirmBtn?.addEventListener("click", async function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("✅ Confirm logout clicked");
+    
+    // Show loading state
+    if (logoutBtnText) logoutBtnText.textContent = "Logging out...";
+    if (logoutConfirmBtn) logoutConfirmBtn.disabled = true;
+    
+    try {
+      // Clear staff session first
+      await handleStaffLogout();
+      clearStaffSession();
+      
+      // Sign out from Firebase Auth (using global auth from dashboard.html)
+      if (window.firebaseAuth) {
+        console.log("🔄 Signing out from Firebase...");
+        await window.firebaseAuth.signOut();
+        console.log("✅ Firebase Auth signed out");
+      } else {
+        console.warn("⚠️ Firebase Auth not found");
+      }
+      
+      // Set a flag so login page knows we just logged out
+      sessionStorage.setItem("oceanz_just_logged_out", "true");
+      
+      console.log("✅ Logged out successfully - redirecting...");
+      window.location.href = "index.html";
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Force clear and set flag anyway
+      clearStaffSession();
+      sessionStorage.setItem("oceanz_just_logged_out", "true");
+      window.location.href = "index.html";
+    }
+  });
+  
+  function closeLogoutModal() {
+    logoutModal.classList.add("hidden");
+    logoutModal.classList.remove("flex");
+    // Reset button state
+    if (logoutBtnText) logoutBtnText.textContent = "Logout";
+    if (logoutConfirmBtn) logoutConfirmBtn.disabled = false;
+  }
+  
+  console.log("✅ Logout handler setup complete");
+}
+
 // ==================== INIT ====================
 
 document.addEventListener("DOMContentLoaded", () => {
-  switchView("dashboard");
+  // Initialize permissions first
+  initializePermissions();
+  
+  // Setup logout
+  setupLogout();
+  
+  // Start with first available view
+  const session = getStaffSession();
+  if (session) {
+    const role = ROLES[session.role];
+    const firstAllowedView = role?.permissions?.[0] || "dashboard";
+    switchView(firstAllowedView);
+  } else {
+    switchView("dashboard");
+  }
+  
   startDataSync();
 });
+
+// Export for external use
+window.hasPermission = hasPermission;
+window.switchView = switchView;

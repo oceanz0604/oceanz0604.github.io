@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="OceanZ Admin"/>
-  <link rel="manifest" href="manifest.json"/>
+  <link rel="manifest" href="manifest.webmanifest"/>
   <link rel="icon" type="image/svg+xml" href="../assets/icons/admin-icon.svg"/>
   <link rel="apple-touch-icon" href="../assets/icons/admin-icon.svg"/>
   
@@ -306,32 +306,90 @@
   
   <script type="module">
     import { BOOKING_DB_CONFIG, AUTH_APP_NAME } from "../shared/config.js";
+    
+    // Dynamic import for permissions to handle failures gracefully
+    let handleStaffLogin = null;
+    let getStaffSession = null;
+    let clearStaffSession = null;
+    
+    try {
+      const permissions = await import("./js/permissions.js");
+      handleStaffLogin = permissions.handleStaffLogin;
+      getStaffSession = permissions.getStaffSession;
+      clearStaffSession = permissions.clearStaffSession;
+      console.log("✅ Permissions module loaded");
+    } catch (err) {
+      console.warn("⚠️ Permissions module failed to load:", err);
+    }
 
     const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
     const auth = firebase.auth(authApp);
 
-    auth.onAuthStateChanged((user) => {
+    // Check if we just logged out (flag set by logout action)
+    const justLoggedOut = sessionStorage.getItem("oceanz_just_logged_out");
+    if (justLoggedOut) {
+      sessionStorage.removeItem("oceanz_just_logged_out");
+      console.log("🔄 Just logged out - forcing sign out...");
+      auth.signOut();
+    }
+
+    auth.onAuthStateChanged(async (user) => {
+      console.log("🔔 Auth state changed:", user ? user.email : "signed out");
       document.getElementById("loading").classList.add("hidden");
       
       if (user) {
-        window.location.replace("dashboard.html");
+        // Create/refresh staff session
+        try {
+          if (handleStaffLogin) {
+            console.log("🔄 Creating staff session for:", user.email);
+            const session = await handleStaffLogin(user.email, user.displayName);
+            console.log("✅ Staff session ready:", session?.name, "Role:", session?.role);
+          }
+        } catch (err) {
+          console.error("❌ Staff session error:", err);
+        }
+        
+        // Verify session was created before redirecting
+        const session = getStaffSession ? getStaffSession() : null;
+        if (session) {
+          console.log("✅ Redirecting to dashboard with role:", session.role);
+          window.location.replace("dashboard.html");
+        } else {
+          console.error("❌ Session not created - showing login form");
+          document.getElementById("login-container").classList.remove("hidden");
+        }
       } else {
+        // Clear session on logout
+        console.log("👋 User signed out - clearing session");
+        if (clearStaffSession) clearStaffSession();
         document.getElementById("login-container").classList.remove("hidden");
       }
     });
 
-    document.getElementById("loginForm").addEventListener("submit", (e) => {
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = document.getElementById("email").value;
       const password = document.getElementById("password").value;
       const errorDiv = document.getElementById("loginError");
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      
+      // Show loading state
+      submitBtn.innerHTML = '<span class="animate-pulse">⏳ Authenticating...</span>';
+      submitBtn.disabled = true;
+      errorDiv.classList.add("hidden");
 
-      auth.signInWithEmailAndPassword(email, password)
-        .then(() => {})
-        .catch((error) => {
-          errorDiv.textContent = "⚠️ " + error.message;
-          errorDiv.classList.remove("hidden");
-        });
+      try {
+        // Just sign in - onAuthStateChanged will handle the rest
+        await auth.signInWithEmailAndPassword(email, password);
+        console.log("✅ Firebase Auth successful - waiting for redirect...");
+        // onAuthStateChanged will handle session creation and redirect
+      } catch (error) {
+        console.error("❌ Login error:", error);
+        errorDiv.textContent = "⚠️ " + error.message;
+        errorDiv.classList.remove("hidden");
+        submitBtn.innerHTML = '⚡ Authorize';
+        submitBtn.disabled = false;
+      }
     });
 
     // Service Worker Registration

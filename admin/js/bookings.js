@@ -5,6 +5,13 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, get, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { BOOKING_DB_CONFIG, BOOKING_APP_NAME, CONSTANTS } from "../../shared/config.js";
+import { getStaffSession } from "./permissions.js";
+
+// Get admin name from staff session
+function getAdminName() {
+  const session = getStaffSession();
+  return session?.name || session?.email?.split("@")[0] || "Admin";
+}
 
 // ==================== FIREBASE INIT ====================
 
@@ -74,19 +81,35 @@ window.downloadCSV = () => {
 
 window.deleteBooking = async id => {
   if (confirm("Are you sure you want to delete this booking?")) {
+    const adminName = getAdminName();
+    console.log(`🗑️ Booking ${id} deleted by ${adminName}`);
     await remove(ref(db, `bookings/${id}`));
   }
 };
 
 window.approveBooking = async id => {
-  await update(ref(db, `bookings/${id}`), { status: "Approved", note: "" });
+  const adminName = getAdminName();
+  await update(ref(db, `bookings/${id}`), { 
+    status: "Approved", 
+    note: "",
+    approvedBy: adminName,
+    approvedAt: new Date().toISOString()
+  });
+  console.log(`✅ Booking ${id} approved by ${adminName}`);
   window.fetchBookings();
   lucide?.createIcons();
 };
 
 window.declineBooking = async id => {
+  const adminName = getAdminName();
   const note = prompt("Enter reason for decline:");
-  await update(ref(db, `bookings/${id}`), { status: "Declined", note: note || "" });
+  await update(ref(db, `bookings/${id}`), { 
+    status: "Declined", 
+    note: note || "",
+    declinedBy: adminName,
+    declinedAt: new Date().toISOString()
+  });
+  console.log(`❌ Booking ${id} declined by ${adminName}`);
   window.fetchBookings();
   lucide?.createIcons();
 };
@@ -141,6 +164,19 @@ function renderBookings(bookingsData) {
     const card = document.createElement("div");
     card.className = "booking-card rounded-xl p-4";
 
+    // Build action info
+    let actionInfo = "";
+    if (booking.approvedBy) {
+      actionInfo = `<div class="text-xs mt-2 pt-2 border-t border-gray-700">
+        <span style="color: #00ff88;">✓ Approved by ${booking.approvedBy}</span>
+      </div>`;
+    } else if (booking.declinedBy) {
+      actionInfo = `<div class="text-xs mt-2 pt-2 border-t border-gray-700">
+        <span style="color: #ff0044;">✕ Declined by ${booking.declinedBy}</span>
+        ${booking.note ? `<br><span class="text-gray-500">Reason: ${booking.note}</span>` : ""}
+      </div>`;
+    }
+
     card.innerHTML = `
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-orbitron text-sm font-bold export-cell" style="color: #00f0ff;">${booking.name}</h3>
@@ -152,8 +188,9 @@ function renderBookings(bookingsData) {
         <div><span class="text-gray-500">Duration:</span> <span class="export-cell" style="color: #b829ff;">${booking.duration} mins</span></div>
         <div><span class="text-gray-500">Terminal:</span> <span class="export-cell" style="color: #00ff88;">${booking.pcs.join(", ")}</span></div>
         <div><span class="text-gray-500">Price:</span> <span class="export-cell" style="color: #ffff00;">₹${booking.price}</span></div>
-        ${booking.note ? `<div><span class="text-gray-500">Note:</span> ${booking.note}</div>` : ""}
+        ${booking.note && !booking.declinedBy ? `<div><span class="text-gray-500">Note:</span> ${booking.note}</div>` : ""}
       </div>
+      ${actionInfo}
       <div class="flex flex-wrap gap-2 mt-4">
         ${(group === "upcoming" || group === "ongoing") && statusText === "Pending" ? `
           <button onclick="approveBooking('${key}')" class="neon-btn neon-btn-green flex items-center gap-1 text-xs px-3 py-2 rounded-lg">
