@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ - Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --neon-cyan: #00f0ff;
+      --neon-pink: #ff00ff;
+      --neon-purple: #b829ff;
+      --neon-green: #00ff88;
+      --neon-red: #ff0044;
+      --neon-orange: #ff6b00;
+      --neon-yellow: #ffff00;
+      --dark-bg: #0a0a0f;
+      --card-bg: rgba(15, 15, 25, 0.85);
+      --card-border: rgba(255, 0, 68, 0.2);
+    }
+
+    * { font-family: 'Rajdhani', sans-serif; }
+    .font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+    body {
+      background: var(--dark-bg);
+      background-image: 
+        linear-gradient(rgba(255, 0, 68, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 0, 68, 0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at 0% 0%, rgba(255, 0, 68, 0.08) 0%, transparent 40%),
+        radial-gradient(ellipse at 100% 100%, rgba(184, 41, 255, 0.06) 0%, transparent 40%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--card-bg);
+      border-right: 1px solid var(--card-border);
+      backdrop-filter: blur(10px);
+    }
+
+    .nav-item {
+      transition: all 0.3s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: rgba(255, 0, 68, 0.1);
+      border-color: rgba(255, 0, 68, 0.3);
+    }
+
+    .nav-item.active {
+      background: rgba(255, 0, 68, 0.15);
+      border-color: var(--neon-red);
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+    }
+
+    .nav-item.active span {
+      color: var(--neon-red);
+      text-shadow: 0 0 10px var(--neon-red);
+    }
+
+    /* Neon Card */
+    .neon-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 0 30px rgba(255, 0, 68, 0.05);
+      backdrop-filter: blur(10px);
+    }
+
+    .neon-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--neon-red), transparent);
+      opacity: 0.5;
+    }
+
+    /* Glow Effects */
+    .glow-red { text-shadow: 0 0 10px var(--neon-red), 0 0 20px var(--neon-red); }
+    .glow-cyan { text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan); }
+    .glow-green { text-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green); }
+    .glow-purple { text-shadow: 0 0 10px var(--neon-purple), 0 0 20px var(--neon-purple); }
+    .glow-yellow { text-shadow: 0 0 10px var(--neon-yellow), 0 0 20px var(--neon-yellow); }
+
+    /* Neon Button */
+    .neon-btn {
+      background: linear-gradient(135deg, rgba(255, 0, 68, 0.2), rgba(184, 41, 255, 0.2));
+      border: 1px solid var(--neon-red);
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .neon-btn:hover {
+      background: linear-gradient(135deg, var(--neon-red), var(--neon-purple));
+      box-shadow: 0 0 20px rgba(255, 0, 68, 0.5);
+      transform: translateY(-2px);
+    }
+
+    .neon-btn-green {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 100, 0.2));
+      border-color: var(--neon-green);
+    }
+
+    .neon-btn-green:hover {
+      background: linear-gradient(135deg, var(--neon-green), #00cc66);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+    }
+
+    .neon-btn-cyan {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(0, 200, 255, 0.2));
+      border-color: var(--neon-cyan);
+    }
+
+    .neon-btn-cyan:hover {
+      background: linear-gradient(135deg, var(--neon-cyan), #00aaff);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+    }
+
+    .neon-btn-purple {
+      background: linear-gradient(135deg, rgba(184, 41, 255, 0.2), rgba(150, 30, 200, 0.2));
+      border-color: var(--neon-purple);
+    }
+
+    .neon-btn-purple:hover {
+      background: linear-gradient(135deg, var(--neon-purple), #9920cc);
+      box-shadow: 0 0 20px rgba(184, 41, 255, 0.5);
+    }
+
+    /* Input Styles */
+    .neon-input {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 0, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .neon-input:focus {
+      border-color: var(--neon-red);
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+      outline: none;
+    }
+
+    .neon-select {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 0, 68, 0.3);
+    }
+
+    .neon-select:focus {
+      border-color: var(--neon-red);
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+      outline: none;
+    }
+
+    /* Terminal Card */
+    .terminal-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 0, 68, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .terminal-card:hover {
+      border-color: var(--neon-red);
+      transform: translateY(-2px);
+    }
+
+    .terminal-card.occupied {
+      border-color: var(--neon-red);
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+    }
+
+    .terminal-card.available {
+      border-color: var(--neon-green);
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+    }
+
+    /* Member Card */
+    .member-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .member-card:hover {
+      border-color: var(--neon-cyan);
+      background: rgba(0, 240, 255, 0.05);
+    }
+
+    /* Booking Card */
+    .booking-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 0, 68, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .booking-card:hover {
+      border-color: var(--neon-red);
+      transform: translateY(-2px);
+    }
+
+    /* Status Badges */
+    .status-approved { 
+      background: rgba(0, 255, 136, 0.2); 
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+    }
+    .status-pending { 
+      background: rgba(255, 255, 0, 0.2); 
+      border: 1px solid var(--neon-yellow);
+      color: var(--neon-yellow);
+    }
+    .status-declined { 
+      background: rgba(255, 0, 100, 0.2); 
+      border: 1px solid #ff0064;
+      color: #ff0064;
+    }
+
+    /* Stat Card */
+    .stat-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 0, 68, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--neon-red), var(--neon-purple));
+    }
+
+    /* Recharge Item */
+    .recharge-item {
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 3px solid var(--neon-green);
+      transition: all 0.3s ease;
+    }
+
+    .recharge-item:hover {
+      background: rgba(0, 255, 136, 0.05);
+    }
+
+    /* Timetable */
+    .timetable-row {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .timetable-block {
+      transition: all 0.3s ease;
+    }
+
+    .timetable-block:hover {
+      transform: scaleY(1.1);
+    }
+
+    /* Audit Log */
+    .audit-item {
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 2px solid var(--neon-purple);
+    }
+
+    /* Logout Button */
+    .logout-btn {
+      background: rgba(255, 0, 68, 0.1);
+      border: 1px solid rgba(255, 0, 68, 0.5);
+      transition: all 0.3s ease;
+    }
+
+    .logout-btn:hover {
+      background: rgba(255, 0, 68, 0.3);
+      box-shadow: 0 0 15px rgba(255, 0, 68, 0.4);
+    }
+
+    /* Cyber Lines */
+    .cyber-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--neon-red), transparent);
+    }
+
+    /* Loading Screen */
+    .loading-spinner {
+      border: 3px solid transparent;
+      border-top-color: var(--neon-red);
+      border-right-color: var(--neon-purple);
+    }
+
+    /* Chart container */
+    .chart-container {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 0, 68, 0.1);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    /* Alert pulse */
+    .alert-pulse {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 68, 0.4); }
+      50% { box-shadow: 0 0 25px rgba(255, 0, 68, 0.8); }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+    ::-webkit-scrollbar-thumb { background: var(--neon-red); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--neon-purple); }
+  </style>
+</head>
+<body class="text-white min-h-screen relative">
+
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="min-h-screen flex items-center justify-center relative z-10">
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 loading-spinner rounded-full animate-spin"></div>
+        <div class="absolute inset-2 loading-spinner rounded-full animate-spin" style="animation-direction: reverse; animation-duration: 0.8s;"></div>
+      </div>
+      <p class="text-gray-400 font-orbitron text-sm tracking-wider">INITIALIZING DASHBOARD...</p>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden flex min-h-screen relative z-10">
+    <!-- Sidebar -->
+    <aside class="sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
+      <!-- Logo -->
+      <div class="mb-8 text-center py-4">
+        <div class="w-12 h-12 mx-auto mb-2">
+          <svg viewBox="0 0 100 100" class="w-full h-full">
+            <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
+              fill="none" stroke="url(#sidebarGradient)" stroke-width="2"/>
+            <defs>
+              <linearGradient id="sidebarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#ff0044"/>
+                <stop offset="100%" style="stop-color:#b829ff"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h2 class="font-orbitron text-lg font-bold glow-red" style="color: var(--neon-red);">OCEANZ</h2>
+        <p class="text-xs text-gray-500 tracking-widest">ADMIN PANEL</p>
+      </div>
+
+      <!-- Nav Items -->
+      <nav class="flex-1 space-y-2">
+        <a id="nav-dashboard" href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          <span class="font-medium">Dashboard</span>
+        </a>
+        <a id="nav-members" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="users" class="w-5 h-5"></i>
+          <span class="font-medium">Members</span>
+        </a>
+        <a id="nav-bookings" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+          <span class="font-medium">Bookings</span>
+        </a>
+        <a id="nav-recharges" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+          <span class="font-medium">Recharges</span>
+        </a>
+        <a id="nav-history" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="history" class="w-5 h-5"></i>
+          <span class="font-medium">History</span>
+        </a>
+      </nav>
+
+      <!-- Footer -->
+      <div class="pt-4 border-t border-gray-800 space-y-2">
+        <a href="../member/login.html" target="_blank" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-500 hover:text-cyan-400">
+          <i data-lucide="external-link" class="w-5 h-5"></i>
+          <span class="font-medium">Member Portal</span>
+        </a>
+        <button id="logout-btn" class="logout-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg" style="color: var(--neon-red);">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+          <span class="font-medium">Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 ml-0 md:ml-64">
+      <div class="max-w-7xl mx-auto space-y-8">
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h1 class="font-orbitron text-3xl font-bold glow-red" style="color: var(--neon-red);">TERMINAL STATUS</h1>
+              <p id="timestamp" class="text-sm text-gray-500 mt-1"></p>
+            </div>
+          </div>
+          <div id="group-container" class="space-y-8"></div>
+        </div>
+
+        <!-- Members Section -->
+        <div id="members-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-cyan flex items-center gap-3" style="color: var(--neon-cyan);">
+            <i data-lucide="users" class="w-7 h-7"></i> MEMBERS DATABASE
+          </h2>
+          <div id="membersList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- Bookings Section -->
+        <div id="bookings-section" class="hidden">
+          <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <h2 class="font-orbitron text-2xl font-bold glow-purple flex items-center gap-3" style="color: var(--neon-purple);">
+              <i data-lucide="calendar-clock" class="w-7 h-7"></i> BOOKINGS
+            </h2>
+            <div class="flex gap-3">
+              <button onclick="fetchBookings()" class="neon-btn-cyan neon-btn px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                <i data-lucide="refresh-ccw" class="w-4 h-4"></i> Refresh
+              </button>
+              <button onclick="downloadCSV()" class="neon-btn-green neon-btn px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                <i data-lucide="download" class="w-4 h-4"></i> Export
+              </button>
+            </div>
+          </div>
+
+          <!-- Timetable -->
+          <div class="neon-card rounded-2xl p-4 mb-6 relative">
+            <h3 class="font-orbitron text-sm font-bold mb-4 glow-cyan" style="color: var(--neon-cyan);">🕒 BOOKING TIMETABLE</h3>
+            <div id="timetableWrapper" class="overflow-x-auto relative">
+              <div id="timeHeader" class="grid grid-cols-[140px_repeat(12,_1fr)] text-xs text-gray-500 mb-2"></div>
+              <div id="timetableBody" class="space-y-2"></div>
+            </div>
+          </div>
+          <div id="bookingCards" class="flex flex-col gap-6"></div>
+        </div>
+
+        <!-- Recharges Section -->
+        <div id="recharges-section" class="hidden">
+          <div class="space-y-6">
+            <div class="flex flex-wrap justify-between gap-4 items-center">
+              <h2 class="font-orbitron text-2xl font-bold glow-green flex items-center gap-3" style="color: var(--neon-green);">
+                💳 DAILY RECHARGES
+              </h2>
+              <div class="flex gap-2">
+                <input type="date" id="datePicker" class="neon-input px-3 py-2 rounded-lg text-white"/>
+                <button onclick="exportMonthCSV()" class="neon-btn-cyan neon-btn px-4 py-2 rounded-lg text-sm">📦 Export</button>
+                <button onclick="printSheet()" class="neon-btn-purple neon-btn px-4 py-2 rounded-lg text-sm">🖨 Print</button>
+              </div>
+            </div>
+
+            <!-- Add Recharge -->
+            <div class="neon-card rounded-xl p-4 space-y-4 relative">
+              <h3 class="font-orbitron text-sm font-bold" style="color: var(--neon-green);">➕ ADD RECHARGE</h3>
+              <div class="grid md:grid-cols-5 gap-3">
+                <div class="relative">
+                  <input id="memberInput" placeholder="Member" class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+                  <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
+                </div>
+                <input id="amountInput" type="number" placeholder="₹ Amount" class="neon-input px-3 py-2 rounded-lg text-white"/>
+                <select id="modeInput" class="neon-select px-3 py-2 rounded-lg text-white">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                </select>
+                <input id="noteInput" placeholder="Note" class="neon-input px-3 py-2 rounded-lg text-white"/>
+                <button onclick="addRecharge()" class="neon-btn-green neon-btn rounded-lg px-4 py-2">Save</button>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="stat-card p-4 rounded-xl text-center">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Total</div>
+                <div id="totalAmount" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">₹0</div>
+              </div>
+              <div class="stat-card p-4 rounded-xl text-center">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Cash</div>
+                <div id="cashTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-cyan);">₹0</div>
+              </div>
+              <div class="stat-card p-4 rounded-xl text-center">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">UPI</div>
+                <div id="upiTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-purple);">₹0</div>
+              </div>
+              <div class="stat-card p-4 rounded-xl text-center">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Card</div>
+                <div id="cardTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-orange);">₹0</div>
+              </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="chart-container">
+                <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-cyan);">📊 TODAY</h3>
+                <canvas id="dailyChart"></canvas>
+              </div>
+              <div class="chart-container">
+                <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-purple);">📊 THIS MONTH</h3>
+                <canvas id="monthlyChart"></canvas>
+              </div>
+            </div>
+
+            <div id="rechargeList" class="space-y-2"></div>
+
+            <div class="neon-card rounded-xl p-4 relative">
+              <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-purple);">🔐 AUDIT LOG</h3>
+              <div id="auditLog" class="text-sm text-gray-400 space-y-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Section -->
+        <div id="history-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-purple flex items-center gap-3" style="color: var(--neon-purple);">
+            <i data-lucide="clock" class="w-7 h-7"></i> SESSION HISTORY
+          </h2>
+          <div id="history-cards"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- Auth Check -->
+  <script type="module">
+    import { BOOKING_DB_CONFIG, AUTH_APP_NAME } from "../shared/config.js";
+    
+    const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
+    const auth = firebase.auth(authApp);
+    
+    auth.onAuthStateChanged(user => {
+      const loadingScreen = document.getElementById("loading-screen");
+      const app = document.getElementById("app");
+      
+      if (user) {
+        loadingScreen.classList.add("hidden");
+        app.classList.remove("hidden");
+        lucide.createIcons();
+      } else {
+        window.location.replace("index.html");
+      }
+    });
+    
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("logout-btn")?.addEventListener("click", () => {
+        auth.signOut().then(() => {
+          window.location.replace("index.html");
+        });
+      });
+    });
+  </script>
+
+  <script type="module" src="js/dashboard.js"></script>
+  <script type="module" src="js/bookings.js"></script>
+  <script type="module" src="js/history.js"></script>
+  <script type="module" src="js/recharges.js"></script>
+</body>
+</html>

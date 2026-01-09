@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ - Admin Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --neon-cyan: #00f0ff;
+      --neon-pink: #ff00ff;
+      --neon-purple: #b829ff;
+      --neon-red: #ff0044;
+      --dark-bg: #0a0a0f;
+      --card-bg: rgba(15, 15, 25, 0.9);
+    }
+
+    * { font-family: 'Rajdhani', sans-serif; }
+    .font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+    body {
+      background: var(--dark-bg);
+      background-image: 
+        linear-gradient(rgba(255, 0, 68, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 0, 68, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at 20% 20%, rgba(255, 0, 68, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(184, 41, 255, 0.1) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .neon-card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 0, 68, 0.3);
+      box-shadow: 
+        0 0 20px rgba(255, 0, 68, 0.1),
+        inset 0 0 60px rgba(255, 0, 68, 0.03);
+      backdrop-filter: blur(10px);
+    }
+
+    .neon-glow {
+      text-shadow: 
+        0 0 10px var(--neon-red),
+        0 0 20px var(--neon-red),
+        0 0 40px var(--neon-red);
+    }
+
+    .neon-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 0, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .neon-input:focus {
+      border-color: var(--neon-red);
+      box-shadow: 
+        0 0 10px rgba(255, 0, 68, 0.3),
+        inset 0 0 10px rgba(255, 0, 68, 0.1);
+      outline: none;
+    }
+
+    .neon-btn {
+      background: linear-gradient(135deg, var(--neon-red), var(--neon-purple));
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 600;
+    }
+
+    .neon-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .neon-btn:hover::before {
+      left: 100%;
+    }
+
+    .neon-btn:hover {
+      box-shadow: 
+        0 0 20px rgba(255, 0, 68, 0.5),
+        0 0 40px rgba(255, 0, 68, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .logo-container {
+      position: relative;
+    }
+
+    .logo-container::before {
+      content: '';
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(255, 0, 68, 0.3) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    .cyber-line {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--neon-red), transparent);
+      animation: line-glow 2s ease-in-out infinite;
+    }
+
+    @keyframes line-glow {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .float-particle {
+      position: fixed;
+      width: 4px;
+      height: 4px;
+      background: var(--neon-red);
+      border-radius: 50%;
+      animation: float-up 8s linear infinite;
+      opacity: 0.6;
+    }
+
+    @keyframes float-up {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 0.6; }
+      90% { opacity: 0.6; }
+      100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+    }
+
+    .corner-accent {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--neon-red);
+    }
+
+    .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+    .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+    .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    .shield-icon {
+      filter: drop-shadow(0 0 10px rgba(255, 0, 68, 0.5));
+    }
+  </style>
+</head>
+<body class="text-white min-h-screen flex items-center justify-center px-4">
+
+  <!-- Floating particles -->
+  <div class="float-particle" style="left: 10%; animation-delay: 0s;"></div>
+  <div class="float-particle" style="left: 25%; animation-delay: 1.5s;"></div>
+  <div class="float-particle" style="left: 45%; animation-delay: 2.5s;"></div>
+  <div class="float-particle" style="left: 65%; animation-delay: 3.5s;"></div>
+  <div class="float-particle" style="left: 85%; animation-delay: 4.5s;"></div>
+
+  <div class="relative z-10 w-full max-w-md">
+    <!-- Main Card -->
+    <div id="login-container" class="neon-card rounded-xl p-8 relative hidden">
+      <!-- Corner accents -->
+      <div class="corner-accent corner-tl"></div>
+      <div class="corner-accent corner-tr"></div>
+      <div class="corner-accent corner-bl"></div>
+      <div class="corner-accent corner-br"></div>
+
+      <!-- Logo Section -->
+      <div class="text-center mb-8">
+        <div class="logo-container inline-block mb-4">
+          <div class="w-20 h-20 mx-auto relative flex items-center justify-center">
+            <svg viewBox="0 0 100 100" class="w-full h-full shield-icon">
+              <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
+                fill="none" stroke="url(#adminGradient)" stroke-width="2"/>
+              <defs>
+                <linearGradient id="adminGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#ff0044"/>
+                  <stop offset="100%" style="stop-color:#b829ff"/>
+                </linearGradient>
+              </defs>
+              <text x="50" y="55" text-anchor="middle" fill="#ff0044" font-size="20" font-family="Orbitron" font-weight="bold">ADMIN</text>
+            </svg>
+          </div>
+        </div>
+        <h1 class="font-orbitron text-2xl font-bold neon-glow tracking-wider" style="color: var(--neon-red);">
+          CONTROL CENTER
+        </h1>
+        <p class="text-gray-400 mt-2 tracking-widest text-sm uppercase">Authorized Personnel Only</p>
+        <div class="cyber-line mt-4"></div>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="space-y-6">
+        <div>
+          <label for="email" class="block text-sm font-medium mb-2 tracking-wider uppercase" style="color: #ff6688;">
+            Admin Email
+          </label>
+          <input type="email" id="email" required placeholder="admin@oceanz.com" 
+            class="neon-input w-full px-4 py-3 rounded-lg text-white placeholder-gray-500"/>
+        </div>
+
+        <div>
+          <label for="password" class="block text-sm font-medium mb-2 tracking-wider uppercase" style="color: #ff6688;">
+            Access Key
+          </label>
+          <input type="password" id="password" required placeholder="••••••••" 
+            class="neon-input w-full px-4 py-3 rounded-lg text-white placeholder-gray-500"/>
+        </div>
+
+        <button type="submit" class="neon-btn w-full py-4 rounded-lg text-white font-orbitron text-sm">
+          ⚡ Authorize
+        </button>
+
+        <p id="loginError" class="text-red-400 text-sm text-center hidden"></p>
+      </form>
+    </div>
+
+    <!-- Loading spinner -->
+    <div id="loading" class="text-center">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 border-2 border-transparent rounded-full animate-spin" 
+          style="border-top-color: #ff0044; border-right-color: #b829ff;"></div>
+        <div class="absolute inset-2 border-2 border-transparent rounded-full animate-spin" 
+          style="border-bottom-color: #ff0044; border-left-color: #b829ff; animation-direction: reverse; animation-duration: 0.8s;"></div>
+      </div>
+      <p class="text-gray-400 font-orbitron text-sm tracking-wider">AUTHENTICATING...</p>
+    </div>
+
+    <!-- Bottom decoration -->
+    <div class="flex justify-center mt-6 gap-2">
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #ff0044;"></div>
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #b829ff; animation-delay: 0.2s;"></div>
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #ff0044; animation-delay: 0.4s;"></div>
+    </div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  
+  <script type="module">
+    import { BOOKING_DB_CONFIG, AUTH_APP_NAME } from "../shared/config.js";
+
+    const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
+    const auth = firebase.auth(authApp);
+
+    auth.onAuthStateChanged((user) => {
+      document.getElementById("loading").classList.add("hidden");
+      
+      if (user) {
+        window.location.replace("dashboard.html");
+      } else {
+        document.getElementById("login-container").classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const errorDiv = document.getElementById("loginError");
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {})
+        .catch((error) => {
+          errorDiv.textContent = "⚠️ " + error.message;
+          errorDiv.classList.remove("hidden");
+        });
+    });
+  </script>
+</body>
+</html>
