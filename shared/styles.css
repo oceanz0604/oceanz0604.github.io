@@ -1,0 +1,184 @@
+/**
+ * OceanZ Gaming Cafe - Global Styles
+ * Shared styles for pages not using Tailwind
+ */
+
+:root {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2b2b2b;
+  --text-primary: #f0f0f0;
+  --text-secondary: #ccc;
+  --text-muted: #888;
+  --accent-blue: #4da6ff;
+  --accent-blue-hover: #2b7ae4;
+  --accent-green: #22c55e;
+  --accent-red: #ef4444;
+  --border-color: #333;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 20px;
+  line-height: 1.5;
+}
+
+/* Container */
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: var(--bg-secondary);
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(80, 150, 255, 0.15);
+}
+
+/* Typography */
+h1 {
+  text-align: center;
+  font-size: 1.8rem;
+  margin-bottom: 20px;
+  color: var(--accent-blue);
+}
+
+h2 {
+  font-size: 1.4rem;
+  margin-bottom: 15px;
+  color: var(--text-primary);
+}
+
+/* Form Elements */
+label {
+  display: block;
+  margin-top: 15px;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent-blue);
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: var(--accent-blue);
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: var(--accent-blue-hover);
+}
+
+button.secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+button.danger {
+  background-color: var(--accent-red);
+  color: white;
+}
+
+button.success {
+  background-color: var(--accent-green);
+  color: white;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  color: var(--accent-blue);
+}
+
+/* Booking Card */
+.booking-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.booking-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+  color: var(--accent-blue);
+}
+
+.booking-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.booking-details div {
+  flex: 1 1 150px;
+  color: var(--text-secondary);
+}
+
+.booking-details strong {
+  color: var(--text-primary);
+}
+
+/* Links */
+a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Utilities */
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.mt-4 { margin-top: 1rem; }
+.mb-4 { margin-bottom: 1rem; }
+
+/* Hide scrollbar */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
