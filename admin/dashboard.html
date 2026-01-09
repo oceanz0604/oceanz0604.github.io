@@ -814,8 +814,76 @@
           .then(reg => console.log('SW registered:', reg.scope))
           .catch(err => console.log('SW registration failed:', err));
       }
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      const installBanner = document.getElementById('installBanner');
+      const installBtn = document.getElementById('installBtn');
+      const dismissBtn = document.getElementById('dismissInstall');
+
+      const installDismissed = localStorage.getItem('adminPwaInstallDismissed');
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        if (!installDismissed && !isStandalone) {
+          setTimeout(() => {
+            installBanner?.classList.remove('hidden');
+          }, 3000);
+        }
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installBanner?.classList.add('hidden');
+      });
+
+      dismissBtn?.addEventListener('click', () => {
+        installBanner?.classList.add('hidden');
+        localStorage.setItem('adminPwaInstallDismissed', 'true');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        installBanner?.classList.add('hidden');
+        deferredPrompt = null;
+      });
     });
   </script>
+
+  <!-- Install App Banner -->
+  <div id="installBanner" class="fixed bottom-4 left-4 right-4 mx-auto max-w-sm p-4 rounded-xl hidden z-50"
+    style="background: linear-gradient(135deg, rgba(255,0,68,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(255,0,68,0.5); backdrop-filter: blur(10px); animation: slideUp 0.3s ease-out;">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(255,0,68,0.2);">
+        <svg viewBox="0 0 100 100" class="w-8 h-8">
+          <path d="M50,10 L85,25 L85,55 C85,75 50,90 50,90 C50,90 15,75 15,55 L15,25 Z" 
+            fill="none" stroke="#ff0044" stroke-width="4"/>
+        </svg>
+      </div>
+      <div class="flex-1">
+        <p class="font-orbitron text-sm font-bold" style="color: #ff0044;">Install Admin App</p>
+        <p class="text-xs text-gray-400">Quick dashboard access</p>
+      </div>
+      <button id="installBtn" class="px-4 py-2 rounded-lg font-orbitron text-xs font-bold"
+        style="background: linear-gradient(135deg, #ff0044, #b829ff); color: #fff;">
+        Install
+      </button>
+      <button id="dismissInstall" class="text-gray-500 hover:text-white p-1">✕</button>
+    </div>
+  </div>
+
+  <style>
+    @keyframes slideUp {
+      from { transform: translateY(100px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
 
   <script type="module" src="js/dashboard.js"></script>
   <script type="module" src="js/bookings.js"></script>
