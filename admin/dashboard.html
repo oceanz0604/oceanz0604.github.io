@@ -8,10 +8,11 @@
   <!-- PWA Meta Tags -->
   <meta name="description" content="OceanZ Gaming Cafe Admin Dashboard - Terminal status, bookings, and analytics"/>
   <meta name="theme-color" content="#ff0044"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="OceanZ Admin"/>
-  <link rel="manifest" href="manifest.json"/>
+  <link rel="manifest" href="manifest.webmanifest"/>
   <link rel="icon" type="image/svg+xml" href="../assets/icons/admin-icon.svg"/>
   <link rel="apple-touch-icon" href="../assets/icons/admin-icon.svg"/>
   
@@ -399,6 +400,76 @@
       background: rgba(0, 255, 136, 0.05);
     }
 
+    /* Audit Filter Buttons */
+    .audit-filter {
+      background: rgba(100, 100, 100, 0.2);
+      color: #888;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .audit-filter:hover {
+      background: rgba(184, 41, 255, 0.1);
+      color: #b829ff;
+    }
+
+    .audit-filter.active {
+      background: rgba(184, 41, 255, 0.2);
+      color: #b829ff;
+      border-color: rgba(184, 41, 255, 0.5);
+    }
+
+    /* Audit Entry */
+    .audit-entry {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .audit-entry:hover {
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .audit-entry.action-ADD { border-left: 3px solid #00ff88; }
+    .audit-entry.action-EDIT { border-left: 3px solid #00f0ff; }
+    .audit-entry.action-DELETE { border-left: 3px solid #ff0044; }
+    .audit-entry.action-CREDIT_PAID { border-left: 3px solid #00ff88; }
+
+    /* Credit Item */
+    .credit-item {
+      background: rgba(255, 107, 0, 0.1);
+      border: 1px solid rgba(255, 107, 0, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .credit-item:hover {
+      border-color: rgba(255, 107, 0, 0.5);
+    }
+
+    .credit-item.paid {
+      background: rgba(0, 255, 136, 0.05);
+      border-color: rgba(0, 255, 136, 0.3);
+      opacity: 0.7;
+    }
+
+    .mark-paid-btn {
+      background: linear-gradient(135deg, rgba(0,255,136,0.2), rgba(0,200,100,0.2));
+      border: 1px solid rgba(0,255,136,0.5);
+      color: #00ff88;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .mark-paid-btn:hover {
+      background: linear-gradient(135deg, #00ff88, #00cc66);
+      color: #000;
+    }
+
     /* Timetable */
     .timetable-row {
       background: rgba(0, 0, 0, 0.3);
@@ -516,7 +587,7 @@
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
       <!-- Logo -->
-      <div class="mb-8 text-center py-4">
+      <div class="mb-4 text-center py-4">
         <div class="w-12 h-12 mx-auto mb-2">
           <svg viewBox="0 0 100 100" class="w-full h-full">
             <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
@@ -533,33 +604,42 @@
         <p class="text-xs text-gray-500 tracking-widest">ADMIN PANEL</p>
       </div>
 
-      <!-- Nav Items -->
-      <nav class="flex-1 space-y-2">
-        <a id="nav-dashboard" href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
+      <!-- Staff Role Badge -->
+      <div id="roleBadgeContainer" class="mb-6 px-2">
+        <div id="roleBadge" class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+          <div class="text-xs text-gray-500 mb-1">Logged in as</div>
+          <div id="currentUserName" class="font-orbitron text-sm truncate" style="color: var(--neon-cyan);">-</div>
+          <div id="currentUserRole" class="inline-block mt-2 text-xs px-2 py-1 rounded-full font-orbitron">-</div>
+        </div>
+      </div>
+
+      <!-- Nav Items (dynamically filtered by permissions) -->
+      <nav id="mainNav" class="flex-1 space-y-2">
+        <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
           <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
           <span class="font-medium">Dashboard</span>
         </a>
-        <a id="nav-members" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-members" href="#" data-permission="members" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="users" class="w-5 h-5"></i>
           <span class="font-medium">Members</span>
         </a>
-        <a id="nav-bookings" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-bookings" href="#" data-permission="bookings" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="calendar-clock" class="w-5 h-5"></i>
           <span class="font-medium">Bookings</span>
         </a>
-        <a id="nav-recharges" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-recharges" href="#" data-permission="recharges" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="wallet" class="w-5 h-5"></i>
           <span class="font-medium">Recharges</span>
         </a>
-        <a id="nav-history" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-history" href="#" data-permission="history" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="history" class="w-5 h-5"></i>
           <span class="font-medium">History</span>
         </a>
-        <a id="nav-analytics" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-analytics" href="#" data-permission="analytics" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
           <span class="font-medium">Analytics</span>
         </a>
-        <a id="nav-staff" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-staff" href="#" data-permission="staff" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
           <span class="font-medium">Staff</span>
         </a>
@@ -645,26 +725,59 @@
             <!-- Add Recharge -->
             <div class="neon-card rounded-xl p-4 space-y-4 relative">
               <h3 class="font-orbitron text-sm font-bold" style="color: var(--neon-green);">➕ ADD RECHARGE</h3>
-              <div class="grid md:grid-cols-5 gap-3">
+              
+              <!-- Row 1: Member and Total -->
+              <div class="grid md:grid-cols-3 gap-3">
                 <div class="relative">
-                  <input id="memberInput" placeholder="Member" class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+                  <label class="text-xs text-gray-500 mb-1 block">Member</label>
+                  <input id="memberInput" placeholder="Search member..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
                   <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
                 </div>
-                <input id="amountInput" type="number" placeholder="₹ Amount" class="neon-input px-3 py-2 rounded-lg text-white"/>
-                <select id="modeInput" class="neon-select px-3 py-2 rounded-lg text-white">
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                  <option value="card">Card</option>
-                </select>
-                <input id="noteInput" placeholder="Note" class="neon-input px-3 py-2 rounded-lg text-white"/>
-                <button onclick="addRecharge()" class="neon-btn-green neon-btn rounded-lg px-4 py-2">Save</button>
+                <div>
+                  <label class="text-xs text-gray-500 mb-1 block">Total Amount</label>
+                  <input id="totalAmountInput" type="number" placeholder="₹ Total" class="neon-input w-full px-3 py-2 rounded-lg text-white" oninput="updateSplitRemaining()"/>
+                </div>
+                <div>
+                  <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
+                  <input id="noteInput" placeholder="Note" class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+                </div>
               </div>
+
+              <!-- Row 2: Split Payment -->
+              <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-xs text-gray-400 uppercase tracking-wider">Split Payment</span>
+                  <span id="splitRemaining" class="text-xs font-orbitron" style="color: #00ff88;">Remaining: ₹0</span>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #00f0ff;">💵 Cash</label>
+                    <input id="cashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
+                  </div>
+                  <div>
+                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #b829ff;">📱 UPI</label>
+                    <input id="upiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
+                  </div>
+                  <div>
+                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #ff6b00;">🔖 Credit</label>
+                    <input id="creditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
+                  </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                  <button onclick="autoFillCash()" class="text-xs px-3 py-1 rounded" style="background: rgba(0,240,255,0.1); color: #00f0ff;">All Cash</button>
+                  <button onclick="autoFillUpi()" class="text-xs px-3 py-1 rounded" style="background: rgba(184,41,255,0.1); color: #b829ff;">All UPI</button>
+                  <button onclick="autoFillCredit()" class="text-xs px-3 py-1 rounded" style="background: rgba(255,107,0,0.1); color: #ff6b00;">All Credit</button>
+                  <button onclick="clearSplit()" class="text-xs px-3 py-1 rounded ml-auto" style="background: rgba(255,0,68,0.1); color: #ff0044;">Clear</button>
+                </div>
+              </div>
+
+              <button onclick="addRecharge()" class="neon-btn-green neon-btn w-full rounded-lg px-4 py-3 font-orbitron">💾 Save Recharge</button>
             </div>
 
             <!-- Summary -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div class="stat-card p-4 rounded-xl text-center">
-                <div class="text-gray-500 text-xs uppercase tracking-wider">Total</div>
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Total Collected</div>
                 <div id="totalAmount" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">₹0</div>
               </div>
               <div class="stat-card p-4 rounded-xl text-center">
@@ -675,29 +788,55 @@
                 <div class="text-gray-500 text-xs uppercase tracking-wider">UPI</div>
                 <div id="upiTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-purple);">₹0</div>
               </div>
-              <div class="stat-card p-4 rounded-xl text-center">
-                <div class="text-gray-500 text-xs uppercase tracking-wider">Card</div>
-                <div id="cardTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-orange);">₹0</div>
+              <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(255,107,0,0.3);">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Credit (Pending)</div>
+                <div id="creditTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-orange);">₹0</div>
+              </div>
+              <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(0,255,136,0.3);">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">Credit (Paid)</div>
+                <div id="creditPaidTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">₹0</div>
               </div>
             </div>
 
-            <!-- Charts -->
-            <div class="grid md:grid-cols-2 gap-6">
-              <div class="chart-container">
-                <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-cyan);">📊 TODAY</h3>
-                <canvas id="dailyChart"></canvas>
-              </div>
-              <div class="chart-container">
-                <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-purple);">📊 THIS MONTH</h3>
-                <canvas id="monthlyChart"></canvas>
+            <!-- Outstanding Credits Section -->
+            <div id="outstandingCreditsSection" class="hidden">
+              <div class="neon-card rounded-xl p-4 relative" style="border-color: rgba(255,107,0,0.3);">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-orange);">
+                    🔖 OUTSTANDING CREDITS
+                    <span id="outstandingCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2);">0</span>
+                  </h3>
+                  <span id="outstandingTotal" class="font-orbitron font-bold" style="color: var(--neon-orange);">₹0</span>
+                </div>
+                <div id="outstandingCreditsList" class="space-y-2"></div>
               </div>
             </div>
 
+            <!-- Recharge List -->
             <div id="rechargeList" class="space-y-2"></div>
 
-            <div class="neon-card rounded-xl p-4 relative">
-              <h3 class="font-orbitron text-sm font-bold mb-3" style="color: var(--neon-purple);">🔐 AUDIT LOG</h3>
-              <div id="auditLog" class="text-sm text-gray-400 space-y-2"></div>
+            <!-- Collapsible Audit Log -->
+            <div class="neon-card rounded-xl relative overflow-hidden">
+              <button id="auditToggle" class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-800/30 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span style="color: var(--neon-purple);">🔐</span>
+                  <h3 class="font-orbitron text-sm font-bold" style="color: var(--neon-purple);">AUDIT LOG</h3>
+                  <span id="auditCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(184,41,255,0.2); color: var(--neon-purple);">0</span>
+                </div>
+                <i data-lucide="chevron-down" id="auditChevron" class="w-5 h-5 transition-transform" style="color: var(--neon-purple);"></i>
+              </button>
+              <div id="auditLogContainer" class="hidden border-t border-gray-800">
+                <div class="p-4 flex items-center justify-between border-b border-gray-800/50">
+                  <div class="flex gap-2">
+                    <button onclick="filterAudit('all')" class="audit-filter active text-xs px-3 py-1 rounded-full" data-filter="all">All</button>
+                    <button onclick="filterAudit('ADD')" class="audit-filter text-xs px-3 py-1 rounded-full" data-filter="ADD">Added</button>
+                    <button onclick="filterAudit('EDIT')" class="audit-filter text-xs px-3 py-1 rounded-full" data-filter="EDIT">Edited</button>
+                    <button onclick="filterAudit('DELETE')" class="audit-filter text-xs px-3 py-1 rounded-full" data-filter="DELETE">Deleted</button>
+                  </div>
+                  <button onclick="loadMoreAudit()" class="text-xs px-3 py-1 rounded-lg" style="color: var(--neon-cyan);">Load More</button>
+                </div>
+                <div id="auditLog" class="max-h-96 overflow-y-auto p-4 space-y-2"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -741,6 +880,9 @@
     const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
     const auth = firebase.auth(authApp);
     
+    // Expose auth globally for logout functionality
+    window.firebaseAuth = auth;
+    
     auth.onAuthStateChanged(user => {
       const loadingScreen = document.getElementById("loading-screen");
       const app = document.getElementById("app");
@@ -755,11 +897,7 @@
     });
     
     document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("logout-btn")?.addEventListener("click", () => {
-        auth.signOut().then(() => {
-          window.location.replace("index.html");
-        });
-      });
+      // Logout is handled by dashboard.js with modal
 
       // Mobile Sidebar Toggle
       const sidebar = document.getElementById("sidebar");
@@ -878,10 +1016,113 @@
     </div>
   </div>
 
+  <!-- Credit Collection Modal -->
+  <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+    <div class="neon-card rounded-2xl w-full max-w-md p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
+      <button onclick="closeCollectModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white">✕</button>
+      
+      <h3 class="font-orbitron text-lg font-bold mb-2" style="color: #ff6b00;">💰 COLLECT CREDIT</h3>
+      <p id="collectModalInfo" class="text-gray-400 text-sm mb-4"></p>
+      
+      <div class="space-y-4">
+        <!-- Pending Amount Display -->
+        <div class="p-3 rounded-lg text-center" style="background: rgba(255,107,0,0.1); border: 1px solid rgba(255,107,0,0.3);">
+          <div class="text-xs text-gray-400 uppercase tracking-wider">Pending Credit</div>
+          <div id="collectPendingAmount" class="text-2xl font-bold font-orbitron mt-1" style="color: #ff6b00;">₹0</div>
+        </div>
+
+        <!-- Split Collection -->
+        <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-gray-400 uppercase tracking-wider">Payment Split</span>
+            <span id="collectRemaining" class="text-xs font-orbitron" style="color: #00ff88;">Remaining: ₹0</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #00f0ff;">💵 Cash</label>
+              <input id="collectCashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #b829ff;">📱 UPI</label>
+              <input id="collectUpiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #ff6b00;">🔖 Still Credit</label>
+              <input id="collectCreditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button onclick="collectAllCash()" class="text-xs px-3 py-1 rounded flex-1" style="background: rgba(0,240,255,0.1); color: #00f0ff;">All Cash</button>
+            <button onclick="collectAllUpi()" class="text-xs px-3 py-1 rounded flex-1" style="background: rgba(184,41,255,0.1); color: #b829ff;">All UPI</button>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3">
+          <button onclick="closeCollectModal()" class="flex-1 px-4 py-3 rounded-lg text-gray-400" style="background: rgba(100,100,100,0.2);">Cancel</button>
+          <button onclick="confirmCollectCredit()" class="flex-1 px-4 py-3 rounded-lg font-orbitron font-bold" style="background: linear-gradient(135deg, #00ff88, #00cc66); color: #000;">
+            ✓ Confirm Collection
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout Confirmation Modal -->
+  <div id="logoutModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+    <div class="neon-card rounded-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all" style="border-color: rgba(255,0,68,0.5); animation: modalSlideIn 0.3s ease-out;">
+      
+      <!-- Icon -->
+      <div class="text-center mb-6">
+        <div class="w-20 h-20 mx-auto rounded-full flex items-center justify-center" 
+          style="background: rgba(255,0,68,0.1); border: 2px solid rgba(255,0,68,0.3);">
+          <svg viewBox="0 0 24 24" class="w-10 h-10" style="color: #ff0044;" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div class="text-center mb-6">
+        <h3 class="font-orbitron text-xl font-bold mb-2" style="color: #ff0044;">LOGOUT</h3>
+        <p class="text-gray-400">Are you sure you want to end your session?</p>
+        <p id="logoutUserInfo" class="text-sm mt-2" style="color: #00f0ff;"></p>
+      </div>
+      
+      <!-- Buttons -->
+      <div class="flex gap-3">
+        <button id="logoutCancelBtn" class="flex-1 px-4 py-3 rounded-lg font-orbitron text-sm transition-all hover:bg-gray-700" 
+          style="background: rgba(100,100,100,0.3); color: #888;">
+          Cancel
+        </button>
+        <button id="logoutConfirmBtn" class="flex-1 px-4 py-3 rounded-lg font-orbitron text-sm font-bold transition-all"
+          style="background: linear-gradient(135deg, #ff0044, #cc0033); color: #fff;">
+          <span id="logoutBtnText">Logout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <style>
     @keyframes slideUp {
       from { transform: translateY(100px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
+    }
+    
+    @keyframes modalSlideIn {
+      from { transform: scale(0.9) translateY(-20px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    
+    #logoutConfirmBtn:hover {
+      box-shadow: 0 0 20px rgba(255, 0, 68, 0.5);
+      transform: translateY(-1px);
+    }
+    
+    #logoutCancelBtn:hover {
+      color: #fff;
     }
   </style>
 

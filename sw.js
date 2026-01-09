@@ -3,46 +3,73 @@
  * Enables offline functionality and caching
  */
 
-const CACHE_NAME = 'oceanz-v1';
+const CACHE_NAME = 'oceanz-v2';
 const OFFLINE_URL = '/offline.html';
 
-// Assets to cache immediately on install
+// Core assets to cache (only essential files)
 const PRECACHE_ASSETS = [
-  '/',
+  '/offline.html',
+  '/assets/icons/icon.svg',
+  '/assets/icons/admin-icon.svg'
+];
+
+// Optional assets to cache (won't fail if missing)
+const OPTIONAL_ASSETS = [
   '/member/login.html',
   '/member/dashboard.html',
-  '/member/js/login.js',
-  '/member/js/dashboard.js',
   '/admin/index.html',
   '/admin/dashboard.html',
-  '/admin/manifest.json',
-  '/admin/js/dashboard.js',
-  '/admin/js/bookings.js',
-  '/admin/js/recharges.js',
-  '/admin/js/history.js',
-  '/admin/js/analytics.js',
-  '/admin/js/staff.js',
   '/shared/config.js',
-  '/shared/utils.js',
-  '/assets/icons/icon.svg',
-  '/assets/icons/admin-icon.svg',
-  '/manifest.json',
-  '/offline.html',
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/lucide@latest',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap'
+  '/manifest.webmanifest',
+  '/admin/manifest.webmanifest'
 ];
+
+// Helper: Cache assets gracefully (skip failures)
+async function cacheAssets(cache, assets, required = false) {
+  const results = await Promise.allSettled(
+    assets.map(async url => {
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (response.ok) {
+          await cache.put(url, response);
+          return { url, success: true };
+        }
+        throw new Error(`HTTP ${response.status}`);
+      } catch (err) {
+        if (required) throw err;
+        console.warn(`[SW] Failed to cache (skipping): ${url}`);
+        return { url, success: false };
+      }
+    })
+  );
+  return results;
+}
 
 // Install event - precache assets
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
+      .then(async cache => {
         console.log('[SW] Precaching assets');
-        return cache.addAll(PRECACHE_ASSETS);
+        
+        // Cache required assets (will fail install if missing)
+        try {
+          await cacheAssets(cache, PRECACHE_ASSETS, true);
+        } catch (err) {
+          console.warn('[SW] Some core assets missing, continuing...');
+        }
+        
+        // Cache optional assets (won't fail if missing)
+        await cacheAssets(cache, OPTIONAL_ASSETS, false);
+        
+        console.log('[SW] Precaching complete');
       })
       .then(() => self.skipWaiting())
+      .catch(err => {
+        console.error('[SW] Install failed:', err);
+        // Still skip waiting to allow updates
+        self.skipWaiting();
+      })
   );
 });
 
