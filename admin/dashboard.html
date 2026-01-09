@@ -4,6 +4,17 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OceanZ - Admin Dashboard</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="description" content="OceanZ Gaming Cafe Admin Dashboard - Terminal status, bookings, and analytics"/>
+  <meta name="theme-color" content="#ff0044"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="OceanZ Admin"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/admin-icon.svg"/>
+  <link rel="apple-touch-icon" href="../assets/icons/admin-icon.svg"/>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -796,6 +807,13 @@
           closeSidebar();
         }
       });
+
+      // Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('../sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      }
     });
   </script>
 

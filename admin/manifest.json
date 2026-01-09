@@ -1,0 +1,49 @@
+{
+  "name": "OceanZ Admin Panel",
+  "short_name": "OceanZ Admin",
+  "description": "Gaming cafe admin dashboard - manage bookings, members, and recharges",
+  "start_url": "/admin/dashboard.html",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#ff0044",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/icons/admin-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View terminal status",
+      "url": "/admin/dashboard.html",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Bookings",
+      "short_name": "Bookings",
+      "description": "Manage bookings",
+      "url": "/admin/dashboard.html?view=bookings",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Recharges",
+      "short_name": "Recharges",
+      "description": "Add recharges",
+      "url": "/admin/dashboard.html?view=recharges",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any" }]
+    }
+  ]
+}
+

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a1a"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="neon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff0044"/>
+      <stop offset="100%" style="stop-color:#b829ff"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  
+  <!-- Shield Shape -->
+  <path d="M256,60 L420,120 L420,280 C420,380 256,450 256,450 C256,450 92,380 92,280 L92,120 Z" 
+    fill="none" stroke="url(#neon)" stroke-width="12"/>
+  
+  <!-- Admin Text -->
+  <text x="256" y="270" text-anchor="middle" 
+    font-family="Arial Black, sans-serif" font-size="80" font-weight="900"
+    fill="#ff0044">ADM</text>
+</svg>
+
