@@ -34,23 +34,15 @@ const bookingCardsEl = document.getElementById("bookingCards");
 // Listen for real-time booking changes
 const bookingsRef = ref(db2, "bookings");
 onValue(bookingsRef, (snapshot) => {
-  const data = snapshot.val() || {};
-  const bookings = Object.entries(data).map(([id, b]) => ({
-    id,
-    ...b
-  }));
-  renderBookings(bookings);
+  const data = snapshot.val();
+  renderBookings(data);
 });
 
 window.fetchBookings = () => {
   const now = new Date();
   const data = get(ref(db2, "bookings")).then(snapshot => {
     const val = snapshot.val();
-    const bookings = Object.entries(val).map(([id, b]) => ({
-    id,
-    ...b
-    }));
-    renderBookings(bookings);
+    renderBookings(val);
   });
 };
 
@@ -79,85 +71,6 @@ function formatDate(isoString) {
     dateStyle: "medium",
     timeStyle: "short",
     hour12: true,
-  });
-}
-
-function getBookingColor(status) {
-  if (status === "approved") return "bg-green-600/90";
-  return "bg-yellow-500/90"; // pending
-}
-
-function renderTimeHeader() {
-  const header = document.getElementById("timeHeader");
-  header.innerHTML = `<div></div>`;
-
-  for (let h = 0; h < 24; h += 2) {
-    header.innerHTML += `
-      <div class="text-center border-l border-gray-700">
-        ${String(h).padStart(2, "0")}:00
-      </div>
-    `;
-  }
-}
-
-const PCS = [
-  ...Array.from({ length: 7 }, (_, i) => `CT-ROOM-${i+1}`),
-  ...Array.from({ length: 7 }, (_, i) => `T-ROOM-${i+1}`),
-  "PS",
-  "XBOX ONE X"
-];
-
-function timeToHourIndex(timeStr) {
-  // "14:30" → 14.5
-  const [h, m] = timeStr.split(":").map(Number);
-  return h + m / 60;
-}
-
-function renderTimetable(bookings) {
-  const body = document.getElementById("timetableBody");
-  body.innerHTML = "";
-
-  PCS.forEach(pc => {
-    const row = document.createElement("div");
-    row.className = "grid grid-cols-[150px_repeat(24,_1fr)] relative h-12 bg-gray-900 rounded";
-    // PC Name
-    row.innerHTML = `
-      <div class="px-2 py-1 text-sm font-semibold text-white border-r border-gray-700">
-        ${pc}
-      </div>
-    `;
-
-    // Empty cells
-    for (let i = 0; i < 24; i++) {
-      row.innerHTML += `<div class="border-l border-gray-800"></div>`;
-    }
-
-    // Bookings for this PC
-    bookings
-      .filter(b => b.PC === pc)
-      .forEach(b => {
-        const start = timeToHourIndex(b.startTime);
-        const end = timeToHourIndex(b.endTime);
-        const left = (start / 24) * 100;
-        const width = ((end - start) / 24) * 100;
-
-        const block = document.createElement("div");
-        block.className = `
-          absolute top-1 h-10 rounded text-xs text-white px-2
-          ${getBookingColor(b.status)}
-        `;
-        // 150px = PC name column width
-        const PC_COL_WIDTH = 150;
-
-        block.style.left = `calc(${left}% + ${PC_COL_WIDTH}px)`;
-        block.style.width = `calc(${width}% - 4px)`; // small padding fix
-
-        block.innerText = `${b.name} (${b.startTime}-${b.endTime})`;
-
-        row.appendChild(block);
-      });
-
-    body.appendChild(row);
   });
 }
 
@@ -286,8 +199,6 @@ function renderBookings(bookingsData) {
   }
 
   lucide.createIcons(); // initialize icons
-  renderTimeHeader();
-  renderTimetable(bookingsData);
 }
 
 window.handleBookingAction = async (bookingId, action) => {
