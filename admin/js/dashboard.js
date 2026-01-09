@@ -5,13 +5,14 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { FDB_DATASET_CONFIG, FDB_APP_NAME } from "../../shared/config.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST } from "../../shared/config.js";
 import { 
   getStaffSession, 
   hasPermission, 
   getCurrentRole, 
   handleStaffLogout,
   clearStaffSession,
+  refreshSessionActivity,
   ROLES 
 } from "./permissions.js";
 
@@ -63,7 +64,9 @@ function initializePermissions() {
   const roleInfo = getCurrentRole();
   
   if (!session || !roleInfo) {
-    console.warn("No staff session found");
+    console.error("❌ No staff session found - redirecting to login");
+    // Redirect to login if no session
+    window.location.replace("index.html");
     return;
   }
   
@@ -219,7 +222,8 @@ function parseActiveSessions(snapshot) {
 function renderTerminals(data) {
   if (!elements.timestamp || !elements.groupContainer) return;
   
-  elements.timestamp.textContent = "Last updated: " + new Date().toLocaleString("en-IN");
+  // Use IST timezone for timestamp
+  elements.timestamp.textContent = "Last updated: " + formatToIST(new Date());
 
   const groups = { "T-ROOM": [], "CT-ROOM": [], "PS/XBOX": [] };
 
@@ -394,6 +398,9 @@ function setupLogout() {
 // ==================== INIT ====================
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Refresh session activity timestamp (keeps session alive for PWA)
+  refreshSessionActivity();
+  
   // Initialize permissions first
   initializePermissions();
   

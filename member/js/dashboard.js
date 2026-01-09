@@ -19,10 +19,87 @@ if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
 const db = bookingApp.database();
 const secondDb = fdbApp.database();
 
+// ==================== MEMBER SESSION (localStorage for PWA persistence) ====================
+
+const MEMBER_SESSION_KEY = "oceanz_member_session";
+const MEMBER_SESSION_TIME_KEY = "oceanz_member_session_time";
+const SESSION_MAX_AGE_DAYS = 7;
+
+function getMemberSession() {
+  try {
+    // First try localStorage (persistent)
+    let data = localStorage.getItem(MEMBER_SESSION_KEY);
+    
+    // Fallback to sessionStorage for backward compatibility
+    if (!data) {
+      data = sessionStorage.getItem("member");
+      if (data) {
+        // Migrate to localStorage
+        localStorage.setItem(MEMBER_SESSION_KEY, data);
+        localStorage.setItem(MEMBER_SESSION_TIME_KEY, new Date().toISOString());
+      }
+    }
+    
+    if (!data) return null;
+    
+    // Check session expiry
+    const timestamp = localStorage.getItem(MEMBER_SESSION_TIME_KEY);
+    if (timestamp) {
+      const lastActivity = new Date(timestamp);
+      const now = new Date();
+      const daysSinceActivity = (now - lastActivity) / (1000 * 60 * 60 * 24);
+      
+      if (daysSinceActivity > SESSION_MAX_AGE_DAYS) {
+        console.log("Member session expired");
+        clearMemberSession();
+        return null;
+      }
+    }
+    
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function refreshMemberSession() {
+  if (localStorage.getItem(MEMBER_SESSION_KEY)) {
+    localStorage.setItem(MEMBER_SESSION_TIME_KEY, new Date().toISOString());
+  }
+}
+
+function clearMemberSession() {
+  localStorage.removeItem(MEMBER_SESSION_KEY);
+  localStorage.removeItem(MEMBER_SESSION_TIME_KEY);
+  sessionStorage.removeItem("member");
+}
+
+// Export for global access
+window.getMemberSession = getMemberSession;
+window.clearMemberSession = clearMemberSession;
+
 // ==================== AUTH CHECK ====================
 
-const member = JSON.parse(sessionStorage.getItem("member"));
-if (!member) window.location.href = "login.html";
+const member = getMemberSession();
+if (!member) {
+  console.log("❌ No member session found - redirecting to login");
+  window.location.replace("login.html");
+  // Stop script execution
+  throw new Error("No member session - redirecting");
+}
+
+console.log("✅ Member session found:", member.USERNAME);
+// Refresh session activity on dashboard load
+refreshMemberSession();
+
+// Show main app and hide loading screen
+document.addEventListener("DOMContentLoaded", () => {
+  const loadingScreen = document.getElementById("loading-screen");
+  const mainApp = document.getElementById("main-app");
+  
+  if (loadingScreen) loadingScreen.classList.add("hidden");
+  if (mainApp) mainApp.classList.remove("hidden");
+});
 
 // ==================== DOM REFERENCES ====================
 
@@ -263,7 +340,8 @@ function loadMemberBookings(memberUsername) {
       return;
     }
 
-    const now = new Date();
+    // Use IST for current time comparison
+    const now = getISTDate();
     const groups = { upcoming: [], ongoing: [], past: [] };
 
     Object.entries(data).forEach(([id, booking]) => {
@@ -590,7 +668,7 @@ function renderRecentSessions(sessions) {
       <li class="history-card rounded-lg p-4">
         <div class="font-orbitron font-bold" style="color: #00f0ff;">${s.TERMINALNAME}</div>
         <div class="text-gray-400 text-sm mt-1">🕒 <span style="color: #b829ff;">${s.USINGMIN} min</span> | 💰 <span style="color: #00ff88;">₹${s.TOTALPRICE}</span></div>
-        <div class="text-xs text-gray-600 mt-1">Ended: ${new Date(s.ENDPOINT).toLocaleString()}</div>
+        <div class="text-xs text-gray-600 mt-1">Ended: ${formatDate(s.ENDPOINT)}</div>
       </li>
     `).join("");
 }

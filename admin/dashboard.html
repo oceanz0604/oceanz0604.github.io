@@ -537,6 +537,9 @@
     ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
     ::-webkit-scrollbar-thumb { background: var(--neon-red); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--neon-purple); }
+
+    /* Chevron rotation for collapsible sections */
+    .rotate-180 { transform: rotate(180deg); }
   </style>
 </head>
 <body class="text-white min-h-screen relative">
@@ -697,12 +700,21 @@
             </div>
           </div>
 
-          <!-- Timetable -->
-          <div class="neon-card rounded-2xl p-4 mb-6 relative">
-            <h3 class="font-orbitron text-sm font-bold mb-4 glow-cyan" style="color: var(--neon-cyan);">🕒 BOOKING TIMETABLE</h3>
-            <div id="timetableWrapper" class="overflow-x-auto relative">
-              <div id="timeHeader" class="grid grid-cols-[140px_repeat(12,_1fr)] text-xs text-gray-500 mb-2"></div>
-              <div id="timetableBody" class="space-y-2"></div>
+          <!-- Collapsible Timetable -->
+          <div class="neon-card rounded-2xl mb-6 relative overflow-hidden">
+            <button id="timetableToggle" class="w-full p-4 flex items-center justify-between text-left hover:bg-gray-800/30 transition-colors">
+              <div class="flex items-center gap-3">
+                <span style="color: var(--neon-cyan);">🕒</span>
+                <h3 class="font-orbitron text-sm font-bold" style="color: var(--neon-cyan);">BOOKING TIMETABLE</h3>
+                <span id="timetableDateBadge" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,240,255,0.2); color: var(--neon-cyan);"></span>
+              </div>
+              <i data-lucide="chevron-down" id="timetableChevron" class="w-5 h-5 transition-transform" style="color: var(--neon-cyan);"></i>
+            </button>
+            <div id="timetableContainer" class="border-t border-gray-800">
+              <div id="timetableWrapper" class="overflow-x-auto relative p-4">
+                <div id="timeHeader" class="grid grid-cols-[140px_repeat(12,_1fr)] text-xs text-gray-500 mb-2"></div>
+                <div id="timetableBody" class="space-y-2"></div>
+              </div>
             </div>
           </div>
           <div id="bookingCards" class="flex flex-col gap-6"></div>
@@ -876,6 +888,7 @@
   <!-- Auth Check -->
   <script type="module">
     import { BOOKING_DB_CONFIG, AUTH_APP_NAME } from "../shared/config.js";
+    import { getStaffSession, handleStaffLogin } from "./js/permissions.js";
     
     const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
     const auth = firebase.auth(authApp);
@@ -883,15 +896,37 @@
     // Expose auth globally for logout functionality
     window.firebaseAuth = auth;
     
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async (user) => {
       const loadingScreen = document.getElementById("loading-screen");
       const app = document.getElementById("app");
       
       if (user) {
+        // Check if staff session exists
+        let session = getStaffSession();
+        
+        // If no session or session email doesn't match, try to create/refresh it
+        if (!session || session.email?.toLowerCase() !== user.email?.toLowerCase()) {
+          console.log("🔄 Creating/refreshing staff session for:", user.email);
+          try {
+            session = await handleStaffLogin(user.email, user.displayName);
+          } catch (err) {
+            console.error("❌ Failed to create staff session:", err);
+          }
+        }
+        
+        // Final check - if still no session, redirect to login
+        if (!session) {
+          console.error("❌ No staff session available - redirecting to login");
+          window.location.replace("index.html");
+          return;
+        }
+        
+        console.log("✅ Staff session verified:", session.name, "Role:", session.role);
         loadingScreen.classList.add("hidden");
         app.classList.remove("hidden");
         lucide.createIcons();
       } else {
+        console.log("👋 No user - redirecting to login");
         window.location.replace("index.html");
       }
     });

@@ -78,24 +78,53 @@ export const MODULE_NAV_MAP = {
 // ==================== STAFF SESSION ====================
 
 const SESSION_KEY = "oceanz_staff_session";
+const SESSION_TIMESTAMP_KEY = "oceanz_staff_session_time";
+const SESSION_MAX_AGE_DAYS = 7; // Session expires after 7 days of inactivity
 
-// Get current staff session from sessionStorage
+// Get current staff session from localStorage (persistent for PWA)
 export function getStaffSession() {
   try {
-    const data = sessionStorage.getItem(SESSION_KEY);
-    return data ? JSON.parse(data) : null;
+    const data = localStorage.getItem(SESSION_KEY);
+    if (!data) return null;
+    
+    // Check if session has expired (7 days of inactivity)
+    const timestamp = localStorage.getItem(SESSION_TIMESTAMP_KEY);
+    if (timestamp) {
+      const lastActivity = new Date(timestamp);
+      const now = new Date();
+      const daysSinceActivity = (now - lastActivity) / (1000 * 60 * 60 * 24);
+      
+      if (daysSinceActivity > SESSION_MAX_AGE_DAYS) {
+        console.log("Session expired due to inactivity");
+        clearStaffSession();
+        return null;
+      }
+    }
+    
+    return JSON.parse(data);
   } catch {
     return null;
   }
 }
 
-// Save staff session
+// Save staff session to localStorage (persistent for PWA)
 export function setStaffSession(staffData) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(staffData));
+  localStorage.setItem(SESSION_KEY, JSON.stringify(staffData));
+  localStorage.setItem(SESSION_TIMESTAMP_KEY, new Date().toISOString());
 }
 
-// Clear staff session
+// Update session activity timestamp (call on user actions)
+export function refreshSessionActivity() {
+  if (localStorage.getItem(SESSION_KEY)) {
+    localStorage.setItem(SESSION_TIMESTAMP_KEY, new Date().toISOString());
+  }
+}
+
+// Clear staff session (only on explicit logout)
 export function clearStaffSession() {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+  // Also clear any legacy sessionStorage
   sessionStorage.removeItem(SESSION_KEY);
 }
 
@@ -328,7 +357,11 @@ export function getNavigationItems() {
 
 // ==================== EXPORTS ====================
 
+// Export to window for global access
 window.hasPermission = hasPermission;
 window.getCurrentRole = getCurrentRole;
 window.logStaffActivity = logStaffActivity;
+window.getStaffSession = getStaffSession;
+window.clearStaffSession = clearStaffSession;
+window.refreshSessionActivity = refreshSessionActivity;
 
