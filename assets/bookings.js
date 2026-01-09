@@ -36,6 +36,9 @@ const bookingsRef = ref(db2, "bookings");
 onValue(bookingsRef, (snapshot) => {
   const data = snapshot.val();
   renderBookings(data);
+  const timetableBookings = buildTimetableBookings(data);
+  renderTimeHeader();
+  renderTimetable(timetableBookings);
 });
 
 window.fetchBookings = () => {
@@ -246,3 +249,127 @@ window.declineBooking = async (id) => {
   lucide.createIcons();
 };
 
+const TIMETABLE_PCS = [
+  ...Array.from({ length: 7 }, (_, i) => `CT-ROOM-${i + 1}`),
+  ...Array.from({ length: 7 }, (_, i) => `T-ROOM-${i + 1}`),
+  "PS",
+  "XBOX ONE X"
+];
+
+const TIMETABLE_START_HOUR = 10; // 10:00
+const TIMETABLE_END_HOUR = 22;   // 22:00
+const TIMETABLE_TOTAL_HOURS = TIMETABLE_END_HOUR - TIMETABLE_START_HOUR; // 12
+const PC_COL_WIDTH = 150;
+
+function timetableTimeIndex(dateStr) {
+  const d = new Date(dateStr);
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+function timetableColor(status) {
+  return status === "Approved"
+    ? "bg-green-600/90"
+    : "bg-yellow-500/90";
+}
+
+function buildTimetableBookings(bookingsData) {
+  if (!bookingsData) return [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Object.values(bookingsData)
+    .map(b => {
+      if (!Array.isArray(b.pcs) || !b.pcs.length) return null;
+
+      const startDate = new Date(b.start);
+      const endDate = new Date(b.end);
+
+      // ❌ Not today
+      if (startDate < today || startDate >= new Date(today.getTime() + 86400000)) {
+        return null;
+      }
+
+      let pc = b.pcs[0].toUpperCase();
+
+      if (/^T\d+$/.test(pc)) pc = `T-ROOM-${pc.slice(1)}`;
+      else if (/^CT\d+$/.test(pc)) pc = `CT-ROOM-${pc.slice(2)}`;
+      else if (pc === "PS") pc = "PS";
+      else if (pc.startsWith("XBOX")) pc = "XBOX ONE X";
+      else return null;
+
+      return {
+        pc,
+        name: b.name || "Booking",
+        start: timetableTimeIndex(b.start),
+        end: timetableTimeIndex(b.end),
+        status: b.status || "Pending"
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderTimeHeader() {
+  const header = document.getElementById("timeHeader");
+  if (!header) return;
+
+  header.innerHTML = `<div></div>`;
+
+  for (let h = TIMETABLE_START_HOUR; h < TIMETABLE_END_HOUR; h++) {
+    header.innerHTML += `
+      <div class="text-center border-l border-gray-700">
+        ${String(h).padStart(2, "0")}:00
+      </div>
+    `;
+  }
+}
+
+
+function renderTimetable(timetableBookings) {
+  const body = document.getElementById("timetableBody");
+  if (!body) return;
+
+  body.innerHTML = "";
+
+  TIMETABLE_PCS.forEach(pc => {
+    const row = document.createElement("div");
+    row.className = "grid grid-cols-[140px_repeat(12,_1fr)] relative h-8 bg-gray-900 rounded";
+
+    row.innerHTML = `
+      <div class="flex items-center justify-center text-[11px] font-semibold text-white border-r border-gray-700">
+        ${pc}
+      </div>
+    `;
+
+    for (let i = 0; i < 12; i++) {
+      row.innerHTML += `<div class="border-l border-gray-800"></div>`;
+    }
+
+    timetableBookings
+      .filter(b => b.pc === pc)
+      .forEach(b => {
+        if (b.end <= b.start) return;
+
+        const start = Math.max(b.start, TIMETABLE_START_HOUR);
+        const end = Math.min(b.end, TIMETABLE_END_HOUR);
+        if (end <= start) return;
+        const left = ((start - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
+        const width = ((end - start) / TIMETABLE_TOTAL_HOURS) * 100;
+
+        const block = document.createElement("div");
+        block.className = `
+          absolute top-1/2 -translate-y-1/2 h-6 rounded text-[10px]
+          text-white px-1 flex items-center
+          ${timetableColor(b.status)}
+        `;
+
+        block.style.left = `calc(${left}% + ${PC_COL_WIDTH}px)`;
+        block.style.width = `calc(${width}% - 4px)`;
+        block.textContent = b.name;
+
+        row.appendChild(block);
+      });
+
+    body.appendChild(row);
+  });
+}
