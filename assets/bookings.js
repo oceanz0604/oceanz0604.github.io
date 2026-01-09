@@ -39,6 +39,7 @@ onValue(bookingsRef, (snapshot) => {
   const timetableBookings = buildTimetableBookings(data);
   renderTimeHeader();
   renderTimetable(timetableBookings);
+  renderCurrentTimeLine();
 });
 
 window.fetchBookings = () => {
@@ -372,4 +373,36 @@ function renderTimetable(timetableBookings) {
 
     body.appendChild(row);
   });
+
 }
+
+function renderCurrentTimeLine() {
+  const wrapper = document.getElementById("timetableWrapper");
+  if (!wrapper) return;
+
+  // Remove old line
+  const oldLine = document.getElementById("currentTimeLine");
+  if (oldLine) oldLine.remove();
+
+  const now = new Date();
+  const hours = now.getHours() + now.getMinutes() / 60;
+
+  // Outside timetable window → do nothing
+  if (hours < TIMETABLE_START_HOUR || hours > TIMETABLE_END_HOUR) return;
+
+  const leftPercent =
+    ((hours - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
+
+  const line = document.createElement("div");
+  line.id = "currentTimeLine";
+  line.className =
+    "absolute top-0 bottom-0 w-[2px] bg-red-500 z-20 pointer-events-none";
+
+  line.style.left = `calc(${leftPercent}% + 140px)`; // 140 = PC column width
+
+  wrapper.appendChild(line);
+}
+
+setInterval(() => {
+  renderCurrentTimeLine();
+}, 60 * 1000);
