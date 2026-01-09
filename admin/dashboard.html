@@ -390,6 +390,14 @@
           <i data-lucide="history" class="w-5 h-5"></i>
           <span class="font-medium">History</span>
         </a>
+        <a id="nav-analytics" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+          <span class="font-medium">Analytics</span>
+        </a>
+        <a id="nav-staff" href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
+          <span class="font-medium">Staff</span>
+        </a>
       </nav>
 
       <!-- Footer -->
@@ -536,6 +544,22 @@
           </h2>
           <div id="history-cards"></div>
         </div>
+
+        <!-- Analytics Section -->
+        <div id="analytics-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-cyan flex items-center gap-3" style="color: var(--neon-cyan);">
+            <i data-lucide="bar-chart-3" class="w-7 h-7"></i> ANALYTICS DASHBOARD
+          </h2>
+          <div id="analytics-content"></div>
+        </div>
+
+        <!-- Staff Management Section -->
+        <div id="staff-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-yellow flex items-center gap-3" style="color: var(--neon-yellow);">
+            <i data-lucide="shield-check" class="w-7 h-7"></i> STAFF MANAGEMENT
+          </h2>
+          <div id="staff-content"></div>
+        </div>
       </div>
     </main>
   </div>
@@ -578,5 +602,7 @@
   <script type="module" src="js/bookings.js"></script>
   <script type="module" src="js/history.js"></script>
   <script type="module" src="js/recharges.js"></script>
+  <script type="module" src="js/analytics.js"></script>
+  <script type="module" src="js/staff.js"></script>
 </body>
 </html>
