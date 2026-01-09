@@ -32,11 +32,15 @@ const elements = {
   navBookings: $("nav-bookings"),
   navHistory: $("nav-history"),
   navRecharges: $("nav-recharges"),
+  navAnalytics: $("nav-analytics"),
+  navStaff: $("nav-staff"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
   historySection: $("history-section"),
-  rechargesSection: $("recharges-section")
+  rechargesSection: $("recharges-section"),
+  analyticsSection: $("analytics-section"),
+  staffSection: $("staff-section")
 };
 
 // ==================== STATE ====================
@@ -52,7 +56,9 @@ function switchView(view) {
     elements.membersSection,
     elements.bookingsSection,
     elements.historySection,
-    elements.rechargesSection
+    elements.rechargesSection,
+    elements.analyticsSection,
+    elements.staffSection
   ];
 
   const navs = [
@@ -60,7 +66,9 @@ function switchView(view) {
     elements.navMembers,
     elements.navBookings,
     elements.navHistory,
-    elements.navRecharges
+    elements.navRecharges,
+    elements.navAnalytics,
+    elements.navStaff
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -74,7 +82,9 @@ function switchView(view) {
     members: { section: elements.membersSection, nav: elements.navMembers, onShow: loadAllMembers },
     bookings: { section: elements.bookingsSection, nav: elements.navBookings },
     history: { section: elements.historySection, nav: elements.navHistory },
-    recharges: { section: elements.rechargesSection, nav: elements.navRecharges }
+    recharges: { section: elements.rechargesSection, nav: elements.navRecharges },
+    analytics: { section: elements.analyticsSection, nav: elements.navAnalytics, onShow: () => window.loadAnalytics?.() },
+    staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() }
   };
 
   const config = viewMap[view];
@@ -93,7 +103,9 @@ const navLinks = [
   { el: elements.navMembers, view: "members" },
   { el: elements.navBookings, view: "bookings" },
   { el: elements.navHistory, view: "history" },
-  { el: elements.navRecharges, view: "recharges" }
+  { el: elements.navRecharges, view: "recharges" },
+  { el: elements.navAnalytics, view: "analytics" },
+  { el: elements.navStaff, view: "staff" }
 ];
 
 navLinks.forEach(({ el, view }) => {

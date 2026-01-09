@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OceanZ - Offline</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Rajdhani', sans-serif; }
+    .font-orbitron { font-family: 'Orbitron', sans-serif; }
+    body {
+      background: #0a0a0f;
+      background-image: 
+        linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .glow { text-shadow: 0 0 20px #00f0ff, 0 0 40px #00f0ff; }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center text-white px-4">
+  <div class="text-center max-w-md">
+    <!-- Offline Icon -->
+    <div class="mb-8">
+      <svg class="w-24 h-24 mx-auto pulse" viewBox="0 0 100 100" fill="none" stroke="#00f0ff" stroke-width="2">
+        <circle cx="50" cy="50" r="45"/>
+        <path d="M30 50 L45 65 L70 35" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" opacity="0.3"/>
+        <line x1="25" y1="25" x2="75" y2="75" stroke="#ff0044" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <h1 class="font-orbitron text-3xl font-bold glow mb-4" style="color: #00f0ff;">
+      CONNECTION LOST
+    </h1>
+    
+    <p class="text-gray-400 mb-8 text-lg">
+      You appear to be offline. Please check your internet connection and try again.
+    </p>
+
+    <div class="space-y-4">
+      <button onclick="location.reload()" 
+        class="w-full py-4 rounded-lg font-orbitron text-sm tracking-wider transition-all"
+        style="background: linear-gradient(135deg, #00f0ff, #b829ff); box-shadow: 0 0 20px rgba(0,240,255,0.3);">
+        ⚡ RETRY CONNECTION
+      </button>
+
+      <p class="text-gray-600 text-sm">
+        Some features may be available offline once you've visited them before.
+      </p>
+    </div>
+
+    <!-- Decorative elements -->
+    <div class="flex justify-center mt-8 gap-2">
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #00f0ff;"></div>
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #b829ff; animation-delay: 0.2s;"></div>
+      <div class="w-2 h-2 rounded-full animate-pulse" style="background: #00f0ff; animation-delay: 0.4s;"></div>
+    </div>
+  </div>
+</body>
+</html>
+

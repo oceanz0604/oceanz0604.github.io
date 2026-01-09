@@ -711,8 +711,241 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (btn.dataset.tab === "analytics") {
       setTimeout(() => loadAnalytics(member.ID), 100);
     }
+    if (btn.dataset.tab === "seasonal") {
+      setTimeout(() => loadSeasonalData(member.USERNAME), 100);
+    }
   });
 });
+
+// ==================== SEASONAL LEADERBOARDS ====================
+
+async function loadSeasonalData(username) {
+  loadWeeklyLeaderboard(username);
+  loadSeasonLeaderboard(username);
+  updateSeasonTimer();
+  loadUserSeasonStats(username);
+}
+
+async function loadWeeklyLeaderboard(loggedUserName) {
+  const container = document.getElementById("weeklyLeaderboard");
+  if (!container) return;
+
+  container.innerHTML = `<p class="text-gray-500 text-center">Loading...</p>`;
+
+  try {
+    // Get current week key (ISO week number)
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const weekNum = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+    const weekKey = `${now.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
+
+    const historyRef = secondDb.ref("history");
+    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
+    const members = Object.values(membersSnap.val() || {});
+
+    // Get start of week (Monday)
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - mondayOffset);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weekStartStr = startOfWeek.toISOString().split("T")[0];
+
+    // Calculate weekly stats for each member
+    const weeklyStats = await Promise.all(
+      members.map(async m => {
+        const snap = await historyRef.child(m.USERNAME).once("value");
+        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= weekStartStr);
+        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
+        const sessions = entries.length;
+        return { username: m.USERNAME, minutes, sessions };
+      })
+    );
+
+    // Sort by minutes
+    const sorted = weeklyStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 10);
+
+    if (sorted.length === 0) {
+      container.innerHTML = `<p class="text-gray-500 text-center">No activity this week yet!</p>`;
+      return;
+    }
+
+    container.innerHTML = sorted.map((row, i) => {
+      const isUser = row.username?.toLowerCase() === loggedUserName?.toLowerCase();
+      const hours = Math.floor(row.minutes / 60);
+      const mins = row.minutes % 60;
+      const timeLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+      const badgeColors = ["#ffd700", "#c0c0c0", "#cd7f32"];
+      const badges = ["🥇", "🥈", "🥉"];
+
+      return `
+        <div class="leaderboard-item ${isUser ? 'highlight' : ''} flex items-center gap-4 p-4 rounded-lg">
+          <div class="w-8 h-8 flex items-center justify-center rounded-lg font-orbitron font-bold text-sm"
+            style="${i < 3 ? `background: ${badgeColors[i]}30; color: ${badgeColors[i]};` : 'background: rgba(0,240,255,0.2); color: #00f0ff;'}">
+            ${i < 3 ? badges[i] : i + 1}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-orbitron font-bold" style="color: ${isUser ? '#00ff88' : '#ff6b00'};">
+              ${row.username} ${isUser ? '<span class="text-xs">(YOU)</span>' : ''}
+            </div>
+            <div class="text-gray-500 text-sm">Sessions: ${row.sessions}</div>
+          </div>
+          <div class="text-right">
+            <div class="font-orbitron font-bold" style="color: #b829ff;">${timeLabel}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  } catch (error) {
+    console.error("Error loading weekly leaderboard:", error);
+    container.innerHTML = `<p class="text-red-400 text-center">Failed to load</p>`;
+  }
+}
+
+async function loadSeasonLeaderboard(loggedUserName) {
+  const container = document.getElementById("seasonLeaderboard");
+  if (!container) return;
+
+  container.innerHTML = `<p class="text-gray-500 text-center">Loading...</p>`;
+
+  try {
+    // Season runs from start of current month (for demo purposes)
+    const now = new Date();
+    const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const seasonStartStr = seasonStart.toISOString().split("T")[0];
+
+    const historyRef = secondDb.ref("history");
+    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
+    const members = Object.values(membersSnap.val() || {});
+
+    // Calculate season stats for each member
+    const seasonStats = await Promise.all(
+      members.map(async m => {
+        const snap = await historyRef.child(m.USERNAME).once("value");
+        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= seasonStartStr);
+        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
+        const sessions = entries.length;
+        const spent = entries.reduce((sum, e) => sum + (e.CHARGE < 0 ? -e.CHARGE : 0), 0);
+        return { username: m.USERNAME, minutes, sessions, spent };
+      })
+    );
+
+    // Sort by minutes
+    const sorted = seasonStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes);
+
+    if (sorted.length === 0) {
+      container.innerHTML = `<p class="text-gray-500 text-center">No activity this season yet!</p>`;
+      return;
+    }
+
+    const top10 = sorted.slice(0, 10);
+    const userRank = sorted.findIndex(s => s.username?.toLowerCase() === loggedUserName?.toLowerCase()) + 1;
+
+    container.innerHTML = top10.map((row, i) => {
+      const isUser = row.username?.toLowerCase() === loggedUserName?.toLowerCase();
+      const hours = Math.floor(row.minutes / 60);
+      const mins = row.minutes % 60;
+      const timeLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+      const badgeColors = ["#ffd700", "#c0c0c0", "#cd7f32"];
+      const badges = ["🥇", "🥈", "🥉"];
+
+      return `
+        <div class="leaderboard-item ${isUser ? 'highlight' : ''} flex items-center gap-4 p-4 rounded-lg">
+          <div class="w-8 h-8 flex items-center justify-center rounded-lg font-orbitron font-bold text-sm"
+            style="${i < 3 ? `background: ${badgeColors[i]}30; color: ${badgeColors[i]};` : 'background: rgba(184,41,255,0.2); color: #b829ff;'}">
+            ${i < 3 ? badges[i] : i + 1}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-orbitron font-bold" style="color: ${isUser ? '#00ff88' : '#b829ff'};">
+              ${row.username} ${isUser ? '<span class="text-xs">(YOU)</span>' : ''}
+            </div>
+            <div class="text-gray-500 text-sm">${row.sessions} sessions • ₹${row.spent} spent</div>
+          </div>
+          <div class="text-right">
+            <div class="font-orbitron font-bold" style="color: #00f0ff;">${timeLabel}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  } catch (error) {
+    console.error("Error loading season leaderboard:", error);
+    container.innerHTML = `<p class="text-red-400 text-center">Failed to load</p>`;
+  }
+}
+
+function updateSeasonTimer() {
+  const timerEl = document.getElementById("seasonTimer");
+  if (!timerEl) return;
+
+  // Season ends on last day of current month
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const diff = endOfMonth - now;
+
+  if (diff <= 0) {
+    timerEl.textContent = "Season Ended!";
+    return;
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  timerEl.textContent = `${days}d ${hours}h ${minutes}m`;
+
+  // Update every minute
+  setTimeout(() => updateSeasonTimer(), 60000);
+}
+
+async function loadUserSeasonStats(username) {
+  try {
+    const now = new Date();
+    const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const seasonStartStr = seasonStart.toISOString().split("T")[0];
+
+    const historyRef = secondDb.ref("history");
+    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
+    const members = Object.values(membersSnap.val() || {});
+
+    // Get all member stats
+    const allStats = await Promise.all(
+      members.map(async m => {
+        const snap = await historyRef.child(m.USERNAME).once("value");
+        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= seasonStartStr);
+        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
+        return { username: m.USERNAME, minutes };
+      })
+    );
+
+    // Sort and find user rank
+    const sorted = allStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes);
+    const userIndex = sorted.findIndex(s => s.username?.toLowerCase() === username?.toLowerCase());
+    const userRank = userIndex >= 0 ? userIndex + 1 : "-";
+
+    // Get user's detailed stats
+    const userSnap = await historyRef.child(username).once("value");
+    const userEntries = Object.values(userSnap.val() || {}).filter(e => e.DATE >= seasonStartStr);
+    const totalMinutes = userEntries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
+    const totalSessions = userEntries.length;
+    const streak = calculateStreak(userEntries);
+
+    // Update UI
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+
+    document.getElementById("seasonRank").textContent = `#${userRank}`;
+    document.getElementById("seasonPlaytime").textContent = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    document.getElementById("seasonSessions").textContent = totalSessions;
+    document.getElementById("seasonStreak").textContent = `${streak}🔥`;
+
+  } catch (error) {
+    console.error("Error loading user season stats:", error);
+  }
+}
 
 // ==================== INIT ====================
 
