@@ -178,6 +178,79 @@
     .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
     .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
     .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+    /* Mobile Enhancements */
+    @media (max-width: 767px) {
+      html { font-size: 14px; }
+      
+      body {
+        padding: 1rem !important;
+        align-items: flex-start;
+        padding-top: 8vh !important;
+      }
+      
+      .neon-card {
+        padding: 1.5rem !important;
+        border-radius: 16px !important;
+      }
+      
+      .logo-container::before {
+        width: 100px;
+        height: 100px;
+      }
+      
+      .logo-container .w-24 {
+        width: 5rem !important;
+        height: 5rem !important;
+      }
+      
+      h1.text-3xl {
+        font-size: 1.5rem !important;
+      }
+      
+      .neon-input {
+        padding: 14px 16px !important;
+        font-size: 16px !important; /* Prevents iOS zoom */
+      }
+      
+      .neon-btn {
+        padding: 16px !important;
+        font-size: 0.85rem !important;
+        min-height: 52px;
+      }
+      
+      .corner-accent {
+        width: 16px;
+        height: 16px;
+      }
+      
+      /* Hide some particles on mobile for performance */
+      .float-particle:nth-child(2),
+      .float-particle:nth-child(4),
+      .float-particle:nth-child(6) {
+        display: none;
+      }
+    }
+    
+    /* Safe area for notched devices */
+    @supports (padding: env(safe-area-inset-top)) {
+      @media (max-width: 767px) {
+        body {
+          padding-top: calc(8vh + env(safe-area-inset-top)) !important;
+        }
+      }
+    }
+    
+    /* Touch device optimizations */
+    @media (hover: none) and (pointer: coarse) {
+      .neon-btn:hover {
+        transform: none;
+      }
+      
+      .neon-btn:active {
+        transform: scale(0.98);
+      }
+    }
   </style>
 </head>
 <body class="text-white min-h-screen flex items-center justify-center px-4">

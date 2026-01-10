@@ -601,6 +601,382 @@
 
     /* Chevron rotation for collapsible sections */
     .rotate-180 { transform: rotate(180deg); }
+
+    /* ==================== MOBILE UI ENHANCEMENTS ==================== */
+    
+    /* Mobile Typography */
+    @media (max-width: 767px) {
+      html { font-size: 14px; }
+      
+      .font-orbitron { letter-spacing: 0.5px; }
+      
+      h1, .text-3xl { font-size: 1.5rem !important; }
+      h2, .text-2xl { font-size: 1.25rem !important; }
+      h3, .text-xl { font-size: 1.1rem !important; }
+      
+      /* Better touch targets - minimum 44x44px */
+      .neon-btn, button, .nav-item {
+        min-height: 44px;
+      }
+      
+      /* Mobile main content padding */
+      .main-content {
+        padding: 1rem !important;
+        padding-top: 80px !important;
+      }
+      
+      /* Mobile sidebar improvements */
+      .sidebar {
+        width: 85vw !important;
+        max-width: 320px;
+        padding-top: 1rem;
+      }
+      
+      .sidebar .nav-item {
+        padding: 14px 16px !important;
+        font-size: 0.95rem;
+      }
+      
+      /* Mobile header sticky */
+      .mobile-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        padding: 0 16px;
+        z-index: 50;
+      }
+      
+      /* Stat cards - 2 column grid on mobile */
+      .grid-cols-2.md\\:grid-cols-4,
+      .grid-cols-2.md\\:grid-cols-5 {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+      }
+      
+      .stat-card {
+        padding: 12px !important;
+      }
+      
+      .stat-card .text-2xl {
+        font-size: 1.1rem !important;
+      }
+      
+      .stat-card .text-xs {
+        font-size: 0.65rem !important;
+      }
+      
+      /* Terminal grid - 2 columns on mobile */
+      .grid-cols-2.sm\\:grid-cols-3.md\\:grid-cols-4.lg\\:grid-cols-5 {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+      }
+      
+      .terminal-card {
+        padding: 10px !important;
+      }
+      
+      .terminal-card .text-xl {
+        font-size: 1rem !important;
+      }
+      
+      /* Neon cards */
+      .neon-card {
+        border-radius: 12px !important;
+      }
+      
+      /* Table mobile styles */
+      .overflow-x-auto {
+        margin: 0 -1rem;
+        padding: 0 1rem;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      table {
+        min-width: 600px;
+      }
+      
+      table th, table td {
+        padding: 10px 8px !important;
+        font-size: 0.75rem !important;
+      }
+      
+      /* Mobile table - card style alternative */
+      .mobile-card-view {
+        display: block !important;
+      }
+      
+      .mobile-card-view thead {
+        display: none;
+      }
+      
+      .mobile-card-view tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .mobile-card-view tr {
+        display: flex;
+        flex-direction: column;
+        background: rgba(0,0,0,0.3);
+        border-radius: 10px;
+        padding: 12px;
+        border: 1px solid rgba(255,255,255,0.05);
+      }
+      
+      .mobile-card-view td {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+      
+      .mobile-card-view td:last-child {
+        border-bottom: none;
+      }
+      
+      .mobile-card-view td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #888;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+      }
+      
+      /* Payment badges mobile */
+      .payment-badge {
+        padding: 3px 6px !important;
+        font-size: 0.6rem !important;
+      }
+      
+      /* Credit items mobile */
+      .credit-item {
+        flex-direction: column !important;
+        gap: 12px !important;
+      }
+      
+      .credit-item > div:last-child {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      
+      /* Buttons mobile */
+      .neon-btn {
+        padding: 12px 16px !important;
+        font-size: 0.85rem !important;
+      }
+      
+      /* Input fields mobile */
+      .neon-input, .neon-select {
+        padding: 12px !important;
+        font-size: 16px !important; /* Prevents zoom on iOS */
+      }
+      
+      /* Modal mobile */
+      .fixed.inset-0.z-50 > div {
+        margin: 1rem !important;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+      }
+      
+      /* Add recharge modal mobile */
+      #addRechargeModal > div,
+      #collectCreditModal > div {
+        padding: 1rem !important;
+        border-radius: 16px !important;
+      }
+      
+      #addRechargeModal .grid-cols-2,
+      #addRechargeModal .grid-cols-3 {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+      
+      /* Split payment section mobile */
+      #addRechargeModal .grid-cols-3.gap-3 {
+        grid-template-columns: repeat(3, 1fr) !important;
+      }
+      
+      /* Bookings section mobile */
+      .booking-card {
+        padding: 12px !important;
+      }
+      
+      .booking-card .flex.gap-4 {
+        flex-direction: column;
+        gap: 8px !important;
+      }
+      
+      /* Timetable mobile */
+      .timetable-container {
+        margin: 0 -1rem;
+      }
+      
+      /* Audit log mobile */
+      .audit-entry {
+        padding: 10px !important;
+      }
+      
+      .audit-entry .flex.items-start {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .audit-entry .text-right {
+        text-align: left !important;
+        display: flex;
+        gap: 8px;
+      }
+      
+      /* Section headers mobile */
+      .flex.flex-wrap.justify-between {
+        flex-direction: column;
+        gap: 12px !important;
+      }
+      
+      /* Date picker and action buttons mobile */
+      .flex.gap-2 {
+        flex-wrap: wrap;
+      }
+      
+      /* Outstanding credits mobile */
+      #outstandingCreditsList .flex.items-center {
+        flex-wrap: wrap;
+      }
+      
+      /* Search input mobile */
+      #rechargeSearch {
+        width: 100% !important;
+      }
+      
+      /* Table header with search mobile */
+      .p-4.border-b.flex.flex-wrap {
+        flex-direction: column;
+        gap: 12px !important;
+      }
+      
+      /* Analytics charts mobile */
+      .chart-container {
+        padding: 0.75rem !important;
+      }
+      
+      .chart-container canvas {
+        max-height: 200px !important;
+      }
+      
+      /* Staff cards mobile */
+      .grid.grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-3 {
+        gap: 12px !important;
+      }
+      
+      /* Logout modal mobile */
+      #logoutModal > div {
+        margin: 1rem;
+      }
+      
+      /* PWA Install banner mobile */
+      #pwaInstallBanner {
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        border-radius: 16px 16px 0 0 !important;
+        padding: 16px !important;
+      }
+      
+      /* Floating action button style for Add Recharge */
+      .mobile-fab {
+        position: fixed;
+        bottom: 80px;
+        right: 16px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+        z-index: 20;
+      }
+    }
+    
+    /* Small mobile screens (< 375px) */
+    @media (max-width: 374px) {
+      html { font-size: 13px; }
+      
+      .stat-card .text-2xl {
+        font-size: 1rem !important;
+      }
+      
+      .grid-cols-2.md\\:grid-cols-4,
+      .grid-cols-2.md\\:grid-cols-5 {
+        gap: 8px !important;
+      }
+      
+      .terminal-card {
+        padding: 8px !important;
+      }
+      
+      #addRechargeModal .grid-cols-3.gap-3 {
+        grid-template-columns: 1fr 1fr 1fr !important;
+      }
+    }
+    
+    /* Safe area insets for notched devices */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      @media (max-width: 767px) {
+        .main-content {
+          padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+        }
+        
+        #pwaInstallBanner {
+          padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important;
+        }
+        
+        .mobile-fab {
+          bottom: calc(80px + env(safe-area-inset-bottom));
+        }
+      }
+    }
+    
+    /* Smooth animations */
+    @media (prefers-reduced-motion: no-preference) {
+      .sidebar {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .sidebar-backdrop {
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .neon-card, .stat-card, .terminal-card {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+    }
+    
+    /* Dark mode optimizations */
+    @media (prefers-color-scheme: dark) {
+      input, select, textarea {
+        color-scheme: dark;
+      }
+    }
+    
+    /* Touch device optimizations */
+    @media (hover: none) and (pointer: coarse) {
+      .neon-btn:hover,
+      .nav-item:hover,
+      .terminal-card:hover,
+      .member-card:hover,
+      .booking-card:hover {
+        transform: none;
+      }
+      
+      .neon-btn:active,
+      .nav-item:active {
+        transform: scale(0.98);
+      }
+    }
   </style>
 </head>
 <body class="text-white min-h-screen relative">
