@@ -1,0 +1,720 @@
+/**
+ * OceanZ Gaming Cafe - Admin Styles
+ * Styles for admin dashboard and login pages
+ */
+
+/* ==================== ADMIN BODY BACKGROUND ==================== */
+body.admin-page {
+  background: var(--dark-bg);
+  background-image: 
+    linear-gradient(rgba(255, 0, 68, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 0, 68, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+body.admin-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 0% 0%, rgba(255, 0, 68, 0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at 100% 100%, rgba(184, 41, 255, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==================== SIDEBAR ==================== */
+.sidebar {
+  background: var(--card-bg);
+  border-right: 1px solid var(--card-border);
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    transform: translateX(-100%);
+    display: flex !important;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+/* Sidebar Backdrop */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 35;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Close button for sidebar */
+.sidebar-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 0, 68, 0.1);
+  border: 1px solid rgba(255, 0, 68, 0.3);
+  border-radius: 8px;
+  color: var(--neon-red);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sidebar-close:hover {
+  background: rgba(255, 0, 68, 0.2);
+}
+
+@media (max-width: 767px) {
+  .sidebar-close {
+    display: flex;
+  }
+}
+
+/* ==================== NAV ITEMS ==================== */
+.nav-item {
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover {
+  background: rgba(255, 0, 68, 0.1);
+  border-color: rgba(255, 0, 68, 0.3);
+}
+
+.nav-item.active {
+  background: rgba(255, 0, 68, 0.15);
+  border-color: var(--neon-red);
+  box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+}
+
+.nav-item.active span {
+  color: var(--neon-red);
+  text-shadow: 0 0 10px var(--neon-red);
+}
+
+/* ==================== MOBILE HEADER ==================== */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  backdrop-filter: blur(10px);
+  z-index: 30;
+  padding: 0 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 767px) {
+  .mobile-header {
+    display: flex;
+  }
+  .main-content {
+    padding-top: 76px !important;
+  }
+}
+
+/* ==================== HAMBURGER BUTTON ==================== */
+.hamburger-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid rgba(255, 0, 68, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.hamburger-btn:hover {
+  background: rgba(255, 0, 68, 0.1);
+  border-color: var(--neon-red);
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--neon-red);
+  transition: all 0.3s ease;
+}
+
+.hamburger-btn.active span:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger-btn.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-btn.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* ==================== TERMINAL CARD ==================== */
+.terminal-card {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 0, 68, 0.2);
+  transition: all 0.3s ease;
+}
+
+.terminal-card:hover {
+  border-color: var(--neon-red);
+  transform: translateY(-2px);
+}
+
+.terminal-card.occupied {
+  border-color: var(--neon-red);
+  box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+}
+
+.terminal-card.available {
+  border-color: var(--neon-green);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+}
+
+/* ==================== MEMBER CARD ==================== */
+.member-card {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.member-card:hover {
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+/* ==================== BOOKING CARD ==================== */
+.booking-card {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 0, 68, 0.2);
+  transition: all 0.3s ease;
+}
+
+.booking-card:hover {
+  border-color: var(--neon-red);
+  transform: translateY(-2px);
+}
+
+/* ==================== RECHARGE TABLE ==================== */
+#rechargeList tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#rechargeList tr:last-child {
+  border-bottom: none;
+}
+
+/* ==================== AUDIT STYLES ==================== */
+.audit-filter {
+  background: rgba(100, 100, 100, 0.2);
+  color: #888;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.audit-filter:hover {
+  background: rgba(184, 41, 255, 0.1);
+  color: #b829ff;
+}
+
+.audit-filter.active {
+  background: rgba(184, 41, 255, 0.2);
+  color: #b829ff;
+  border-color: rgba(184, 41, 255, 0.5);
+}
+
+.audit-entry {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.audit-entry:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.audit-entry.action-ADD { border-left: 3px solid #00ff88; }
+.audit-entry.action-EDIT { border-left: 3px solid #00f0ff; }
+.audit-entry.action-DELETE { border-left: 3px solid #ff0044; }
+.audit-entry.action-CREDIT_PAID { border-left: 3px solid #00ff88; }
+
+.audit-item {
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 2px solid var(--neon-purple);
+}
+
+/* ==================== CREDIT ITEM ==================== */
+.credit-item {
+  background: rgba(255, 107, 0, 0.1);
+  border: 1px solid rgba(255, 107, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.credit-item:hover {
+  border-color: rgba(255, 107, 0, 0.5);
+}
+
+.credit-item.paid {
+  background: rgba(0, 255, 136, 0.05);
+  border-color: rgba(0, 255, 136, 0.3);
+  opacity: 0.7;
+}
+
+.mark-paid-btn {
+  background: linear-gradient(135deg, rgba(0,255,136,0.2), rgba(0,200,100,0.2));
+  border: 1px solid rgba(0,255,136,0.5);
+  color: #00ff88;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.mark-paid-btn:hover {
+  background: linear-gradient(135deg, #00ff88, #00cc66);
+  color: #000;
+}
+
+/* ==================== TIMETABLE ==================== */
+.timetable-row {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.timetable-block {
+  transition: all 0.3s ease;
+}
+
+.timetable-block:hover {
+  transform: scaleY(1.1);
+}
+
+/* ==================== LOGOUT BUTTON ==================== */
+.logout-btn {
+  background: rgba(255, 0, 68, 0.1);
+  border: 1px solid rgba(255, 0, 68, 0.5);
+  transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 0, 68, 0.3);
+  box-shadow: 0 0 15px rgba(255, 0, 68, 0.4);
+}
+
+/* ==================== ADMIN LOGIN PAGE ==================== */
+body.admin-login {
+  background: var(--dark-bg);
+  background-image: 
+    linear-gradient(rgba(255, 0, 68, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 0, 68, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  position: relative;
+  overflow: hidden;
+}
+
+body.admin-login::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 20% 20%, rgba(255, 0, 68, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(184, 41, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.admin-login .neon-card {
+  border: 1px solid rgba(255, 0, 68, 0.3);
+  box-shadow: 
+    0 0 20px rgba(255, 0, 68, 0.1),
+    inset 0 0 60px rgba(255, 0, 68, 0.03);
+}
+
+.admin-login .neon-glow {
+  text-shadow: 
+    0 0 10px var(--neon-red),
+    0 0 20px var(--neon-red),
+    0 0 40px var(--neon-red);
+}
+
+.admin-login .neon-input:focus {
+  box-shadow: 
+    0 0 10px rgba(255, 0, 68, 0.3),
+    inset 0 0 10px rgba(255, 0, 68, 0.1);
+}
+
+.admin-login .neon-btn {
+  background: linear-gradient(135deg, var(--neon-red), var(--neon-purple));
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-login .neon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.admin-login .neon-btn:hover::before {
+  left: 100%;
+}
+
+.admin-login .neon-btn:hover {
+  box-shadow: 
+    0 0 20px rgba(255, 0, 68, 0.5),
+    0 0 40px rgba(255, 0, 68, 0.3);
+}
+
+.admin-login .logo-container {
+  position: relative;
+}
+
+.admin-login .logo-container::before {
+  content: '';
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(255, 0, 68, 0.3) 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+.admin-login .cyber-line {
+  height: 2px;
+  animation: line-glow 2s ease-in-out infinite;
+}
+
+@keyframes line-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.shield-icon {
+  filter: drop-shadow(0 0 10px rgba(255, 0, 68, 0.5));
+}
+
+/* ==================== ADMIN MOBILE STYLES ==================== */
+@media (max-width: 767px) {
+  html { font-size: 14px; }
+  
+  .font-orbitron { letter-spacing: 0.5px; }
+  
+  h1, .text-3xl { font-size: 1.5rem !important; }
+  h2, .text-2xl { font-size: 1.25rem !important; }
+  h3, .text-xl { font-size: 1.1rem !important; }
+  
+  /* Touch targets */
+  .neon-btn, button, .nav-item {
+    min-height: 44px;
+  }
+  
+  /* Main content */
+  .main-content {
+    padding: 1rem !important;
+    padding-top: 80px !important;
+  }
+  
+  /* Sidebar */
+  .sidebar {
+    width: 85vw !important;
+    max-width: 320px;
+    padding-top: 1rem;
+  }
+  
+  .sidebar .nav-item {
+    padding: 14px 16px !important;
+    font-size: 0.95rem;
+  }
+  
+  /* Mobile header */
+  .mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    padding: 0 16px;
+    z-index: 50;
+  }
+  
+  /* Stat cards */
+  .grid-cols-2.md\:grid-cols-4,
+  .grid-cols-2.md\:grid-cols-5 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  
+  /* Terminal grid */
+  .grid-cols-2.sm\:grid-cols-3.md\:grid-cols-4.lg\:grid-cols-5 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  
+  .terminal-card {
+    padding: 10px !important;
+  }
+  
+  .terminal-card .text-xl {
+    font-size: 1rem !important;
+  }
+  
+  /* Tables */
+  .overflow-x-auto {
+    margin: 0 -1rem;
+    padding: 0 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  table {
+    min-width: 600px;
+  }
+  
+  table th, table td {
+    padding: 10px 8px !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Credit items */
+  .credit-item {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .credit-item > div:last-child {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  /* Buttons */
+  .neon-btn {
+    padding: 12px 16px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  /* Inputs */
+  .neon-input, .neon-select {
+    padding: 12px !important;
+  }
+  
+  /* Modals */
+  .fixed.inset-0.z-50 > div {
+    margin: 1rem !important;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+  
+  #addRechargeModal > div,
+  #collectCreditModal > div {
+    padding: 1rem !important;
+    border-radius: 16px !important;
+  }
+  
+  #addRechargeModal .grid-cols-2,
+  #addRechargeModal .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  #addRechargeModal .grid-cols-3.gap-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  /* Bookings */
+  .booking-card {
+    padding: 12px !important;
+  }
+  
+  .booking-card .flex.gap-4 {
+    flex-direction: column;
+    gap: 8px !important;
+  }
+  
+  /* Audit log */
+  .audit-entry {
+    padding: 10px !important;
+  }
+  
+  .audit-entry .flex.items-start {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .audit-entry .text-right {
+    text-align: left !important;
+    display: flex;
+    gap: 8px;
+  }
+  
+  /* Section headers */
+  .flex.flex-wrap.justify-between {
+    flex-direction: column;
+    gap: 12px !important;
+  }
+  
+  /* Search input */
+  #rechargeSearch {
+    width: 100% !important;
+  }
+  
+  .p-4.border-b.flex.flex-wrap {
+    flex-direction: column;
+    gap: 12px !important;
+  }
+  
+  /* PWA Install banner */
+  #pwaInstallBanner {
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 16px !important;
+  }
+  
+  /* Admin login mobile */
+  body.admin-login {
+    padding: 1rem !important;
+    align-items: flex-start;
+    padding-top: 10vh !important;
+  }
+  
+  .admin-login .neon-card {
+    padding: 1.5rem !important;
+    border-radius: 16px !important;
+  }
+  
+  .admin-login .logo-container::before {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .admin-login .logo-container .w-20 {
+    width: 4.5rem !important;
+    height: 4.5rem !important;
+  }
+  
+  .admin-login h1.text-2xl {
+    font-size: 1.25rem !important;
+  }
+  
+  .admin-login .neon-input {
+    padding: 14px 16px !important;
+  }
+  
+  .admin-login .neon-btn {
+    padding: 16px !important;
+    min-height: 52px;
+  }
+  
+  /* Hide particles on mobile */
+  .float-particle:nth-child(2),
+  .float-particle:nth-child(4) {
+    display: none;
+  }
+}
+
+/* Small screens */
+@media (max-width: 374px) {
+  html { font-size: 13px; }
+  
+  .grid-cols-2.md\:grid-cols-4,
+  .grid-cols-2.md\:grid-cols-5 {
+    gap: 8px !important;
+  }
+  
+  .terminal-card {
+    padding: 8px !important;
+  }
+  
+  #addRechargeModal .grid-cols-3.gap-3 {
+    grid-template-columns: 1fr 1fr 1fr !important;
+  }
+}
+
+/* Safe area insets */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (max-width: 767px) {
+    .main-content {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+    }
+    
+    body.admin-login {
+      padding-top: calc(10vh + env(safe-area-inset-top)) !important;
+    }
+  }
+}
+
+/* Touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .nav-item:hover,
+  .terminal-card:hover,
+  .member-card:hover,
+  .booking-card:hover {
+    transform: none;
+  }
+  
+  .nav-item:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Smooth animations */
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .sidebar-backdrop {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .terminal-card, .member-card, .booking-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
