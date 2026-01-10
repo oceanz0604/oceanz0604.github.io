@@ -469,6 +469,159 @@
       border: 1px solid var(--neon-green) !important;
       box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
     }
+
+    /* ==================== MOBILE UI ENHANCEMENTS ==================== */
+    
+    @media (max-width: 768px) {
+      html { font-size: 14px; }
+      
+      /* Mobile main content */
+      .main-content {
+        padding: 1rem !important;
+        margin-left: 0 !important;
+      }
+      
+      /* Mobile sidebar improvements */
+      .member-sidebar {
+        width: 85vw !important;
+        max-width: 300px;
+      }
+      
+      .member-sidebar .nav-item {
+        padding: 14px 16px !important;
+      }
+      
+      /* Mobile header */
+      .sticky.top-0.z-30 {
+        padding: 12px 16px !important;
+      }
+      
+      /* Better touch targets */
+      button, .nav-item, .neon-btn {
+        min-height: 44px;
+      }
+      
+      /* Stat cards mobile */
+      .grid-cols-2.md\\:grid-cols-4 {
+        gap: 10px !important;
+      }
+      
+      .stat-card {
+        padding: 12px !important;
+      }
+      
+      .stat-card .text-2xl,
+      .stat-card .text-xl {
+        font-size: 1.1rem !important;
+      }
+      
+      /* Neon cards */
+      .neon-card {
+        padding: 1rem !important;
+        border-radius: 12px !important;
+      }
+      
+      /* Typography scaling */
+      h1, .text-3xl { font-size: 1.5rem !important; }
+      h2, .text-2xl { font-size: 1.25rem !important; }
+      
+      /* Input fields - prevent iOS zoom */
+      input, select, textarea {
+        font-size: 16px !important;
+      }
+      
+      /* Chart container mobile */
+      .chart-container {
+        padding: 0.75rem !important;
+      }
+      
+      .chart-container canvas {
+        max-height: 200px !important;
+      }
+      
+      /* Session history cards */
+      .session-card {
+        padding: 12px !important;
+      }
+      
+      /* Leaderboard items */
+      .leaderboard-item {
+        padding: 12px !important;
+      }
+      
+      /* Booking form mobile */
+      .grid.gap-4 {
+        gap: 12px !important;
+      }
+      
+      /* Modal mobile */
+      .modal-card {
+        margin: 1rem !important;
+        padding: 1.25rem !important;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+      }
+      
+      /* Tab content spacing */
+      .tab-pane {
+        padding: 0 !important;
+      }
+      
+      /* PWA Install banner mobile */
+      #pwaInstallBanner {
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        border-radius: 16px 16px 0 0 !important;
+      }
+    }
+    
+    /* Small mobile screens */
+    @media (max-width: 374px) {
+      html { font-size: 13px; }
+      
+      .stat-card .text-2xl {
+        font-size: 1rem !important;
+      }
+    }
+    
+    /* Safe area insets for notched devices */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      @media (max-width: 768px) {
+        .main-content {
+          padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+        }
+        
+        #pwaInstallBanner {
+          padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important;
+        }
+      }
+    }
+    
+    /* Touch device optimizations */
+    @media (hover: none) and (pointer: coarse) {
+      .neon-btn:hover,
+      .nav-item:hover,
+      .neon-card:hover {
+        transform: none;
+      }
+      
+      .neon-btn:active,
+      .nav-item:active {
+        transform: scale(0.98);
+      }
+    }
+    
+    /* Smooth animations */
+    @media (prefers-reduced-motion: no-preference) {
+      .member-sidebar {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .member-sidebar-backdrop {
+        transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+    }
   </style>
 </head>
 <body class="text-white min-h-screen relative">
