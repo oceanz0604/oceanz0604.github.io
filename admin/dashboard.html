@@ -22,44 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/common.css">
+  <link rel="stylesheet" href="../assets/css/admin.css">
   <style>
-    :root {
-      --neon-cyan: #00f0ff;
-      --neon-pink: #ff00ff;
-      --neon-purple: #b829ff;
-      --neon-green: #00ff88;
-      --neon-red: #ff0044;
-      --neon-orange: #ff6b00;
-      --neon-yellow: #ffff00;
-      --dark-bg: #0a0a0f;
-      --card-bg: rgba(15, 15, 25, 0.85);
-      --card-border: rgba(255, 0, 68, 0.2);
-    }
-
-    * { font-family: 'Rajdhani', sans-serif; }
-    .font-orbitron { font-family: 'Orbitron', sans-serif; }
-
-    body {
-      background: var(--dark-bg);
-      background-image: 
-        linear-gradient(rgba(255, 0, 68, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 0, 68, 0.02) 1px, transparent 1px);
-      background-size: 40px 40px;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        radial-gradient(ellipse at 0% 0%, rgba(255, 0, 68, 0.08) 0%, transparent 40%),
-        radial-gradient(ellipse at 100% 100%, rgba(184, 41, 255, 0.06) 0%, transparent 40%);
-      pointer-events: none;
-      z-index: 0;
-    }
+    /* Page-specific styles - most styles are in common.css and admin.css */
 
     /* Sidebar */
     .sidebar {
@@ -979,7 +945,7 @@
     }
   </style>
 </head>
-<body class="text-white min-h-screen relative">
+<body class="admin-page text-white min-h-screen relative">
 
   <!-- Loading Screen -->
   <div id="loading-screen" class="min-h-screen flex items-center justify-center relative z-10">

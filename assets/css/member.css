@@ -1,0 +1,572 @@
+/**
+ * OceanZ Gaming Cafe - Member Styles
+ * Styles for member dashboard and login pages
+ */
+
+/* ==================== MEMBER BODY BACKGROUND ==================== */
+body.member-page {
+  background: var(--dark-bg);
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+body.member-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 0% 0%, rgba(0, 240, 255, 0.1) 0%, transparent 40%),
+    radial-gradient(ellipse at 100% 100%, rgba(255, 0, 255, 0.08) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Override card border for member theme */
+body.member-page {
+  --card-border: rgba(0, 240, 255, 0.2);
+}
+
+/* ==================== MEMBER NEON CARD ==================== */
+body.member-page .neon-card {
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.05);
+}
+
+body.member-page .neon-card::before {
+  background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+}
+
+.neon-card-pink::before {
+  background: linear-gradient(90deg, transparent, var(--neon-pink), transparent);
+}
+
+.neon-card-purple::before {
+  background: linear-gradient(90deg, transparent, var(--neon-purple), transparent);
+}
+
+.neon-card-green::before {
+  background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+}
+
+/* ==================== MEMBER SPECIFIC GLOW ==================== */
+.glow-orange { text-shadow: 0 0 10px var(--neon-orange), 0 0 20px var(--neon-orange); }
+
+/* ==================== TAB BAR ==================== */
+.tab-bar {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(10px);
+}
+
+.tab-btn {
+  position: relative;
+  transition: all 0.3s ease;
+  color: #6b7280;
+  border: 1px solid transparent;
+}
+
+.tab-btn:hover {
+  color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.tab-btn.active {
+  color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+
+/* ==================== MEMBER BUTTONS ==================== */
+body.member-page .neon-btn {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(184, 41, 255, 0.2));
+  border: 1px solid var(--neon-cyan);
+}
+
+body.member-page .neon-btn:hover {
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+}
+
+.neon-btn-pink {
+  background: linear-gradient(135deg, rgba(255, 0, 255, 0.2), rgba(184, 41, 255, 0.2));
+  border-color: var(--neon-pink);
+}
+
+.neon-btn-pink:hover {
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-purple));
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+}
+
+/* ==================== MEMBER INPUTS ==================== */
+body.member-page .neon-input {
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+body.member-page .neon-input:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+
+body.member-page .neon-select {
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+body.member-page .neon-select:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+
+/* ==================== AVATAR RING ==================== */
+.avatar-ring {
+  border: 3px solid var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.5); }
+  50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.8); }
+}
+
+/* ==================== MEMBER STAT CARD ==================== */
+body.member-page .stat-card {
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+body.member-page .stat-card::after {
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+}
+
+/* ==================== LEADERBOARD ==================== */
+.leaderboard-item {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 240, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.leaderboard-item:hover {
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.05);
+  transform: translateX(5px);
+}
+
+.leaderboard-item.highlight {
+  background: rgba(0, 255, 136, 0.15) !important;
+  border: 1px solid var(--neon-green) !important;
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+}
+
+/* Rank Badge */
+.rank-badge {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border-radius: 8px;
+}
+
+.rank-1 { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #000; }
+.rank-2 { background: linear-gradient(135deg, #c0c0c0, #a0a0a0); color: #000; }
+.rank-3 { background: linear-gradient(135deg, #cd7f32, #b5651d); color: #fff; }
+
+/* ==================== PC BUTTON ==================== */
+.pc-btn {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.pc-btn:hover {
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
+.pc-btn.selected {
+  border-color: var(--neon-green);
+  background: rgba(0, 255, 136, 0.2);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
+}
+
+/* ==================== DATE BUTTON ==================== */
+.date-btn {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.date-btn:hover {
+  border-color: var(--neon-cyan);
+}
+
+.date-btn.selected {
+  border-color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.2);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+
+/* ==================== HISTORY CARD ==================== */
+.history-card {
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid var(--neon-purple);
+  transition: all 0.3s ease;
+}
+
+.history-card:hover {
+  background: rgba(0, 240, 255, 0.05);
+  border-left-color: var(--neon-cyan);
+}
+
+/* ==================== MEMBER BOOKING CARD ==================== */
+body.member-page .booking-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+body.member-page .booking-card:hover {
+  border-color: var(--neon-cyan);
+}
+
+/* ==================== MEMBER SIDEBAR ==================== */
+.member-sidebar {
+  background: rgba(10, 10, 15, 0.98);
+  border-right: 1px solid var(--card-border);
+  backdrop-filter: blur(20px);
+  transition: transform 0.3s ease;
+}
+
+.member-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  z-index: 39;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.member-sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.member-page .nav-item {
+  transition: all 0.2s ease;
+}
+
+body.member-page .nav-item:hover {
+  background: rgba(0, 240, 255, 0.1);
+}
+
+body.member-page .nav-item.active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+body.member-page .nav-item.active span {
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+@media (max-width: 768px) {
+  .member-sidebar {
+    transform: translateX(-100%);
+  }
+  .member-sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+/* ==================== CYBER LINES ==================== */
+body.member-page .cyber-line {
+  background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+}
+
+/* ==================== SCANLINE EFFECT ==================== */
+.scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.1) 0px,
+    rgba(0, 0, 0, 0.1) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+/* ==================== MEMBER LOGIN PAGE ==================== */
+body.member-login {
+  background: var(--dark-bg);
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  position: relative;
+  overflow: hidden;
+}
+
+body.member-login::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 20% 20%, rgba(0, 240, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(255, 0, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.member-login .neon-card {
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: 
+    0 0 20px rgba(0, 240, 255, 0.1),
+    inset 0 0 60px rgba(0, 240, 255, 0.03);
+}
+
+.member-login .neon-glow {
+  text-shadow: 
+    0 0 10px var(--neon-cyan),
+    0 0 20px var(--neon-cyan),
+    0 0 40px var(--neon-cyan);
+}
+
+.member-login .neon-input:focus {
+  box-shadow: 
+    0 0 10px rgba(0, 240, 255, 0.3),
+    inset 0 0 10px rgba(0, 240, 255, 0.1);
+}
+
+.member-login .neon-btn {
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+  position: relative;
+  overflow: hidden;
+}
+
+.member-login .neon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.member-login .neon-btn:hover::before {
+  left: 100%;
+}
+
+.member-login .neon-btn:hover {
+  box-shadow: 
+    0 0 20px rgba(0, 240, 255, 0.5),
+    0 0 40px rgba(0, 240, 255, 0.3);
+}
+
+.member-login .logo-container {
+  position: relative;
+}
+
+.member-login .logo-container::before {
+  content: '';
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.3) 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: member-pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes member-pulse-glow {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+.member-login .cyber-line {
+  height: 2px;
+  animation: member-line-glow 2s ease-in-out infinite;
+}
+
+@keyframes member-line-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Member login corner accents */
+.member-login .corner-accent {
+  border-color: var(--neon-cyan);
+}
+
+/* Member floating particles */
+.member-login .float-particle {
+  background: var(--neon-cyan);
+}
+
+/* ==================== UTILITIES ==================== */
+.hide-scrollbar { 
+  -ms-overflow-style: none; 
+  scrollbar-width: none; 
+}
+
+.hide-scrollbar::-webkit-scrollbar { 
+  display: none; 
+}
+
+/* ==================== MEMBER MOBILE STYLES ==================== */
+@media (max-width: 768px) {
+  html { font-size: 14px; }
+  
+  /* Main content */
+  .main-content {
+    padding: 1rem !important;
+    margin-left: 0 !important;
+  }
+  
+  /* Sidebar */
+  .member-sidebar {
+    width: 85vw !important;
+    max-width: 300px;
+  }
+  
+  .member-sidebar .nav-item {
+    padding: 14px 16px !important;
+  }
+  
+  /* Mobile header */
+  .sticky.top-0.z-30 {
+    padding: 12px 16px !important;
+  }
+  
+  /* Touch targets */
+  button, .nav-item, .neon-btn {
+    min-height: 44px;
+  }
+  
+  /* Stat cards */
+  .grid-cols-2.md\:grid-cols-4 {
+    gap: 10px !important;
+  }
+  
+  /* Typography */
+  h1, .text-3xl { font-size: 1.5rem !important; }
+  h2, .text-2xl { font-size: 1.25rem !important; }
+  
+  /* Session history cards */
+  .session-card {
+    padding: 12px !important;
+  }
+  
+  /* Leaderboard items */
+  .leaderboard-item {
+    padding: 12px !important;
+  }
+  
+  /* Booking form */
+  .grid.gap-4 {
+    gap: 12px !important;
+  }
+  
+  /* Tab content */
+  .tab-pane {
+    padding: 0 !important;
+  }
+  
+  /* Member login mobile */
+  body.member-login {
+    padding: 1rem !important;
+    align-items: flex-start;
+    padding-top: 8vh !important;
+  }
+  
+  .member-login .neon-card {
+    padding: 1.5rem !important;
+    border-radius: 16px !important;
+  }
+  
+  .member-login .logo-container::before {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .member-login .logo-container .w-24 {
+    width: 5rem !important;
+    height: 5rem !important;
+  }
+  
+  .member-login h1.text-3xl {
+    font-size: 1.5rem !important;
+  }
+  
+  .member-login .neon-input {
+    padding: 14px 16px !important;
+  }
+  
+  .member-login .neon-btn {
+    padding: 16px !important;
+    min-height: 52px;
+  }
+  
+  /* Hide particles on mobile */
+  .float-particle:nth-child(2),
+  .float-particle:nth-child(4),
+  .float-particle:nth-child(6) {
+    display: none;
+  }
+}
+
+/* Small screens */
+@media (max-width: 374px) {
+  html { font-size: 13px; }
+}
+
+/* Safe area insets */
+@supports (padding: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .main-content {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+    }
+    
+    body.member-login {
+      padding-top: calc(8vh + env(safe-area-inset-top)) !important;
+    }
+  }
+}
+
+/* Touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .leaderboard-item:hover {
+    transform: none;
+  }
+}
+
+/* Smooth animations */
+@media (prefers-reduced-motion: no-preference) {
+  .member-sidebar {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .member-sidebar-backdrop {
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
