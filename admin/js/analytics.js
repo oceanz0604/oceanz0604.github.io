@@ -87,6 +87,22 @@ function renderAnalyticsDashboard(container, data) {
         <div class="text-xs text-gray-600 mt-1">Total: ${stats.totalSessions} sessions</div>
       </div>
     </div>
+    
+    <!-- Payment Breakdown -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(0,240,255,0.3);">
+        <div class="text-gray-500 text-xs uppercase tracking-wider">💵 Cash Total</div>
+        <div class="text-xl font-bold font-orbitron mt-1" style="color: #00f0ff;">₹${stats.totalCash.toLocaleString()}</div>
+      </div>
+      <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(184,41,255,0.3);">
+        <div class="text-gray-500 text-xs uppercase tracking-wider">📱 UPI Total</div>
+        <div class="text-xl font-bold font-orbitron mt-1" style="color: #b829ff;">₹${stats.totalUpi.toLocaleString()}</div>
+      </div>
+      <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(255,107,0,0.3);">
+        <div class="text-gray-500 text-xs uppercase tracking-wider">🔖 Credit Collected</div>
+        <div class="text-xl font-bold font-orbitron mt-1" style="color: #ff6b00;">₹${stats.totalCreditCollected.toLocaleString()}</div>
+      </div>
+    </div>
 
     <!-- Charts Row 1 -->
     <div class="grid md:grid-cols-2 gap-6 mb-6">
@@ -156,14 +172,48 @@ function calculateStats(recharges, bookings, members, sessions) {
   const now = new Date();
   const thisMonth = now.toISOString().slice(0, 7);
 
-  // Revenue
+  // Revenue - calculate from all payment types
   let totalRevenue = 0;
   let monthlyRevenue = 0;
+  let totalCash = 0;
+  let totalUpi = 0;
+  let totalCreditCollected = 0;
+  
   Object.entries(recharges).forEach(([date, dayRecharges]) => {
     Object.values(dayRecharges).forEach(r => {
-      totalRevenue += r.amount || 0;
+      let entryTotal = 0;
+      
+      // Handle new split format
+      if (r.total !== undefined) {
+        entryTotal = (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+        totalCash += r.cash || 0;
+        totalUpi += r.upi || 0;
+        
+        // Add credit collected via cash/UPI
+        totalCash += r.lastPaidCash || 0;
+        totalUpi += r.lastPaidUpi || 0;
+        totalCreditCollected += r.creditPaid || 0;
+      } 
+      // Handle old format
+      else if (r.amount !== undefined) {
+        if (r.mode === "credit") {
+          if (r.paid) {
+            entryTotal = r.amount;
+            if (r.paidVia === "cash") totalCash += r.amount;
+            else if (r.paidVia === "upi") totalUpi += r.amount;
+            else totalCash += r.amount; // Default to cash
+            totalCreditCollected += r.amount;
+          }
+        } else {
+          entryTotal = r.amount;
+          if (r.mode === "cash") totalCash += r.amount;
+          if (r.mode === "upi") totalUpi += r.amount;
+        }
+      }
+      
+      totalRevenue += entryTotal;
       if (date.startsWith(thisMonth)) {
-        monthlyRevenue += r.amount || 0;
+        monthlyRevenue += entryTotal;
       }
     });
   });
@@ -230,6 +280,9 @@ function calculateStats(recharges, bookings, members, sessions) {
   return {
     totalRevenue,
     monthlyRevenue,
+    totalCash,
+    totalUpi,
+    totalCreditCollected,
     totalMembers,
     activeMembers,
     totalBookings,
@@ -259,7 +312,19 @@ function renderRevenueChart(recharges) {
     const dateStr = date.toISOString().split("T")[0];
     labels.push(date.toLocaleDateString("en-IN", { day: "numeric", month: "short" }));
     
-    const dayTotal = Object.values(recharges[dateStr] || {}).reduce((sum, r) => sum + (r.amount || 0), 0);
+    // Calculate day total from all payment types
+    const dayTotal = Object.values(recharges[dateStr] || {}).reduce((sum, r) => {
+      // New split format
+      if (r.total !== undefined) {
+        return sum + (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+      }
+      // Old format
+      if (r.amount !== undefined) {
+        if (r.mode === "credit" && !r.paid) return sum; // Don't count unpaid credits
+        return sum + (r.amount || 0);
+      }
+      return sum;
+    }, 0);
     data.push(dayTotal);
   }
 
@@ -442,7 +507,17 @@ function renderTopSpenders(recharges) {
     if (date.startsWith(thisMonth)) {
       Object.values(dayRecharges).forEach(r => {
         if (r.member) {
-          memberTotals[r.member] = (memberTotals[r.member] || 0) + (r.amount || 0);
+          let amount = 0;
+          // New split format
+          if (r.total !== undefined) {
+            amount = (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+          }
+          // Old format
+          else if (r.amount !== undefined) {
+            if (r.mode === "credit" && !r.paid) amount = 0; // Don't count unpaid
+            else amount = r.amount || 0;
+          }
+          memberTotals[r.member] = (memberTotals[r.member] || 0) + amount;
         }
       });
     }
