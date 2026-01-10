@@ -57,6 +57,7 @@ const $ = id => document.getElementById(id);
 const elements = {
   memberInput: $("memberInput"),
   totalAmountInput: $("totalAmountInput"),
+  freeRechargeInput: $("freeRechargeInput"),
   cashInput: $("cashInput"),
   upiInput: $("upiInput"),
   creditInput: $("creditInput"),
@@ -68,7 +69,7 @@ const elements = {
   cashEl: $("cashTotal"),
   upiEl: $("upiTotal"),
   creditEl: $("creditTotal"),
-  creditPaidEl: $("creditPaidTotal"),
+  freeEl: $("freeTotal"),
   outstandingSection: $("outstandingCreditsSection"),
   outstandingList: $("outstandingCreditsList"),
   outstandingCount: $("outstandingCount"),
@@ -185,10 +186,9 @@ function loadDay() {
       : [];
     render();
     loadAudit();
+    // Reload outstanding credits whenever data changes (including new credit entries)
+    loadAllOutstandingCredits();
   });
-
-  // Also load all outstanding credits
-  loadAllOutstandingCredits();
 }
 
 // Load all outstanding credits across all dates
@@ -394,6 +394,7 @@ window.closeAddRechargeModal = () => {
   editId = null;
   if (elements.memberInput) elements.memberInput.value = "";
   if (elements.totalAmountInput) elements.totalAmountInput.value = "";
+  if (elements.freeRechargeInput) elements.freeRechargeInput.value = "";
   if (elements.noteInput) elements.noteInput.value = "";
   clearSplit();
 };
@@ -403,6 +404,7 @@ window.closeAddRechargeModal = () => {
 window.addRecharge = () => {
   const member = elements.memberInput?.value.trim();
   const total = Number(elements.totalAmountInput?.value) || 0;
+  const free = Number(elements.freeRechargeInput?.value) || 0;
   const cash = Number(elements.cashInput?.value) || 0;
   const upi = Number(elements.upiInput?.value) || 0;
   const credit = Number(elements.creditInput?.value) || 0;
@@ -412,24 +414,29 @@ window.addRecharge = () => {
     return;
   }
 
-  if (total <= 0) {
-    notifyWarning("Please enter total amount");
+  if (total <= 0 && free <= 0) {
+    notifyWarning("Please enter paid amount or free recharge");
     return;
   }
 
-  const splitTotal = cash + upi + credit;
-  if (splitTotal !== total) {
-    notifyWarning(`Split amounts (₹${splitTotal}) don't match total (₹${total}). Please adjust.`);
-    return;
+  if (total > 0) {
+    const splitTotal = cash + upi + credit;
+    if (splitTotal !== total) {
+      notifyWarning(`Split amounts (₹${splitTotal}) don't match paid amount (₹${total}). Please adjust.`);
+      return;
+    }
   }
 
   const data = {
     member,
     total,
+    free: free || 0,
     cash: cash || 0,
     upi: upi || 0,
     credit: credit || 0,
-    creditPaid: 0, // Track how much credit has been paid
+    creditPaid: 0, // Reset - credit tracking starts fresh
+    lastPaidCash: 0, // Reset settlement data
+    lastPaidUpi: 0, // Reset settlement data
     note: elements.noteInput?.value || "",
     admin: getAdminName(),
     createdAt: new Date().toISOString()
@@ -438,11 +445,19 @@ window.addRecharge = () => {
   const refPath = `recharges/${selectedDate}`;
 
   if (editId) {
+    // When editing, preserve createdAt from original record
+    const originalRecord = state.find(x => x.id === editId);
+    if (originalRecord?.createdAt) {
+      data.createdAt = originalRecord.createdAt;
+    }
+    data.updatedAt = new Date().toISOString();
+    data.updatedBy = getAdminName();
+    
     rechargeDb.ref(`${refPath}/${editId}`).update(data);
-    logAudit("EDIT", member, total);
+    logAudit("EDIT", member, total + free);
   } else {
     rechargeDb.ref(refPath).push(data);
-    logAudit("ADD", member, total);
+    logAudit("ADD", member, total + free);
   }
 
   // Close modal and clear form
@@ -451,24 +466,71 @@ window.addRecharge = () => {
 
 // ==================== RENDER LIST ====================
 
+let searchQuery = "";
+
+window.filterRechargeList = () => {
+  const searchInput = document.getElementById("rechargeSearch");
+  searchQuery = (searchInput?.value || "").toLowerCase().trim();
+  render();
+};
+
 function render() {
   elements.listEl.innerHTML = "";
-  let totalCollected = 0, cashTotal = 0, upiTotal = 0, creditPending = 0, creditPaid = 0;
+  const countEl = document.getElementById("rechargeCount");
+  const emptyEl = document.getElementById("rechargeEmptyState");
+  const noResultsEl = document.getElementById("rechargeNoResults");
+  
+  let totalCollected = 0, cashTotal = 0, upiTotal = 0, creditPending = 0, freeTotal = 0;
 
+  // Sort by createdAt in descending order (newest first)
+  const sortedState = [...state].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+    return dateB - dateA;
+  });
+
+  // Filter based on search query
+  const filteredState = sortedState.filter(r => {
+    if (!searchQuery) return true;
+    
+    const memberMatch = r.member?.toLowerCase().includes(searchQuery);
+    const noteMatch = r.note?.toLowerCase().includes(searchQuery);
+    const amountMatch = String(r.total || r.amount).includes(searchQuery);
+    const adminMatch = r.admin?.toLowerCase().includes(searchQuery);
+    
+    return memberMatch || noteMatch || amountMatch || adminMatch;
+  });
+
+  // Calculate totals from all state (not filtered)
+  // When credit is collected via cash/UPI, it's added to those totals
   state.forEach(r => {
-    // Handle both old format (mode-based) and new format (split payment)
     if (r.total !== undefined) {
       // New split payment format
+      // Direct cash and UPI payments
       cashTotal += r.cash || 0;
       upiTotal += r.upi || 0;
-      totalCollected += (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+      freeTotal += r.free || 0;
+      
+      // Add collected credit payments to cash/UPI based on how they were paid
+      if (r.lastPaidCash) cashTotal += r.lastPaidCash;
+      if (r.lastPaidUpi) upiTotal += r.lastPaidUpi;
+      
+      // Calculate totals
+      const collected = (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+      totalCollected += collected;
       creditPending += (r.credit || 0) - (r.creditPaid || 0);
-      creditPaid += r.creditPaid || 0;
     } else if (r.amount !== undefined) {
       // Old single-mode format (backward compatibility)
       if (r.mode === "credit") {
         if (r.paid) {
-          creditPaid += r.amount;
+          // Credit was paid - add to appropriate payment method
+          if (r.paidVia === "cash" || r.paidVia === "cash+upi") {
+            cashTotal += r.amount; // Approximate: add full to cash for old records
+          } else if (r.paidVia === "upi") {
+            upiTotal += r.amount;
+          } else {
+            cashTotal += r.amount; // Default to cash for old paid credits
+          }
           totalCollected += r.amount;
         } else {
           creditPending += r.amount;
@@ -479,10 +541,27 @@ function render() {
         if (r.mode === "upi") upiTotal += r.amount;
       }
     }
+  });
 
-    // Render entry
-    const div = document.createElement("div");
-    div.className = "recharge-item p-4 rounded-lg";
+  // Update count
+  if (countEl) countEl.textContent = state.length;
+
+  // Handle empty states
+  if (state.length === 0) {
+    if (emptyEl) emptyEl.classList.remove("hidden");
+    if (noResultsEl) noResultsEl.classList.add("hidden");
+  } else if (filteredState.length === 0) {
+    if (emptyEl) emptyEl.classList.add("hidden");
+    if (noResultsEl) noResultsEl.classList.remove("hidden");
+  } else {
+    if (emptyEl) emptyEl.classList.add("hidden");
+    if (noResultsEl) noResultsEl.classList.add("hidden");
+  }
+
+  // Render table rows
+  filteredState.forEach((r, index) => {
+    const row = document.createElement("tr");
+    row.className = "hover:bg-gray-800/30 transition-colors";
     
     // Determine if this entry has pending credit
     const hasPendingCredit = r.total !== undefined 
@@ -490,32 +569,71 @@ function render() {
       : (r.mode === "credit" && !r.paid);
     
     if (hasPendingCredit) {
-      div.style.borderLeftColor = "#ff6b00";
+      row.style.borderLeft = "3px solid #ff6b00";
     }
 
-    // Build payment breakdown display
-    let paymentBreakdown = "";
-    if (r.total !== undefined) {
-      // New format - show split
-      const parts = [];
-      if (r.cash > 0) parts.push(`<span style="color: #00f0ff;">💵 ₹${r.cash}</span>`);
-      if (r.upi > 0) parts.push(`<span style="color: #b829ff;">📱 ₹${r.upi}</span>`);
+    // Format time from createdAt
+    const createdDate = r.createdAt ? new Date(r.createdAt) : null;
+    const timeStr = createdDate 
+      ? createdDate.toLocaleTimeString("en-IN", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: true })
+      : "-";
+    const dateStr = createdDate 
+      ? createdDate.toLocaleDateString("en-IN", { timeZone: TIMEZONE, day: "numeric", month: "short" })
+      : selectedDate;
+
+    // Build payment badges
+    let paymentBadges = "";
+    if (r.total !== undefined || r.free !== undefined) {
+      const badges = [];
+      // Show direct cash payment
+      if (r.cash > 0) badges.push(`<span class="payment-badge cash">💵 ₹${r.cash}</span>`);
+      // Show direct UPI payment
+      if (r.upi > 0) badges.push(`<span class="payment-badge upi">📱 ₹${r.upi}</span>`);
+      // Show free recharge
+      if (r.free > 0) badges.push(`<span class="payment-badge free">🎁 ₹${r.free}</span>`);
+      
       if (r.credit > 0) {
         const remaining = (r.credit || 0) - (r.creditPaid || 0);
+        // Show pending credit
         if (remaining > 0) {
-          parts.push(`<span style="color: #ff6b00;">🔖 ₹${remaining} pending</span>`);
+          badges.push(`<span class="payment-badge credit-pending">🔖 ₹${remaining}</span>`);
         }
+        // Show how the credit was settled (via cash/UPI)
         if (r.creditPaid > 0) {
-          parts.push(`<span style="color: #00ff88;">✓ ₹${r.creditPaid} paid</span>`);
+          if (r.lastPaidCash > 0 && r.lastPaidUpi > 0) {
+            badges.push(`<span class="payment-badge cash" title="Credit settled">✓💵 ₹${r.lastPaidCash}</span>`);
+            badges.push(`<span class="payment-badge upi" title="Credit settled">✓📱 ₹${r.lastPaidUpi}</span>`);
+          } else if (r.lastPaidCash > 0) {
+            badges.push(`<span class="payment-badge cash" title="Credit settled via Cash">✓💵 ₹${r.lastPaidCash}</span>`);
+          } else if (r.lastPaidUpi > 0) {
+            badges.push(`<span class="payment-badge upi" title="Credit settled via UPI">✓📱 ₹${r.lastPaidUpi}</span>`);
+          } else {
+            // Fallback for old records without lastPaid info
+            badges.push(`<span class="payment-badge credit-paid">✓ ₹${r.creditPaid}</span>`);
+          }
         }
       }
-      paymentBreakdown = parts.join(" • ");
+      paymentBadges = badges.join(" ");
     } else {
-      // Old format
-      const icon = { cash: "💵", upi: "📱", credit: "🔖" }[r.mode] || "";
-      paymentBreakdown = `${icon} ${r.mode?.toUpperCase() || ""}`;
-      if (r.mode === "credit") {
-        paymentBreakdown += r.paid ? " ✓ PAID" : " ⏳ PENDING";
+      // Old single-mode format
+      if (r.mode === "credit" && r.paid) {
+        // Show as settled via the payment method used
+        const paidVia = r.paidVia || "cash";
+        if (paidVia.includes("cash")) {
+          paymentBadges = `<span class="payment-badge cash">✓💵 ₹${r.amount}</span>`;
+        } else if (paidVia === "upi") {
+          paymentBadges = `<span class="payment-badge upi">✓📱 ₹${r.amount}</span>`;
+        } else {
+          paymentBadges = `<span class="payment-badge credit-paid">✓ ₹${r.amount}</span>`;
+        }
+      } else {
+        const badgeClass = r.mode === "cash" ? "cash" : r.mode === "upi" ? "upi" : "credit-pending";
+        const icon = { cash: "💵", upi: "📱", credit: "🔖" }[r.mode] || "";
+        let label = r.mode?.toUpperCase() || "";
+        if (r.mode === "credit") {
+          label = "PENDING";
+        }
+        paymentBadges = `<span class="payment-badge ${badgeClass}">${icon} ${label}</span>`;
       }
     }
 
@@ -523,28 +641,48 @@ function render() {
       ? (r.credit || 0) - (r.creditPaid || 0)
       : (r.mode === "credit" && !r.paid ? r.amount : 0);
 
-    div.innerHTML = `
-      <div class="flex justify-between items-start gap-4">
-        <div class="flex-1">
-          <div class="flex items-center flex-wrap gap-2">
-            <strong class="font-orbitron" style="color: #00f0ff;">${r.member}</strong>
-            <span class="font-orbitron" style="color: #00ff88;">₹${r.total || r.amount}</span>
-          </div>
-          <div class="text-xs text-gray-400 mt-1">${paymentBreakdown}</div>
-          ${r.note ? `<div class="text-xs text-gray-600 mt-1">📝 ${r.note}</div>` : ""}
-        </div>
-        <div class="flex gap-2 items-center shrink-0">
+    row.innerHTML = `
+      <td class="px-4 py-3">
+        <div class="text-white font-medium">${timeStr}</div>
+        <div class="text-xs text-gray-500">${dateStr}</div>
+      </td>
+      <td class="px-4 py-3">
+        <span class="font-orbitron font-bold" style="color: var(--neon-cyan);">${r.member}</span>
+      </td>
+      <td class="px-4 py-3 text-right">
+        <span class="font-orbitron font-bold text-lg" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
+        ${r.free > 0 ? `<div class="text-xs" style="color: #ffff00;">(₹${r.total || 0} + ₹${r.free} free)</div>` : ''}
+      </td>
+      <td class="px-4 py-3">
+        <div class="flex flex-wrap gap-1">${paymentBadges}</div>
+      </td>
+      <td class="px-4 py-3 text-gray-400 text-xs max-w-32 truncate" title="${r.note || ''}">
+        ${r.note || "-"}
+      </td>
+      <td class="px-4 py-3">
+        <span class="text-xs px-2 py-1 rounded" style="background: rgba(0,240,255,0.1); color: var(--neon-cyan);">${r.admin || "Admin"}</span>
+      </td>
+      <td class="px-4 py-3 text-right">
+        <div class="flex gap-1 justify-end items-center">
           ${pendingCreditAmount > 0 ? `
-            <button onclick="collectCredit('${r.id}', ${pendingCreditAmount})" class="mark-paid-btn text-xs">
-              Collect ₹${pendingCreditAmount}
+            <button onclick="collectCredit('${r.id}', ${pendingCreditAmount})" 
+              class="text-xs px-2 py-1 rounded transition-all hover:scale-105"
+              style="background: rgba(255,107,0,0.2); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);">
+              Collect
             </button>
           ` : ''}
-          <button onclick="editRecharge('${r.id}')" class="hover:scale-110 transition-transform p-1" style="color: #00f0ff;">✏</button>
-          <button onclick="deleteRecharge('${r.id}')" class="hover:scale-110 transition-transform p-1" style="color: #ff0044;">✖</button>
+          <button onclick="editRecharge('${r.id}')" 
+            class="p-1.5 rounded transition-all hover:scale-110 hover:bg-cyan-500/20" style="color: var(--neon-cyan);">
+            ✏️
+          </button>
+          <button onclick="deleteRecharge('${r.id}')" 
+            class="p-1.5 rounded transition-all hover:scale-110 hover:bg-red-500/20" style="color: #ff0044;">
+            🗑️
+          </button>
         </div>
-      </div>
+      </td>
     `;
-    elements.listEl.appendChild(div);
+    elements.listEl.appendChild(row);
   });
 
   // Update totals
@@ -552,7 +690,7 @@ function render() {
   if (elements.cashEl) elements.cashEl.textContent = `₹${cashTotal}`;
   if (elements.upiEl) elements.upiEl.textContent = `₹${upiTotal}`;
   if (elements.creditEl) elements.creditEl.textContent = `₹${creditPending}`;
-  if (elements.creditPaidEl) elements.creditPaidEl.textContent = `₹${creditPaid}`;
+  if (elements.freeEl) elements.freeEl.textContent = `₹${freeTotal}`;
 }
 
 // ==================== CREDIT COLLECTION MODAL ====================
@@ -741,20 +879,43 @@ window.editRecharge = id => {
   editId = id;
   if (elements.memberInput) elements.memberInput.value = r.member;
   if (elements.noteInput) elements.noteInput.value = r.note || "";
+  if (elements.freeRechargeInput) elements.freeRechargeInput.value = r.free || "";
   
   // Handle both formats
   if (r.total !== undefined) {
-    // New split format
+    // New split format - show ACTUAL current state including settled credits
+    // Cash = original cash + any cash used to settle credit
+    const actualCash = (r.cash || 0) + (r.lastPaidCash || 0);
+    // UPI = original upi + any upi used to settle credit
+    const actualUpi = (r.upi || 0) + (r.lastPaidUpi || 0);
+    // Credit = remaining unpaid credit
+    const actualCredit = (r.credit || 0) - (r.creditPaid || 0);
+    
     if (elements.totalAmountInput) elements.totalAmountInput.value = r.total;
-    if (elements.cashInput) elements.cashInput.value = r.cash || "";
-    if (elements.upiInput) elements.upiInput.value = r.upi || "";
-    if (elements.creditInput) elements.creditInput.value = r.credit || "";
+    if (elements.cashInput) elements.cashInput.value = actualCash || "";
+    if (elements.upiInput) elements.upiInput.value = actualUpi || "";
+    if (elements.creditInput) elements.creditInput.value = actualCredit > 0 ? actualCredit : "";
   } else {
     // Old single-mode format
-    if (elements.totalAmountInput) elements.totalAmountInput.value = r.amount;
-    if (elements.cashInput) elements.cashInput.value = r.mode === "cash" ? r.amount : "";
-    if (elements.upiInput) elements.upiInput.value = r.mode === "upi" ? r.amount : "";
-    if (elements.creditInput) elements.creditInput.value = r.mode === "credit" ? r.amount : "";
+    if (r.mode === "credit" && r.paid) {
+      // Credit was paid - show as cash/upi based on paidVia
+      if (elements.totalAmountInput) elements.totalAmountInput.value = r.amount;
+      if (r.paidVia === "upi") {
+        if (elements.cashInput) elements.cashInput.value = "";
+        if (elements.upiInput) elements.upiInput.value = r.amount;
+        if (elements.creditInput) elements.creditInput.value = "";
+      } else {
+        // Default to cash
+        if (elements.cashInput) elements.cashInput.value = r.amount;
+        if (elements.upiInput) elements.upiInput.value = "";
+        if (elements.creditInput) elements.creditInput.value = "";
+      }
+    } else {
+      if (elements.totalAmountInput) elements.totalAmountInput.value = r.amount;
+      if (elements.cashInput) elements.cashInput.value = r.mode === "cash" ? r.amount : "";
+      if (elements.upiInput) elements.upiInput.value = r.mode === "upi" ? r.amount : "";
+      if (elements.creditInput) elements.creditInput.value = r.mode === "credit" ? r.amount : "";
+    }
   }
   
   updateSplitRemaining();
