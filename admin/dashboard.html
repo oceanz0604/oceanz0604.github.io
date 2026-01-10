@@ -389,15 +389,70 @@
       background: linear-gradient(90deg, var(--neon-red), var(--neon-purple));
     }
 
-    /* Recharge Item */
-    .recharge-item {
-      background: rgba(0, 0, 0, 0.3);
-      border-left: 3px solid var(--neon-green);
-      transition: all 0.3s ease;
+    /* Recharge Table */
+    #rechargeList tr {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .recharge-item:hover {
-      background: rgba(0, 255, 136, 0.05);
+    #rechargeList tr:last-child {
+      border-bottom: none;
+    }
+
+    /* Payment Badges */
+    .payment-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: 'Orbitron', sans-serif;
+      white-space: nowrap;
+    }
+
+    .payment-badge.cash {
+      background: rgba(0, 240, 255, 0.15);
+      color: #00f0ff;
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+
+    .payment-badge.upi {
+      background: rgba(184, 41, 255, 0.15);
+      color: #b829ff;
+      border: 1px solid rgba(184, 41, 255, 0.3);
+    }
+
+    .payment-badge.credit-pending {
+      background: rgba(255, 107, 0, 0.15);
+      color: #ff6b00;
+      border: 1px solid rgba(255, 107, 0, 0.3);
+    }
+
+    .payment-badge.credit-paid {
+      background: rgba(0, 255, 136, 0.15);
+      color: #00ff88;
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+
+    .payment-badge.free {
+      background: rgba(255, 255, 0, 0.15);
+      color: #ffff00;
+      border: 1px solid rgba(255, 255, 0, 0.3);
+    }
+
+    /* Table Scrollbar */
+    .overflow-x-auto::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .overflow-x-auto::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .overflow-x-auto::-webkit-scrollbar-thumb {
+      background: var(--neon-red);
+      border-radius: 3px;
     }
 
     /* Audit Filter Buttons */
@@ -595,9 +650,11 @@
       <button id="sidebar-close" class="sidebar-close" aria-label="Close menu">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
-      <!-- Logo -->
-      <div class="mb-4 text-center py-4">
-        <div class="w-12 h-12 mx-auto mb-2">
+      
+      <!-- Logo + User Info (Horizontal) -->
+      <div class="mb-4 p-3 rounded-xl flex items-center gap-3" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+        <!-- Logo -->
+        <div class="w-10 h-10 shrink-0">
           <svg viewBox="0 0 100 100" class="w-full h-full">
             <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
               fill="none" stroke="url(#sidebarGradient)" stroke-width="2"/>
@@ -609,16 +666,14 @@
             </defs>
           </svg>
         </div>
-        <h2 class="font-orbitron text-lg font-bold glow-red" style="color: var(--neon-red);">OCEANZ</h2>
-        <p class="text-xs text-gray-500 tracking-widest">ADMIN PANEL</p>
-      </div>
-
-      <!-- Staff Role Badge -->
-      <div id="roleBadgeContainer" class="mb-6 px-2">
-        <div id="roleBadge" class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
-          <div class="text-xs text-gray-500 mb-1">Logged in as</div>
-          <div id="currentUserName" class="font-orbitron text-sm truncate" style="color: var(--neon-cyan);">-</div>
-          <div id="currentUserRole" class="inline-block mt-2 text-xs px-2 py-1 rounded-full font-orbitron">-</div>
+        <!-- Branding + User -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1">
+            <span class="font-orbitron text-sm font-bold" style="color: var(--neon-red);">OCEANZ</span>
+            <span class="text-xs text-gray-600">ADMIN</span>
+          </div>
+          <div id="currentUserName" class="font-orbitron text-xs truncate mt-0.5" style="color: var(--neon-cyan);">-</div>
+          <div id="currentUserRole" class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded font-orbitron">-</div>
         </div>
       </div>
 
@@ -763,9 +818,9 @@
                 <div class="text-gray-500 text-xs uppercase tracking-wider">Credit (Pending)</div>
                 <div id="creditTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-orange);">₹0</div>
               </div>
-              <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(0,255,136,0.3);">
-                <div class="text-gray-500 text-xs uppercase tracking-wider">Credit (Paid)</div>
-                <div id="creditPaidTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">₹0</div>
+              <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(255,255,0,0.3);">
+                <div class="text-gray-500 text-xs uppercase tracking-wider">🎁 Free Given</div>
+                <div id="freeTotal" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-yellow);">₹0</div>
               </div>
             </div>
 
@@ -783,8 +838,52 @@
               </div>
             </div>
 
-            <!-- Recharge List -->
-            <div id="rechargeList" class="space-y-2"></div>
+            <!-- Recharge List - Table Style -->
+            <div class="neon-card rounded-xl overflow-hidden">
+              <!-- Table Header with Search -->
+              <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
+                <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-cyan);">
+                  📋 TODAY'S TRANSACTIONS
+                  <span id="rechargeCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,240,255,0.2);">0</span>
+                </h3>
+                <div class="relative">
+                  <input type="text" id="rechargeSearch" placeholder="Search by name, amount, note..." 
+                    class="neon-input px-4 py-2 pl-10 rounded-lg text-sm w-full sm:w-64"
+                    oninput="filterRechargeList()"/>
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+                </div>
+              </div>
+              
+              <!-- Table -->
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-900/50">
+                    <tr class="text-left">
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-purple);">Time</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-cyan);">Member</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amount</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-yellow);">Payment</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Note</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Admin</th>
+                      <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rechargeList" class="divide-y divide-gray-800/50"></tbody>
+                </table>
+              </div>
+              
+              <!-- Empty State -->
+              <div id="rechargeEmptyState" class="hidden text-center py-12 text-gray-500">
+                <span class="text-4xl block mb-3">📭</span>
+                <p>No transactions found for this date</p>
+              </div>
+              
+              <!-- No Results State -->
+              <div id="rechargeNoResults" class="hidden text-center py-8 text-gray-500">
+                <span class="text-2xl block mb-2">🔍</span>
+                <p>No matching transactions found</p>
+              </div>
+            </div>
 
             <!-- Collapsible Audit Log -->
             <div class="neon-card rounded-xl relative overflow-hidden">
@@ -1026,9 +1125,13 @@
             <input id="memberInput" placeholder="Search member..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
             <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
           </div>
-          <div class="col-span-2 md:col-span-1">
-            <label class="text-xs text-gray-500 mb-1 block">Total Amount</label>
-            <input id="totalAmountInput" type="number" placeholder="₹ Total" class="neon-input w-full px-3 py-2 rounded-lg text-white text-lg font-orbitron" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+          <div>
+            <label class="text-xs text-gray-500 mb-1 block">Paid Amount</label>
+            <input id="totalAmountInput" type="number" placeholder="₹ Paid" class="neon-input w-full px-3 py-2 rounded-lg text-white text-lg font-orbitron" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+          </div>
+          <div>
+            <label class="text-xs mb-1 flex items-center gap-1" style="color: #ffff00;">🎁 Free (Offer)</label>
+            <input id="freeRechargeInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" style="border-color: rgba(255,255,0,0.3);" onfocus="this.select()"/>
           </div>
         </div>
 
