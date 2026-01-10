@@ -343,6 +343,61 @@
       box-shadow: 0 0 15px rgba(255, 0, 100, 0.4);
     }
 
+    /* Sidebar Styles */
+    .member-sidebar {
+      background: rgba(10, 10, 15, 0.98);
+      border-right: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      transition: transform 0.3s ease;
+    }
+
+    .member-sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(3px);
+      z-index: 39;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .member-sidebar-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .nav-item {
+      transition: all 0.2s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: rgba(0, 240, 255, 0.1);
+      border-left-color: var(--neon-cyan);
+    }
+
+    .nav-item.active {
+      background: rgba(0, 240, 255, 0.15);
+      border-left-color: var(--neon-cyan);
+      color: var(--neon-cyan) !important;
+    }
+
+    /* Scrollbar for sidebar */
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    @media (max-width: 768px) {
+      .member-sidebar {
+        transform: translateX(-100%);
+      }
+      .member-sidebar.open {
+        transform: translateX(0);
+      }
+    }
+
     /* Cyber Lines */
     .cyber-line {
       height: 1px;
@@ -432,68 +487,100 @@
   </div>
 
   <!-- Main App (hidden until auth verified) -->
-  <div id="main-app" class="hidden relative z-10 w-full max-w-4xl mx-auto px-4 py-6 space-y-6">
+  <div id="main-app" class="hidden relative z-10 flex min-h-screen">
+    
+    <!-- Sidebar Backdrop (mobile) -->
+    <div id="sidebar-backdrop" class="member-sidebar-backdrop md:hidden"></div>
 
-    <!-- Header -->
-    <header class="tab-bar rounded-2xl p-2 flex items-center gap-2">
+    <!-- Sidebar -->
+    <aside id="member-sidebar" class="member-sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
+      <!-- Close button (mobile only) -->
+      <button id="sidebar-close" class="md:hidden absolute top-4 right-4 text-gray-500 hover:text-white" aria-label="Close menu">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
       <!-- Logo -->
-      <div class="px-4 py-2 flex items-center gap-2">
-        <div class="w-8 h-8 flex items-center justify-center">
+      <div class="text-center mb-6 pt-2">
+        <div class="w-16 h-16 mx-auto mb-3">
           <svg viewBox="0 0 100 100" class="w-full h-full">
             <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" 
-              fill="none" stroke="url(#headerGradient)" stroke-width="3"/>
+              fill="none" stroke="url(#sidebarGradient)" stroke-width="3"/>
             <defs>
-              <linearGradient id="headerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <linearGradient id="sidebarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:#00f0ff"/>
                 <stop offset="100%" style="stop-color:#ff00ff"/>
               </linearGradient>
             </defs>
           </svg>
         </div>
-        <span class="font-orbitron text-lg font-bold glow-cyan hidden sm:block" style="color: var(--neon-cyan);">OCEANZ</span>
+        <h2 class="font-orbitron text-lg font-bold glow-cyan" style="color: var(--neon-cyan);">OCEANZ</h2>
+        <p class="text-xs text-gray-500 tracking-widest">MEMBER PORTAL</p>
       </div>
 
-      <!-- Tab Buttons -->
-      <div id="topTabBar" class="flex gap-1 flex-1 overflow-x-auto hide-scrollbar">
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="profile">
-          <span class="hidden sm:inline">👤 Profile</span>
-          <span class="sm:hidden">👤</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="leaderboard">
-          <span class="hidden sm:inline">🏆 Leaders</span>
-          <span class="sm:hidden">🏆</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="monthly">
-          <span class="hidden sm:inline">📅 Monthly</span>
-          <span class="sm:hidden">📅</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="seasonal">
-          <span class="hidden sm:inline">🏅 Seasons</span>
-          <span class="sm:hidden">🏅</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="analytics">
-          <span class="hidden sm:inline">📊 Stats</span>
-          <span class="sm:hidden">📊</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="booking">
-          <span class="hidden sm:inline">🎮 Book</span>
-          <span class="sm:hidden">🎮</span>
-        </button>
-        <button class="tab-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium" data-tab="history">
-          <span class="hidden sm:inline">📜 History</span>
-          <span class="sm:hidden">📜</span>
-        </button>
+      <!-- User Info -->
+      <div class="mb-6 px-2">
+        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+          <div class="text-xs text-gray-500 mb-1">Logged in as</div>
+          <div id="sidebarUsername" class="font-orbitron text-sm truncate" style="color: var(--neon-cyan);">-</div>
+        </div>
       </div>
 
-      <!-- Logout -->
-      <button id="logoutBtn" class="logout-btn shrink-0 px-3 py-2 rounded-lg text-sm font-medium text-red-400">
-        <span class="hidden sm:inline">⚡ Exit</span>
-        <span class="sm:hidden">⚡</span>
-      </button>
-    </header>
+      <!-- Nav Items -->
+      <nav id="memberNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin">
+        <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="profile">
+          <span class="text-lg">👤</span>
+          <span class="font-medium">Profile</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="leaderboard">
+          <span class="text-lg">🏆</span>
+          <span class="font-medium">Leaderboard</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="monthly">
+          <span class="text-lg">📅</span>
+          <span class="font-medium">Monthly</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="seasonal">
+          <span class="text-lg">🏅</span>
+          <span class="font-medium">Seasons</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="analytics">
+          <span class="text-lg">📊</span>
+          <span class="font-medium">Stats</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="booking">
+          <span class="text-lg">🎮</span>
+          <span class="font-medium">Book PC</span>
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="history">
+          <span class="text-lg">📜</span>
+          <span class="font-medium">History</span>
+        </a>
+      </nav>
 
-    <!-- Tab Content -->
-    <div id="tab-content" class="space-y-6">
+      <!-- Footer -->
+      <div class="pt-4 border-t border-gray-800">
+        <button id="logoutBtn" class="logout-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-400">
+          <span class="text-lg">⚡</span>
+          <span class="font-medium">Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 ml-0 md:ml-64 min-h-screen">
+      <!-- Mobile Header -->
+      <div class="md:hidden sticky top-0 z-30 p-4" style="background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-border);">
+        <div class="flex items-center justify-between">
+          <button id="sidebar-toggle" class="p-2 rounded-lg" style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--neon-cyan);">
+            <i data-lucide="menu" class="w-5 h-5" style="color: var(--neon-cyan);"></i>
+          </button>
+          <span class="font-orbitron font-bold glow-cyan" style="color: var(--neon-cyan);">OCEANZ</span>
+          <div class="w-9"></div>
+        </div>
+      </div>
+
+      <!-- Tab Content -->
+      <div id="tab-content" class="p-4 md:p-6 space-y-6">
 
       <!-- Profile Tab -->
       <div class="tab-pane space-y-6" data-tab="profile">
@@ -820,7 +907,8 @@
         </div>
       </div>
     </div>
-  </div>
+      </div>
+    </main>
   </div><!-- End of main-app -->
 
   <!-- Logout Modal -->
@@ -866,6 +954,7 @@
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="../shared/notify.js" type="module"></script>
   <script src="js/dashboard.js" type="module"></script>
 
   <script>
@@ -926,14 +1015,76 @@
         window.location.href = "../index.html";
       });
 
-      // Tab bar horizontal scroll
-      const tabBar = document.getElementById("topTabBar");
-      tabBar?.addEventListener("wheel", (e) => {
-        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-          e.preventDefault();
-          tabBar.scrollLeft += e.deltaY;
+      // Sidebar Toggle (Mobile)
+      const sidebar = document.getElementById("member-sidebar");
+      const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+      const sidebarToggle = document.getElementById("sidebar-toggle");
+      const sidebarClose = document.getElementById("sidebar-close");
+
+      function openSidebar() {
+        sidebar?.classList.add("open");
+        sidebar?.classList.remove("hidden");
+        sidebarBackdrop?.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeSidebar() {
+        sidebar?.classList.remove("open");
+        sidebarBackdrop?.classList.remove("active");
+        document.body.style.overflow = "";
+        // Only hide on mobile
+        if (window.innerWidth < 768) {
+          setTimeout(() => {
+            if (!sidebar?.classList.contains("open")) {
+              sidebar?.classList.add("hidden");
+            }
+          }, 300);
         }
-      }, { passive: false });
+      }
+
+      sidebarToggle?.addEventListener("click", openSidebar);
+      sidebarClose?.addEventListener("click", closeSidebar);
+      sidebarBackdrop?.addEventListener("click", closeSidebar);
+
+      // Close sidebar when nav item clicked (mobile)
+      document.querySelectorAll("#memberNav .nav-item").forEach(item => {
+        item.addEventListener("click", (e) => {
+          e.preventDefault();
+          const tab = item.dataset.tab;
+          if (tab) {
+            // Update active state
+            document.querySelectorAll("#memberNav .nav-item").forEach(n => n.classList.remove("active"));
+            item.classList.add("active");
+            
+            // Trigger tab switch via existing dashboard.js logic
+            document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden"));
+            document.querySelector(`.tab-pane[data-tab="${tab}"]`)?.classList.remove("hidden");
+            
+            // Close sidebar on mobile
+            if (window.innerWidth < 768) {
+              closeSidebar();
+            }
+          }
+        });
+      });
+
+      // Handle window resize
+      window.addEventListener("resize", () => {
+        if (window.innerWidth >= 768) {
+          sidebar?.classList.remove("hidden", "open");
+          sidebarBackdrop?.classList.remove("active");
+          document.body.style.overflow = "";
+        } else {
+          if (!sidebar?.classList.contains("open")) {
+            sidebar?.classList.add("hidden");
+          }
+        }
+      });
+
+      // Initial state for mobile
+      if (window.innerWidth < 768) {
+        sidebar?.classList.add("hidden");
+      }
 
       // Service Worker Registration
       if ('serviceWorker' in navigator) {

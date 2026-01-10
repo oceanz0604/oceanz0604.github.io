@@ -339,7 +339,7 @@ function renderStaffStats(staffList, activityList) {
 async function addStaffMember() {
   // Check permission
   if (!hasPermission("staff")) {
-    alert("You don't have permission to manage staff");
+    notifyError("You don't have permission to manage staff");
     return;
   }
 
@@ -360,24 +360,24 @@ async function addStaffMember() {
 
   // Validation
   if (!email || !name) {
-    alert("Please fill in email and name");
+    notifyWarning("Please fill in email and name");
     return;
   }
 
   if (!password || password.length < 6) {
-    alert("Password must be at least 6 characters");
+    notifyWarning("Password must be at least 6 characters");
     return;
   }
 
   // Only super admins can create super admins
   if (role === "SUPER_ADMIN" && currentSession?.role !== "SUPER_ADMIN") {
-    alert("Only Super Admins can create Super Admin accounts");
+    notifyError("Only Super Admins can create Super Admin accounts");
     return;
   }
 
   // Can only create roles with lower level than yourself
   if (targetRole && currentRole && targetRole.level >= currentRole.level && currentSession?.role !== "SUPER_ADMIN") {
-    alert(`You can only create roles below your level (${currentRole.name})`);
+    notifyError(`You can only create roles below your level (${currentRole.name})`);
     return;
   }
 
@@ -411,7 +411,7 @@ async function addStaffMember() {
     await logActivity("staff_add", `Added staff member: ${name} as ${role}`);
     
     console.log("✅ Staff member added successfully");
-    alert(`✅ Staff member "${name}" created successfully!\n\nEmail: ${email}\nRole: ${role}`);
+    notifySuccess(`Staff member "${name}" created successfully! Email: ${email}, Role: ${role}`);
 
     // Clear form
     if (emailEl) emailEl.value = "";
@@ -422,7 +422,7 @@ async function addStaffMember() {
     loadStaffManagement();
   } catch (error) {
     console.error("Error adding staff:", error);
-    alert("❌ Failed to add staff member:\n" + error.message);
+    notifyError("Failed to add staff member: " + error.message);
   } finally {
     // Reset button
     if (addBtn) {
@@ -435,7 +435,7 @@ async function addStaffMember() {
 async function removeStaffMember(id) {
   // Check permission
   if (!hasPermission("staff")) {
-    alert("You don't have permission to manage staff");
+    notifyError("You don't have permission to manage staff");
     return;
   }
 
@@ -446,23 +446,29 @@ async function removeStaffMember(id) {
   const staffMember = staffSnap.val();
   
   if (!staffMember) {
-    alert("Staff member not found");
+    notifyError("Staff member not found");
     return;
   }
 
   // Cannot remove yourself
   if (staffMember.email?.toLowerCase() === currentSession?.email?.toLowerCase()) {
-    alert("You cannot remove yourself");
+    notifyError("You cannot remove yourself");
     return;
   }
 
   // Only super admins can remove other super admins
   if (staffMember.role === "SUPER_ADMIN" && currentSession?.role !== "SUPER_ADMIN") {
-    alert("Only Super Admins can remove Super Admin accounts");
+    notifyError("Only Super Admins can remove Super Admin accounts");
     return;
   }
 
-  if (!confirm(`Remove ${staffMember.name} (${staffMember.role})?`)) return;
+  const confirmed = await showConfirm(`Remove ${staffMember.name} (${staffMember.role})?`, {
+    title: "Remove Staff Member",
+    type: "error",
+    confirmText: "Remove",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
 
   try {
     await set(ref(db, `staff/${id}`), null);
@@ -484,7 +490,7 @@ export async function logActivity(type, action, details = "") {
 
 async function changeStaffRole(id, newRole) {
   if (!hasPermission("staff")) {
-    alert("You don't have permission to manage staff");
+    notifyError("You don't have permission to manage staff");
     return;
   }
 
@@ -493,20 +499,20 @@ async function changeStaffRole(id, newRole) {
   const newRoleInfo = ROLES[newRole];
 
   if (!newRoleInfo) {
-    alert("Invalid role");
+    notifyError("Invalid role");
     return;
   }
 
   // Only super admins can assign super admin role
   if (newRole === "SUPER_ADMIN" && currentSession?.role !== "SUPER_ADMIN") {
-    alert("Only Super Admins can assign Super Admin role");
+    notifyError("Only Super Admins can assign Super Admin role");
     loadStaffManagement(); // Refresh to reset dropdown
     return;
   }
 
   // Can only assign roles lower than your own (except super admins)
   if (currentSession?.role !== "SUPER_ADMIN" && newRoleInfo.level >= currentRoleInfo.level) {
-    alert("You can only assign roles below your level");
+    notifyError("You can only assign roles below your level");
     loadStaffManagement(); // Refresh to reset dropdown
     return;
   }
@@ -522,10 +528,11 @@ async function changeStaffRole(id, newRole) {
     });
 
     await logActivity("staff_role_change", `Changed ${staffMember?.name}'s role to ${newRoleInfo.name}`);
+    notifySuccess(`Role updated to ${newRoleInfo.name}`);
     loadStaffManagement();
   } catch (error) {
     console.error("Error changing role:", error);
-    alert("Failed to change role");
+    notifyError("Failed to change role");
   }
 }
 
@@ -602,7 +609,7 @@ async function openEditStaffModal(id) {
   const staff = staffSnap.val();
   
   if (!staff) {
-    alert("Staff member not found");
+    notifyError("Staff member not found");
     return;
   }
   
@@ -639,7 +646,7 @@ async function saveStaffEdit() {
   const saveBtn = document.getElementById("saveEditBtn");
   
   if (!name) {
-    alert("Please enter a display name");
+    notifyWarning("Please enter a display name");
     return;
   }
   
@@ -648,7 +655,7 @@ async function saveStaffEdit() {
   const staff = staffSnap.val();
   
   if (!staff) {
-    alert("Staff member not found");
+    notifyError("Staff member not found");
     return;
   }
   
@@ -658,11 +665,11 @@ async function saveStaffEdit() {
   
   if (role !== staff.role) {
     if (role === "SUPER_ADMIN" && currentSession?.role !== "SUPER_ADMIN") {
-      alert("Only Super Admins can assign Super Admin role");
+      notifyError("Only Super Admins can assign Super Admin role");
       return;
     }
     if (currentSession?.role !== "SUPER_ADMIN" && newRoleInfo.level >= currentRole.level) {
-      alert("You can only assign roles below your level");
+      notifyError("You can only assign roles below your level");
       return;
     }
   }
@@ -685,13 +692,13 @@ async function saveStaffEdit() {
     // Handle password change if provided
     if (currentPwd && newPwd) {
       if (newPwd.length < 6) {
-        alert("New password must be at least 6 characters");
+        notifyWarning("New password must be at least 6 characters");
         return;
       }
       
       const pwdResult = await updateUserPassword(staff.email, currentPwd, newPwd);
       if (!pwdResult.success) {
-        alert("Password update failed: " + pwdResult.error);
+        notifyError("Password update failed: " + pwdResult.error);
         // Database update succeeded, just password failed
       } else {
         console.log("✅ Password updated");
@@ -699,13 +706,13 @@ async function saveStaffEdit() {
     }
     
     await logActivity("staff_edit", `Updated staff member: ${name}`);
-    alert("✅ Staff member updated successfully!");
+    notifySuccess("Staff member updated successfully!");
     
     closeEditStaffModal();
     loadStaffManagement();
   } catch (error) {
     console.error("Error updating staff:", error);
-    alert("❌ Failed to update staff member:\n" + error.message);
+    notifyError("Failed to update staff member: " + error.message);
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;

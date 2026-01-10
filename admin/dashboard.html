@@ -537,6 +537,12 @@
     ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
     ::-webkit-scrollbar-thumb { background: var(--neon-red); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--neon-purple); }
+    
+    /* Thin scrollbar for sidebar */
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
     /* Chevron rotation for collapsible sections */
     .rotate-180 { transform: rotate(180deg); }
@@ -617,7 +623,7 @@
       </div>
 
       <!-- Nav Items (dynamically filtered by permissions) -->
-      <nav id="mainNav" class="flex-1 space-y-2">
+      <nav id="mainNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin">
         <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
           <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
           <span class="font-medium">Dashboard</span>
@@ -634,10 +640,6 @@
           <i data-lucide="wallet" class="w-5 h-5"></i>
           <span class="font-medium">Recharges</span>
         </a>
-        <a id="nav-history" href="#" data-permission="history" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="history" class="w-5 h-5"></i>
-          <span class="font-medium">History</span>
-        </a>
         <a id="nav-analytics" href="#" data-permission="analytics" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
           <span class="font-medium">Analytics</span>
@@ -645,6 +647,10 @@
         <a id="nav-staff" href="#" data-permission="staff" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="shield-check" class="w-5 h-5"></i>
           <span class="font-medium">Staff</span>
+        </a>
+        <a id="nav-cash" href="#" data-permission="recharges" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="banknote" class="w-5 h-5"></i>
+          <span class="font-medium">Cash Register</span>
         </a>
       </nav>
 
@@ -734,57 +740,10 @@
               </div>
             </div>
 
-            <!-- Add Recharge -->
-            <div class="neon-card rounded-xl p-4 space-y-4 relative">
-              <h3 class="font-orbitron text-sm font-bold" style="color: var(--neon-green);">➕ ADD RECHARGE</h3>
-              
-              <!-- Row 1: Member and Total -->
-              <div class="grid md:grid-cols-3 gap-3">
-                <div class="relative">
-                  <label class="text-xs text-gray-500 mb-1 block">Member</label>
-                  <input id="memberInput" placeholder="Search member..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
-                  <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
-                </div>
-                <div>
-                  <label class="text-xs text-gray-500 mb-1 block">Total Amount</label>
-                  <input id="totalAmountInput" type="number" placeholder="₹ Total" class="neon-input w-full px-3 py-2 rounded-lg text-white" oninput="updateSplitRemaining()"/>
-                </div>
-                <div>
-                  <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
-                  <input id="noteInput" placeholder="Note" class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
-                </div>
-              </div>
-
-              <!-- Row 2: Split Payment -->
-              <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
-                <div class="flex items-center justify-between mb-3">
-                  <span class="text-xs text-gray-400 uppercase tracking-wider">Split Payment</span>
-                  <span id="splitRemaining" class="text-xs font-orbitron" style="color: #00ff88;">Remaining: ₹0</span>
-                </div>
-                <div class="grid grid-cols-3 gap-3">
-                  <div>
-                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #00f0ff;">💵 Cash</label>
-                    <input id="cashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
-                  </div>
-                  <div>
-                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #b829ff;">📱 UPI</label>
-                    <input id="upiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
-                  </div>
-                  <div>
-                    <label class="text-xs mb-1 flex items-center gap-1" style="color: #ff6b00;">🔖 Credit</label>
-                    <input id="creditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" value="0"/>
-                  </div>
-                </div>
-                <div class="flex gap-2 mt-3">
-                  <button onclick="autoFillCash()" class="text-xs px-3 py-1 rounded" style="background: rgba(0,240,255,0.1); color: #00f0ff;">All Cash</button>
-                  <button onclick="autoFillUpi()" class="text-xs px-3 py-1 rounded" style="background: rgba(184,41,255,0.1); color: #b829ff;">All UPI</button>
-                  <button onclick="autoFillCredit()" class="text-xs px-3 py-1 rounded" style="background: rgba(255,107,0,0.1); color: #ff6b00;">All Credit</button>
-                  <button onclick="clearSplit()" class="text-xs px-3 py-1 rounded ml-auto" style="background: rgba(255,0,68,0.1); color: #ff0044;">Clear</button>
-                </div>
-              </div>
-
-              <button onclick="addRecharge()" class="neon-btn-green neon-btn w-full rounded-lg px-4 py-3 font-orbitron">💾 Save Recharge</button>
-            </div>
+            <!-- Add Recharge Button -->
+            <button onclick="openAddRechargeModal()" class="neon-btn neon-btn-green w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
+              <span class="text-2xl">➕</span> ADD RECHARGE
+            </button>
 
             <!-- Summary -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -853,13 +812,6 @@
           </div>
         </div>
 
-        <!-- History Section -->
-        <div id="history-section" class="hidden">
-          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-purple flex items-center gap-3" style="color: var(--neon-purple);">
-            <i data-lucide="clock" class="w-7 h-7"></i> SESSION HISTORY
-          </h2>
-          <div id="history-cards"></div>
-        </div>
 
         <!-- Analytics Section -->
         <div id="analytics-section" class="hidden">
@@ -875,6 +827,14 @@
             <i data-lucide="shield-check" class="w-7 h-7"></i> STAFF MANAGEMENT
           </h2>
           <div id="staff-content"></div>
+        </div>
+
+        <!-- Cash Register Section -->
+        <div id="cash-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 flex items-center gap-3" style="color: var(--neon-green);">
+            <i data-lucide="banknote" class="w-7 h-7"></i> CASH REGISTER
+          </h2>
+          <div id="cash-register-content"></div>
         </div>
       </div>
     </main>
@@ -1051,6 +1011,70 @@
     </div>
   </div>
 
+  <!-- Add Recharge Modal -->
+  <div id="addRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+    <div class="neon-card rounded-2xl w-full max-w-lg p-6 mx-4 relative" style="border-color: rgba(0,255,136,0.5);">
+      <button onclick="closeAddRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
+      
+      <h3 class="font-orbitron text-lg font-bold mb-4" style="color: #00ff88;">➕ ADD RECHARGE</h3>
+      
+      <!-- Member and Total -->
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="relative col-span-2 md:col-span-1">
+            <label class="text-xs text-gray-500 mb-1 block">Member</label>
+            <input id="memberInput" placeholder="Search member..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+            <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
+          </div>
+          <div class="col-span-2 md:col-span-1">
+            <label class="text-xs text-gray-500 mb-1 block">Total Amount</label>
+            <input id="totalAmountInput" type="number" placeholder="₹ Total" class="neon-input w-full px-3 py-2 rounded-lg text-white text-lg font-orbitron" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+          </div>
+        </div>
+
+        <!-- Split Payment -->
+        <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-gray-400 uppercase tracking-wider">Split Payment</span>
+            <span id="splitRemaining" class="text-xs font-orbitron" style="color: #00ff88;">Enter total first</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #00f0ff;">💵 Cash</label>
+              <input id="cashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #b829ff;">📱 UPI</label>
+              <input id="upiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 flex items-center gap-1" style="color: #ff6b00;">🔖 Credit</label>
+              <input id="creditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateSplitRemaining()" onfocus="this.select()"/>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-3">
+            <button onclick="autoFillCash()" class="text-xs px-3 py-1 rounded" style="background: rgba(0,240,255,0.1); color: #00f0ff;">All Cash</button>
+            <button onclick="autoFillUpi()" class="text-xs px-3 py-1 rounded" style="background: rgba(184,41,255,0.1); color: #b829ff;">All UPI</button>
+            <button onclick="autoFillCredit()" class="text-xs px-3 py-1 rounded" style="background: rgba(255,107,0,0.1); color: #ff6b00;">All Credit</button>
+            <button onclick="clearSplit()" class="text-xs px-3 py-1 rounded ml-auto" style="background: rgba(255,0,68,0.1); color: #ff0044;">Clear</button>
+          </div>
+        </div>
+
+        <!-- Note -->
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
+          <input id="noteInput" placeholder="Add a note..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3 pt-2">
+          <button onclick="closeAddRechargeModal()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: rgba(255,255,255,0.05); color: #888;">Cancel</button>
+          <button onclick="addRecharge()" class="flex-1 neon-btn neon-btn-green py-3 rounded-lg font-orbitron text-sm">💾 Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Credit Collection Modal -->
   <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
     <div class="neon-card rounded-2xl w-full max-w-md p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
@@ -1075,15 +1099,15 @@
           <div class="grid grid-cols-3 gap-3">
             <div>
               <label class="text-xs mb-1 flex items-center gap-1" style="color: #00f0ff;">💵 Cash</label>
-              <input id="collectCashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+              <input id="collectCashInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" onfocus="this.select()"/>
             </div>
             <div>
               <label class="text-xs mb-1 flex items-center gap-1" style="color: #b829ff;">📱 UPI</label>
-              <input id="collectUpiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+              <input id="collectUpiInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" onfocus="this.select()"/>
             </div>
             <div>
               <label class="text-xs mb-1 flex items-center gap-1" style="color: #ff6b00;">🔖 Still Credit</label>
-              <input id="collectCreditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" value="0"/>
+              <input id="collectCreditInput" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateCollectRemaining()" onfocus="this.select()"/>
             </div>
           </div>
           <div class="flex gap-2 mt-3">
@@ -1161,11 +1185,12 @@
     }
   </style>
 
+  <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="js/dashboard.js"></script>
   <script type="module" src="js/bookings.js"></script>
-  <script type="module" src="js/history.js"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/analytics.js"></script>
   <script type="module" src="js/staff.js"></script>
+  <script type="module" src="js/cash-register.js"></script>
 </body>
 </html>

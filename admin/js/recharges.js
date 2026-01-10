@@ -125,9 +125,9 @@ window.autoFillCredit = () => {
 };
 
 window.clearSplit = () => {
-  if (elements.cashInput) elements.cashInput.value = 0;
-  if (elements.upiInput) elements.upiInput.value = 0;
-  if (elements.creditInput) elements.creditInput.value = 0;
+  if (elements.cashInput) elements.cashInput.value = "";
+  if (elements.upiInput) elements.upiInput.value = "";
+  if (elements.creditInput) elements.creditInput.value = "";
   updateSplitRemaining();
 };
 
@@ -318,10 +318,18 @@ window.collectCreditGlobal = (date, id, amount, isNewFormat) => {
   });
 };
 
-window.deleteCreditGlobal = (date, id) => {
-  if (confirm("Delete this credit entry? This will remove the entire recharge record.")) {
+window.deleteCreditGlobal = async (date, id) => {
+  const confirmed = await showConfirm("Delete this credit entry? This will remove the entire recharge record.", {
+    title: "Delete Credit Entry",
+    type: "error",
+    confirmText: "Delete",
+    cancelText: "Cancel"
+  });
+  
+  if (confirmed) {
     rechargeDb.ref(`recharges/${date}/${id}`).remove();
     logAudit("DELETE", `Entry from ${date}`);
+    notifySuccess("Credit entry deleted");
     loadAllOutstandingCredits();
     
     if (date === selectedDate) {
@@ -349,6 +357,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
 loadDay();
 
+// ==================== ADD RECHARGE MODAL ====================
+
+window.openAddRechargeModal = (isEdit = false) => {
+  const modal = document.getElementById("addRechargeModal");
+  const modalTitle = modal?.querySelector("h3");
+  const saveBtn = modal?.querySelector("button[onclick='addRecharge()']");
+  
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    
+    // Update title and button based on mode
+    if (modalTitle) {
+      modalTitle.innerHTML = isEdit ? "✏️ EDIT RECHARGE" : "➕ ADD RECHARGE";
+    }
+    if (saveBtn) {
+      saveBtn.innerHTML = isEdit ? "💾 Update" : "💾 Save";
+    }
+    
+    // Focus on member input
+    setTimeout(() => {
+      elements.memberInput?.focus();
+    }, 100);
+  }
+};
+
+window.closeAddRechargeModal = () => {
+  const modal = document.getElementById("addRechargeModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+  
+  // Clear form
+  editId = null;
+  if (elements.memberInput) elements.memberInput.value = "";
+  if (elements.totalAmountInput) elements.totalAmountInput.value = "";
+  if (elements.noteInput) elements.noteInput.value = "";
+  clearSplit();
+};
+
 // ==================== ADD / EDIT ====================
 
 window.addRecharge = () => {
@@ -359,18 +408,18 @@ window.addRecharge = () => {
   const credit = Number(elements.creditInput?.value) || 0;
 
   if (!member) {
-    alert("Please enter member name");
+    notifyWarning("Please enter member name");
     return;
   }
 
   if (total <= 0) {
-    alert("Please enter total amount");
+    notifyWarning("Please enter total amount");
     return;
   }
 
   const splitTotal = cash + upi + credit;
   if (splitTotal !== total) {
-    alert(`Split amounts (₹${splitTotal}) don't match total (₹${total}). Please adjust.`);
+    notifyWarning(`Split amounts (₹${splitTotal}) don't match total (₹${total}). Please adjust.`);
     return;
   }
 
@@ -396,12 +445,8 @@ window.addRecharge = () => {
     logAudit("ADD", member, total);
   }
 
-  // Clear form
-  editId = null;
-  if (elements.memberInput) elements.memberInput.value = "";
-  if (elements.totalAmountInput) elements.totalAmountInput.value = "";
-  if (elements.noteInput) elements.noteInput.value = "";
-  clearSplit();
+  // Close modal and clear form
+  closeAddRechargeModal();
 };
 
 // ==================== RENDER LIST ====================
@@ -544,9 +589,9 @@ function openCollectModal(data) {
   const upiInput = document.getElementById("collectUpiInput");
   const creditInput = document.getElementById("collectCreditInput");
   
-  if (cashInput) cashInput.value = 0;
-  if (upiInput) upiInput.value = 0;
-  if (creditInput) creditInput.value = 0;
+  if (cashInput) cashInput.value = "";
+  if (upiInput) upiInput.value = "";
+  if (creditInput) creditInput.value = "";
   
   updateCollectRemaining();
   
@@ -621,14 +666,14 @@ window.confirmCollectCredit = () => {
   const total = cash + upi + stillCredit;
   
   if (total !== pending) {
-    alert(`Split amounts (₹${total}) don't match pending (₹${pending}). Please adjust.`);
+    notifyWarning(`Split amounts (₹${total}) don't match pending (₹${pending}). Please adjust.`);
     return;
   }
   
   const collected = cash + upi;
   
   if (collected === 0 && stillCredit === pending) {
-    alert("No payment collected. Adjust the amounts.");
+    notifyWarning("No payment collected. Adjust the amounts.");
     return;
   }
   
@@ -701,27 +746,35 @@ window.editRecharge = id => {
   if (r.total !== undefined) {
     // New split format
     if (elements.totalAmountInput) elements.totalAmountInput.value = r.total;
-    if (elements.cashInput) elements.cashInput.value = r.cash || 0;
-    if (elements.upiInput) elements.upiInput.value = r.upi || 0;
-    if (elements.creditInput) elements.creditInput.value = r.credit || 0;
+    if (elements.cashInput) elements.cashInput.value = r.cash || "";
+    if (elements.upiInput) elements.upiInput.value = r.upi || "";
+    if (elements.creditInput) elements.creditInput.value = r.credit || "";
   } else {
     // Old single-mode format
     if (elements.totalAmountInput) elements.totalAmountInput.value = r.amount;
-    if (elements.cashInput) elements.cashInput.value = r.mode === "cash" ? r.amount : 0;
-    if (elements.upiInput) elements.upiInput.value = r.mode === "upi" ? r.amount : 0;
-    if (elements.creditInput) elements.creditInput.value = r.mode === "credit" ? r.amount : 0;
+    if (elements.cashInput) elements.cashInput.value = r.mode === "cash" ? r.amount : "";
+    if (elements.upiInput) elements.upiInput.value = r.mode === "upi" ? r.amount : "";
+    if (elements.creditInput) elements.creditInput.value = r.mode === "credit" ? r.amount : "";
   }
   
   updateSplitRemaining();
   
-  // Scroll to form
-  elements.memberInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Open modal for editing
+  openAddRechargeModal(true);
 };
 
-window.deleteRecharge = id => {
-  if (confirm("Delete entry?")) {
+window.deleteRecharge = async id => {
+  const confirmed = await showConfirm("Delete this recharge entry?", {
+    title: "Delete Entry",
+    type: "error",
+    confirmText: "Delete",
+    cancelText: "Cancel"
+  });
+  
+  if (confirmed) {
     rechargeDb.ref(`recharges/${selectedDate}/${id}`).remove();
     logAudit("DELETE", id);
+    notifySuccess("Entry deleted");
   }
 };
 

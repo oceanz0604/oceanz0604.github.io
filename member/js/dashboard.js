@@ -268,6 +268,12 @@ function loadProfile() {
   document.getElementById("memberName").textContent = `${member.NAME} ${member.LASTNAME || ''}`.trim();
   document.getElementById("memberUsername").textContent = `👤 Username: ${member.USERNAME}`;
   document.getElementById("avatar").src = getAvatarUrl(member.USERNAME);
+  
+  // Update sidebar username
+  const sidebarUsername = document.getElementById("sidebarUsername");
+  if (sidebarUsername) {
+    sidebarUsername.textContent = member.USERNAME;
+  }
 
   const detailList = document.getElementById("memberDetailsList");
   if (detailList) {
@@ -733,12 +739,12 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
 
   const termsAccepted = document.getElementById("termsAccepted")?.checked;
   if (!termsAccepted) {
-    alert("Please accept the Terms & Conditions to continue.");
+    notifyWarning("Please accept the Terms & Conditions to continue.");
     return;
   }
 
   if (selectedPCSet.size !== 1) {
-    alert("Please select exactly one PC.");
+    notifyWarning("Please select exactly one PC.");
     return;
   }
 
@@ -752,7 +758,7 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
   const duration = (endTime - startTime) / (1000 * 60);
 
   if (duration < 60) {
-    alert("Minimum 1 hour booking required.");
+    notifyWarning("Minimum 1 hour booking required.");
     return;
   }
 
@@ -784,12 +790,14 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
   });
 });
 
-document.querySelectorAll(".tab-btn").forEach(btn => {
+// Handle tab switching for both old tab buttons and new sidebar nav
+document.querySelectorAll(".tab-btn, #memberNav .nav-item").forEach(btn => {
   btn.addEventListener("click", () => {
-    if (btn.dataset.tab === "analytics") {
+    const tab = btn.dataset.tab;
+    if (tab === "analytics") {
       setTimeout(() => loadAnalytics(member.ID), 100);
     }
-    if (btn.dataset.tab === "seasonal") {
+    if (tab === "seasonal") {
       setTimeout(() => loadSeasonalData(member.USERNAME), 100);
     }
   });

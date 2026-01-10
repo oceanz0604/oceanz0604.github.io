@@ -39,17 +39,17 @@ const elements = {
   navDashboard: $("nav-dashboard"),
   navMembers: $("nav-members"),
   navBookings: $("nav-bookings"),
-  navHistory: $("nav-history"),
   navRecharges: $("nav-recharges"),
   navAnalytics: $("nav-analytics"),
   navStaff: $("nav-staff"),
+  navCash: $("nav-cash"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
-  historySection: $("history-section"),
   rechargesSection: $("recharges-section"),
   analyticsSection: $("analytics-section"),
-  staffSection: $("staff-section")
+  staffSection: $("staff-section"),
+  cashSection: $("cash-section")
 };
 
 // ==================== STATE ====================
@@ -97,8 +97,11 @@ function initializePermissions() {
 // ==================== VIEW SWITCHER ====================
 
 function switchView(view) {
+  // Cash register uses recharges permission
+  const permissionKey = view === "cash" ? "recharges" : view;
+  
   // Check permission before switching
-  if (!hasPermission(view)) {
+  if (!hasPermission(permissionKey)) {
     console.warn(`Access denied to ${view} - insufficient permissions`);
     showAccessDenied(view);
     return;
@@ -108,20 +111,20 @@ function switchView(view) {
     elements.dashboardSection,
     elements.membersSection,
     elements.bookingsSection,
-    elements.historySection,
     elements.rechargesSection,
     elements.analyticsSection,
-    elements.staffSection
+    elements.staffSection,
+    elements.cashSection
   ];
 
   const navs = [
     elements.navDashboard,
     elements.navMembers,
     elements.navBookings,
-    elements.navHistory,
     elements.navRecharges,
     elements.navAnalytics,
-    elements.navStaff
+    elements.navStaff,
+    elements.navCash
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -134,10 +137,10 @@ function switchView(view) {
     dashboard: { section: elements.dashboardSection, nav: elements.navDashboard },
     members: { section: elements.membersSection, nav: elements.navMembers, onShow: loadAllMembers },
     bookings: { section: elements.bookingsSection, nav: elements.navBookings },
-    history: { section: elements.historySection, nav: elements.navHistory },
     recharges: { section: elements.rechargesSection, nav: elements.navRecharges },
     analytics: { section: elements.analyticsSection, nav: elements.navAnalytics, onShow: () => window.loadAnalytics?.() },
-    staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() }
+    staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() },
+    cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() }
   };
 
   const config = viewMap[view];
@@ -170,10 +173,10 @@ const navLinks = [
   { el: elements.navDashboard, view: "dashboard" },
   { el: elements.navMembers, view: "members" },
   { el: elements.navBookings, view: "bookings" },
-  { el: elements.navHistory, view: "history" },
   { el: elements.navRecharges, view: "recharges" },
   { el: elements.navAnalytics, view: "analytics" },
-  { el: elements.navStaff, view: "staff" }
+  { el: elements.navStaff, view: "staff" },
+  { el: elements.navCash, view: "cash" }
 ];
 
 navLinks.forEach(({ el, view }) => {
