@@ -189,8 +189,8 @@ window.loadCashRegister = function() {
           </h3>
           <div class="flex items-center gap-3">
             <input type="month" id="monthPicker" class="neon-input px-3 py-2 rounded-lg text-white"/>
-            <button onclick="exportCashCSV()" class="neon-btn neon-btn-cyan px-4 py-2 rounded-lg text-sm">
-              📦 Export
+            <button onclick="exportCashPDF()" class="neon-btn neon-btn-cyan px-4 py-2 rounded-lg text-sm">
+              📄 Export PDF
             </button>
           </div>
         </div>
@@ -808,39 +808,106 @@ window.editCashEntry = async function(date) {
 
 // ==================== EXPORT ====================
 
-window.exportCashCSV = function() {
+window.exportCashPDF = function() {
   if (cashData.length === 0) {
     notifyWarning("No data to export");
     return;
   }
   
-  const headers = ["Date", "Open", "Close", "Sale", "Withdrawal", "Expenses", "Difference", "500", "200", "100", "50", "20", "10", "Coins", "Comments"];
+  // Calculate totals
+  let totalSale = 0, totalWithdrawal = 0, totalExpenses = 0;
+  cashData.forEach(e => {
+    totalSale += e.sale || 0;
+    totalWithdrawal += e.withdrawal || 0;
+    totalExpenses += e.expenses || 0;
+  });
   
-  const rows = cashData.map(e => [
-    e.date,
-    e.opening || 0,
-    e.actualClosing || e.closing || 0,
-    e.sale || 0,
-    e.withdrawal || 0,
-    e.expenses || 0,
-    e.difference || 0,
-    e.denominations?.d500 || 0,
-    e.denominations?.d200 || 0,
-    e.denominations?.d100 || 0,
-    e.denominations?.d50 || 0,
-    e.denominations?.d20 || 0,
-    e.denominations?.d10 || 0,
-    e.denominations?.coins || 0,
-    `"${(e.comments || "").replace(/"/g, '""')}"`
-  ]);
+  // Get month name
+  const monthName = new Date(selectedMonth + "-01").toLocaleString('en-IN', { 
+    month: 'long', 
+    year: 'numeric' 
+  });
   
-  const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `cash_register_${selectedMonth}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  // Prepare rows for main table
+  const rows = cashData.map(e => {
+    const diff = e.difference || 0;
+    const diffStr = diff >= 0 ? `+Rs.${diff}` : `-Rs.${Math.abs(diff)}`;
+    return [
+      e.date,
+      `Rs.${e.opening || 0}`,
+      `Rs.${e.actualClosing || e.closing || 0}`,
+      `Rs.${e.sale || 0}`,
+      `Rs.${e.withdrawal || 0}`,
+      `Rs.${e.expenses || 0}`,
+      diffStr
+    ];
+  });
+  
+  // Create PDF
+  const doc = PDFExport.createStyledPDF({ orientation: 'landscape' });
+  let y = PDFExport.addPDFHeader(doc, 'Cash Register Report', monthName);
+  
+  // Summary stats
+  y = PDFExport.addPDFSummary(doc, [
+    { label: 'Days Recorded', value: String(cashData.length), color: 'neonCyan' },
+    { label: 'Total Sale', value: `Rs.${totalSale}`, color: 'neonGreen' },
+    { label: 'Withdrawals', value: `Rs.${totalWithdrawal}`, color: 'neonOrange' },
+    { label: 'Expenses', value: `Rs.${totalExpenses}`, color: 'neonRed' },
+  ], y);
+  
+  // Main table
+  y = PDFExport.addPDFTable(doc, 
+    ['Date', 'Opening', 'Closing', 'Sale', 'Withdrawal', 'Expenses', 'Diff'],
+    rows,
+    y,
+    { 
+      columnStyles: {
+        1: { halign: 'right' },
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' }
+      }
+    }
+  );
+  
+  // Add denomination breakdown on new page if there's data
+  const denomData = cashData.filter(e => e.denominations);
+  if (denomData.length > 0) {
+    y = PDFExport.addPageBreak(doc);
+    
+    // Denomination section header
+    const { jsPDF } = window.jspdf;
+    doc.setTextColor(0, 240, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DENOMINATION BREAKDOWN', 15, y);
+    y += 10;
+    
+    const denomRows = denomData.map(e => [
+      e.date,
+      e.denominations?.d500 || 0,
+      e.denominations?.d200 || 0,
+      e.denominations?.d100 || 0,
+      e.denominations?.d50 || 0,
+      e.denominations?.d20 || 0,
+      e.denominations?.d10 || 0,
+      `Rs.${e.denominations?.coins || 0}`,
+      e.comments || "-"
+    ]);
+    
+    PDFExport.addPDFTable(doc, 
+      ['Date', 'Rs.500', 'Rs.200', 'Rs.100', 'Rs.50', 'Rs.20', 'Rs.10', 'Coins', 'Comments'],
+      denomRows,
+      y
+    );
+  }
+  
+  PDFExport.savePDF(doc, `cash_register_${selectedMonth}`);
+  notifySuccess("Cash register report exported as PDF");
 };
+
+// Backward compatibility
+window.exportCashCSV = window.exportCashPDF;
 

@@ -1061,24 +1061,79 @@ window.loadMoreAudit = () => {
 
 // ==================== EXPORTS ====================
 
-window.exportMonthCSV = () => {
+window.exportMonthPDF = () => {
   const ym = selectedDate.slice(0, 7);
-  const rows = [["Date", "Member", "Amount", "Mode", "Admin"]];
+  const monthName = new Date(selectedDate).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
   rechargeDb.ref("recharges").once("value").then(snap => {
-    Object.entries(snap.val() || {}).forEach(([d, v]) => {
+    const allData = snap.val() || {};
+    const rows = [];
+    let totalCash = 0, totalUPI = 0, totalCredit = 0, totalFree = 0, grandTotal = 0;
+
+    Object.entries(allData).forEach(([d, v]) => {
       if (!d.startsWith(ym)) return;
-      Object.values(v).forEach(r => rows.push([d, r.member, r.amount, r.mode, r.admin]));
+      Object.values(v).forEach(r => {
+        const cash = r.cash || 0;
+        const upi = r.upi || 0;
+        const credit = r.credit || 0;
+        const free = r.free || 0;
+        const total = (r.total || r.amount || 0) + free;
+        
+        // For old format
+        let mode = "Split";
+        if (r.mode) mode = r.mode.toUpperCase();
+        else if (cash > 0 && upi === 0 && credit === 0) mode = "Cash";
+        else if (upi > 0 && cash === 0 && credit === 0) mode = "UPI";
+        else if (credit > 0 && cash === 0 && upi === 0) mode = "Credit";
+        
+        rows.push([
+          d,
+          r.member || "-",
+          `Rs.${total}`,
+          mode,
+          r.admin || "Admin"
+        ]);
+        
+        totalCash += cash + (r.lastPaidCash || 0);
+        totalUPI += upi + (r.lastPaidUpi || 0);
+        totalCredit += (credit - (r.creditPaid || 0));
+        totalFree += free;
+        grandTotal += total;
+      });
     });
 
-    const csv = rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `recharges_${ym}.csv`;
-    a.click();
+    if (rows.length === 0) {
+      notifyWarning("No data to export for this month");
+      return;
+    }
+
+    // Create PDF
+    const doc = PDFExport.createStyledPDF();
+    let y = PDFExport.addPDFHeader(doc, 'Monthly Recharges Report', monthName);
+    
+    // Summary stats
+    y = PDFExport.addPDFSummary(doc, [
+      { label: 'Total', value: `Rs.${grandTotal}`, color: 'neonGreen' },
+      { label: 'Cash', value: `Rs.${totalCash}`, color: 'neonCyan' },
+      { label: 'UPI', value: `Rs.${totalUPI}`, color: 'neonPurple' },
+      { label: 'Credit Pending', value: `Rs.${totalCredit}`, color: 'neonOrange' },
+    ], y);
+    
+    // Table
+    PDFExport.addPDFTable(doc, 
+      ['Date', 'Member', 'Amount', 'Mode', 'Admin'],
+      rows,
+      y,
+      { statusColumn: 3 }
+    );
+    
+    PDFExport.savePDF(doc, `recharges_${ym}`);
+    notifySuccess("Monthly report exported as PDF");
   });
 };
+
+// Keep old function name for backward compatibility
+window.exportMonthCSV = window.exportMonthPDF;
 
 window.printSheet = () => {
   const w = window.open("");
@@ -1090,4 +1145,393 @@ window.printSheet = () => {
     <br><p>Admin: ${getAdminName()}</p>
   `);
   w.print();
+};
+
+// ==================== PANCAFE SYNC ====================
+
+let syncResults = [];
+let syncFilter = "all";
+
+window.openSyncModal = () => {
+  const modal = document.getElementById("syncModal");
+  const dateBadge = document.getElementById("syncDateBadge");
+  
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+  }
+  
+  if (dateBadge) {
+    dateBadge.textContent = selectedDate;
+  }
+  
+  runSync();
+};
+
+window.closeSyncModal = () => {
+  const modal = document.getElementById("syncModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+};
+
+async function runSync() {
+  const loadingEl = document.getElementById("syncLoading");
+  const resultsEl = document.getElementById("syncResults");
+  const errorEl = document.getElementById("syncError");
+  
+  // Show loading
+  loadingEl?.classList.remove("hidden");
+  resultsEl?.classList.add("hidden");
+  errorEl?.classList.add("hidden");
+  
+  try {
+    // Get admin recharge entries for selected date
+    const adminEntries = state.map(r => ({
+      id: r.id,
+      member: r.member?.toUpperCase().trim(),
+      amount: (r.total || r.amount || 0) + (r.free || 0),
+      paid: r.total || r.amount || 0,
+      free: r.free || 0,
+      createdAt: r.createdAt,
+      note: r.note,
+      mode: r.total !== undefined ? "split" : r.mode
+    }));
+    
+    // Get PanCafe history entries for all members for selected date
+    const panCafeEntries = await fetchPanCafeEntriesForDate(selectedDate);
+    
+    // Match entries
+    const results = matchEntries(adminEntries, panCafeEntries);
+    syncResults = results;
+    
+    // Update counts
+    const matched = results.filter(r => r.status === "matched").length;
+    const adminOnly = results.filter(r => r.status === "admin-only").length;
+    const panCafeOnly = results.filter(r => r.status === "pancafe-only").length;
+    const mismatch = results.filter(r => r.status === "mismatch").length;
+    
+    document.getElementById("syncMatched").textContent = matched;
+    document.getElementById("syncOnlyAdmin").textContent = adminOnly;
+    document.getElementById("syncOnlyPanCafe").textContent = panCafeOnly;
+    document.getElementById("syncMismatch").textContent = mismatch;
+    
+    // Update summary
+    const summary = document.getElementById("syncSummary");
+    if (summary) {
+      const totalAdmin = adminEntries.length;
+      const totalPanCafe = panCafeEntries.length;
+      summary.textContent = `Admin: ${totalAdmin} entries | PanCafe: ${totalPanCafe} entries`;
+    }
+    
+    // Render results
+    syncFilter = "all";
+    renderSyncResults();
+    
+    // Show results
+    loadingEl?.classList.add("hidden");
+    resultsEl?.classList.remove("hidden");
+    
+  } catch (error) {
+    console.error("Sync error:", error);
+    loadingEl?.classList.add("hidden");
+    errorEl?.classList.remove("hidden");
+    
+    const errorMsg = document.getElementById("syncErrorMsg");
+    if (errorMsg) {
+      errorMsg.textContent = error.message || "Failed to sync with PanCafe. Please try again.";
+    }
+  }
+}
+
+async function fetchPanCafeEntriesForDate(date) {
+  // Fetch all history data from fdb-dataset
+  const historySnap = await fdbDb.ref("history").once("value");
+  const historyData = historySnap.val() || {};
+  
+  const entries = [];
+  
+  // Iterate through all users' history
+  Object.entries(historyData).forEach(([username, records]) => {
+    if (!records) return;
+    
+    Object.entries(records).forEach(([recordId, record]) => {
+      // Check if the record date matches selected date
+      const recordDate = record.DATE; // Format: YYYY-MM-DD
+      
+      if (recordDate === date) {
+        // Only include recharges (positive CHARGE amounts)
+        const charge = Number(record.CHARGE) || 0;
+        if (charge > 0) {
+          entries.push({
+            id: recordId,
+            member: username.toUpperCase().trim(),
+            amount: charge,
+            balance: record.BALANCE,
+            time: record.TIME,
+            date: record.DATE,
+            raw: record
+          });
+        }
+      }
+    });
+  });
+  
+  return entries;
+}
+
+function matchEntries(adminEntries, panCafeEntries) {
+  const results = [];
+  const usedAdminIds = new Set();
+  const usedPanCafeIds = new Set();
+  
+  // First pass: exact matches (member + amount)
+  adminEntries.forEach(admin => {
+    const matchingPanCafe = panCafeEntries.find(pc => 
+      pc.member === admin.member && 
+      pc.amount === admin.amount && 
+      !usedPanCafeIds.has(pc.id)
+    );
+    
+    if (matchingPanCafe) {
+      results.push({
+        status: "matched",
+        member: admin.member,
+        adminAmount: admin.amount,
+        panCafeAmount: matchingPanCafe.amount,
+        adminId: admin.id,
+        panCafeId: matchingPanCafe.id,
+        adminData: admin,
+        panCafeData: matchingPanCafe
+      });
+      usedAdminIds.add(admin.id);
+      usedPanCafeIds.add(matchingPanCafe.id);
+    }
+  });
+  
+  // Second pass: same member, different amount (potential mismatch)
+  adminEntries.forEach(admin => {
+    if (usedAdminIds.has(admin.id)) return;
+    
+    const sameMember = panCafeEntries.find(pc => 
+      pc.member === admin.member && 
+      !usedPanCafeIds.has(pc.id)
+    );
+    
+    if (sameMember) {
+      results.push({
+        status: "mismatch",
+        member: admin.member,
+        adminAmount: admin.amount,
+        panCafeAmount: sameMember.amount,
+        difference: admin.amount - sameMember.amount,
+        adminId: admin.id,
+        panCafeId: sameMember.id,
+        adminData: admin,
+        panCafeData: sameMember
+      });
+      usedAdminIds.add(admin.id);
+      usedPanCafeIds.add(sameMember.id);
+    }
+  });
+  
+  // Third pass: admin-only entries (not found in PanCafe)
+  adminEntries.forEach(admin => {
+    if (usedAdminIds.has(admin.id)) return;
+    
+    results.push({
+      status: "admin-only",
+      member: admin.member,
+      adminAmount: admin.amount,
+      adminId: admin.id,
+      adminData: admin
+    });
+  });
+  
+  // Fourth pass: pancafe-only entries (not found in Admin)
+  panCafeEntries.forEach(pc => {
+    if (usedPanCafeIds.has(pc.id)) return;
+    
+    results.push({
+      status: "pancafe-only",
+      member: pc.member,
+      panCafeAmount: pc.amount,
+      panCafeId: pc.id,
+      panCafeData: pc
+    });
+  });
+  
+  // Sort by member name
+  results.sort((a, b) => a.member.localeCompare(b.member));
+  
+  return results;
+}
+
+window.filterSyncResults = (filter) => {
+  syncFilter = filter;
+  
+  // Update tab active state
+  document.querySelectorAll(".sync-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.tab === filter);
+  });
+  
+  renderSyncResults();
+};
+
+function renderSyncResults() {
+  const listEl = document.getElementById("syncResultsList");
+  if (!listEl) return;
+  
+  const filtered = syncFilter === "all" 
+    ? syncResults 
+    : syncResults.filter(r => r.status === syncFilter);
+  
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div class="text-center py-8 text-gray-500">
+        <span class="text-4xl block mb-3">📭</span>
+        <p>No entries found${syncFilter !== "all" ? " for this filter" : ""}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  listEl.innerHTML = filtered.map(r => {
+    const statusConfig = {
+      "matched": { icon: "✅", label: "Matched", color: "#00ff88" },
+      "admin-only": { icon: "⚠️", label: "Only in Admin", color: "#ffff00" },
+      "pancafe-only": { icon: "❌", label: "Only in PanCafe", color: "#ff0044" },
+      "mismatch": { icon: "🔄", label: "Amount Mismatch", color: "#b829ff" }
+    };
+    
+    const config = statusConfig[r.status];
+    
+    let detailsHtml = "";
+    
+    if (r.status === "matched") {
+      detailsHtml = `
+        <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
+          <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
+            <div class="text-xs text-gray-500 mb-1">Admin Entry</div>
+            <div style="color: #00f0ff;">₹${r.adminAmount}</div>
+            ${r.adminData?.note ? `<div class="text-xs text-gray-500 mt-1">📝 ${r.adminData.note}</div>` : ""}
+          </div>
+          <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
+            <div class="text-xs text-gray-500 mb-1">PanCafe Entry</div>
+            <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
+            ${r.panCafeData?.time ? `<div class="text-xs text-gray-500 mt-1">⏰ ${r.panCafeData.time}</div>` : ""}
+          </div>
+        </div>
+      `;
+    } else if (r.status === "admin-only") {
+      detailsHtml = `
+        <div class="mt-2 p-2 rounded text-sm" style="background: rgba(255,255,0,0.1);">
+          <div class="flex items-center justify-between">
+            <span style="color: #00f0ff;">₹${r.adminAmount}</span>
+            ${r.adminData?.note ? `<span class="text-xs text-gray-500">📝 ${r.adminData.note}</span>` : ""}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">This entry exists in Admin but not in PanCafe system</div>
+        </div>
+      `;
+    } else if (r.status === "pancafe-only") {
+      detailsHtml = `
+        <div class="mt-2 p-2 rounded text-sm" style="background: rgba(255,0,68,0.1);">
+          <div class="flex items-center justify-between">
+            <span style="color: #00ff88;">₹${r.panCafeAmount}</span>
+            ${r.panCafeData?.time ? `<span class="text-xs text-gray-500">⏰ ${r.panCafeData.time}</span>` : ""}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">This entry exists in PanCafe but not recorded in Admin</div>
+        </div>
+      `;
+    } else if (r.status === "mismatch") {
+      const diffColor = r.difference > 0 ? "#00ff88" : "#ff0044";
+      const diffSign = r.difference > 0 ? "+" : "";
+      detailsHtml = `
+        <div class="grid grid-cols-3 gap-3 mt-2 text-sm">
+          <div class="p-2 rounded text-center" style="background: rgba(0,240,255,0.1);">
+            <div class="text-xs text-gray-500 mb-1">Admin</div>
+            <div style="color: #00f0ff;">₹${r.adminAmount}</div>
+          </div>
+          <div class="p-2 rounded text-center" style="background: rgba(0,255,136,0.1);">
+            <div class="text-xs text-gray-500 mb-1">PanCafe</div>
+            <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
+          </div>
+          <div class="p-2 rounded text-center" style="background: rgba(184,41,255,0.1);">
+            <div class="text-xs text-gray-500 mb-1">Difference</div>
+            <div style="color: ${diffColor};">${diffSign}₹${r.difference}</div>
+          </div>
+        </div>
+      `;
+    }
+    
+    return `
+      <div class="sync-item ${r.status}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="text-xl">${config.icon}</span>
+            <span class="font-orbitron font-bold" style="color: #00f0ff;">${r.member}</span>
+          </div>
+          <span class="text-xs px-2 py-1 rounded" style="background: ${config.color}20; color: ${config.color};">
+            ${config.label}
+          </span>
+        </div>
+        ${detailsHtml}
+      </div>
+    `;
+  }).join("");
+}
+
+window.exportSyncReport = () => {
+  if (syncResults.length === 0) {
+    notifyWarning("No sync results to export");
+    return;
+  }
+  
+  // Count by status
+  const matched = syncResults.filter(r => r.status === "matched").length;
+  const adminOnly = syncResults.filter(r => r.status === "admin-only").length;
+  const panCafeOnly = syncResults.filter(r => r.status === "pancafe-only").length;
+  const mismatch = syncResults.filter(r => r.status === "mismatch").length;
+  
+  // Prepare rows with status labels (ASCII-safe)
+  const rows = syncResults.map(r => {
+    const statusLabels = {
+      "matched": "MATCHED",
+      "admin-only": "ADMIN ONLY",
+      "pancafe-only": "PANCAFE ONLY",
+      "mismatch": "MISMATCH"
+    };
+    return [
+      statusLabels[r.status] || r.status,
+      r.member,
+      r.adminAmount ? `Rs.${r.adminAmount}` : "-",
+      r.panCafeAmount ? `Rs.${r.panCafeAmount}` : "-",
+      r.difference ? `Rs.${r.difference}` : "-",
+      r.adminData?.note || "-"
+    ];
+  });
+  
+  // Create PDF
+  const doc = PDFExport.createStyledPDF();
+  let y = PDFExport.addPDFHeader(doc, 'PanCafe Sync Report', selectedDate);
+  
+  // Summary stats
+  y = PDFExport.addPDFSummary(doc, [
+    { label: 'Matched', value: String(matched), color: 'neonGreen' },
+    { label: 'Admin Only', value: String(adminOnly), color: 'neonYellow' },
+    { label: 'PanCafe Only', value: String(panCafeOnly), color: 'neonRed' },
+    { label: 'Mismatch', value: String(mismatch), color: 'neonPurple' },
+  ], y);
+  
+  // Table
+  PDFExport.addPDFTable(doc, 
+    ['Status', 'Member', 'Admin Amt', 'PanCafe Amt', 'Diff', 'Note'],
+    rows,
+    y,
+    { statusColumn: 0 }
+  );
+  
+  PDFExport.savePDF(doc, `sync-report-${selectedDate}`);
+  notifySuccess("Sync report exported as PDF");
 };

@@ -61,23 +61,62 @@ function fetchBookings() {
 }
 
 function downloadCSV() {
-  const rows = [["Name", "PC", "Start Time", "End Time", "Duration", "Price"]];
+  // Alias for PDF export
+  downloadPDF();
+}
+
+function downloadPDF() {
   const cards = document.querySelectorAll(".booking-card");
+  const rows = [];
+  let totalRevenue = 0;
 
   cards.forEach(card => {
     const name = card.querySelector("h3").textContent;
     const details = card.querySelectorAll(".booking-details div");
     const values = Array.from(details).map(d => d.textContent.split(":").slice(1).join(":").trim());
     rows.push([name, ...values]);
+    
+    // Extract price
+    const priceStr = values[4] || "0";
+    const price = parseFloat(priceStr.replace('₹', '').replace(',', '')) || 0;
+    totalRevenue += price;
   });
 
-  const csv = rows.map(r => r.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "bookings.csv";
-  link.click();
-  URL.revokeObjectURL(url);
+  if (rows.length === 0) {
+    alert("No bookings to export");
+    return;
+  }
+
+  // Create PDF
+  const doc = PDFExport.createStyledPDF();
+  const filterDate = document.getElementById("filterDate").value;
+  const dateStr = filterDate || new Date().toLocaleDateString('en-IN', { 
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+  let y = PDFExport.addPDFHeader(doc, 'Bookings Report', dateStr);
+  
+  // Summary stats
+  y = PDFExport.addPDFSummary(doc, [
+    { label: 'Total Bookings', value: String(rows.length), color: 'neonCyan' },
+    { label: 'Total Revenue', value: `Rs.${totalRevenue}`, color: 'neonGreen' },
+  ], y);
+  
+  // Table
+  PDFExport.addPDFTable(doc, 
+    ['Name', 'PC', 'Start', 'End', 'Duration', 'Price'],
+    rows,
+    y,
+    { 
+      columnStyles: {
+        5: { halign: 'right' }
+      }
+    }
+  );
+  
+  const filename = filterDate ? `bookings_${filterDate}` : `bookings_${new Date().toISOString().slice(0, 10)}`;
+  PDFExport.savePDF(doc, filename);
 }
 
