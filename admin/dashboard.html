@@ -19,6 +19,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1097,8 +1099,8 @@
               <button onclick="fetchBookings()" class="neon-btn-cyan neon-btn px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                 <i data-lucide="refresh-ccw" class="w-4 h-4"></i> Refresh
               </button>
-              <button onclick="downloadCSV()" class="neon-btn-green neon-btn px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
-                <i data-lucide="download" class="w-4 h-4"></i> Export
+              <button onclick="downloadPDF()" class="neon-btn-green neon-btn px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                <i data-lucide="file-text" class="w-4 h-4"></i> Export PDF
               </button>
             </div>
           </div>
@@ -1132,15 +1134,20 @@
               </h2>
               <div class="flex gap-2">
                 <input type="date" id="datePicker" class="neon-input px-3 py-2 rounded-lg text-white"/>
-                <button onclick="exportMonthCSV()" class="neon-btn-cyan neon-btn px-4 py-2 rounded-lg text-sm">📦 Export</button>
+                <button onclick="exportMonthPDF()" class="neon-btn-cyan neon-btn px-4 py-2 rounded-lg text-sm">📄 Export PDF</button>
                 <button onclick="printSheet()" class="neon-btn-purple neon-btn px-4 py-2 rounded-lg text-sm">🖨 Print</button>
               </div>
             </div>
 
-            <!-- Add Recharge Button -->
-            <button onclick="openAddRechargeModal()" class="neon-btn neon-btn-green w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
-              <span class="text-2xl">➕</span> ADD RECHARGE
-            </button>
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button onclick="openAddRechargeModal()" class="neon-btn neon-btn-green w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
+                <span class="text-2xl">➕</span> ADD RECHARGE
+              </button>
+              <button onclick="openSyncModal()" class="neon-btn neon-btn-cyan w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
+                <span class="text-2xl">🔄</span> SYNC WITH PANCAFE
+              </button>
+            </div>
 
             <!-- Summary -->
             <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -1609,6 +1616,79 @@
     </div>
   </div>
 
+  <!-- PanCafe Sync Modal -->
+  <div id="syncModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+    <div class="neon-card rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden mx-4 relative" style="border-color: rgba(0,240,255,0.5); animation: modalSlideIn 0.3s ease-out;">
+      <!-- Header -->
+      <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+        <h3 class="font-orbitron text-lg font-bold flex items-center gap-3" style="color: #00f0ff;">
+          🔄 SYNC WITH PANCAFE
+          <span id="syncDateBadge" class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,240,255,0.2);"></span>
+        </h3>
+        <button onclick="closeSyncModal()" class="text-gray-500 hover:text-white text-xl transition-colors">✕</button>
+      </div>
+      
+      <!-- Loading State -->
+      <div id="syncLoading" class="hidden p-8 text-center">
+        <div class="w-16 h-16 mx-auto mb-4 relative">
+          <div class="absolute inset-0 loading-spinner rounded-full animate-spin"></div>
+        </div>
+        <p class="text-gray-400 font-orbitron text-sm">ANALYZING TRANSACTIONS...</p>
+      </div>
+      
+      <!-- Results -->
+      <div id="syncResults" class="hidden overflow-y-auto" style="max-height: calc(90vh - 180px);">
+        <!-- Summary Cards -->
+        <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="stat-card p-3 rounded-xl text-center" style="border-color: rgba(0,255,136,0.3);">
+            <div class="text-xs text-gray-500 uppercase">Matched</div>
+            <div id="syncMatched" class="text-2xl font-bold font-orbitron" style="color: #00ff88;">0</div>
+          </div>
+          <div class="stat-card p-3 rounded-xl text-center" style="border-color: rgba(255,255,0,0.3);">
+            <div class="text-xs text-gray-500 uppercase">Only in Admin</div>
+            <div id="syncOnlyAdmin" class="text-2xl font-bold font-orbitron" style="color: #ffff00;">0</div>
+          </div>
+          <div class="stat-card p-3 rounded-xl text-center" style="border-color: rgba(255,0,68,0.3);">
+            <div class="text-xs text-gray-500 uppercase">Only in PanCafe</div>
+            <div id="syncOnlyPanCafe" class="text-2xl font-bold font-orbitron" style="color: #ff0044;">0</div>
+          </div>
+          <div class="stat-card p-3 rounded-xl text-center" style="border-color: rgba(184,41,255,0.3);">
+            <div class="text-xs text-gray-500 uppercase">Amount Mismatch</div>
+            <div id="syncMismatch" class="text-2xl font-bold font-orbitron" style="color: #b829ff;">0</div>
+          </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="px-4 flex gap-2 border-b border-gray-800">
+          <button onclick="filterSyncResults('all')" class="sync-tab active px-4 py-2 text-sm font-medium transition-colors" data-tab="all">All</button>
+          <button onclick="filterSyncResults('matched')" class="sync-tab px-4 py-2 text-sm font-medium transition-colors" data-tab="matched">✅ Matched</button>
+          <button onclick="filterSyncResults('admin-only')" class="sync-tab px-4 py-2 text-sm font-medium transition-colors" data-tab="admin-only">⚠️ Admin Only</button>
+          <button onclick="filterSyncResults('pancafe-only')" class="sync-tab px-4 py-2 text-sm font-medium transition-colors" data-tab="pancafe-only">❌ PanCafe Only</button>
+          <button onclick="filterSyncResults('mismatch')" class="sync-tab px-4 py-2 text-sm font-medium transition-colors" data-tab="mismatch">🔄 Mismatch</button>
+        </div>
+        
+        <!-- Results List -->
+        <div id="syncResultsList" class="p-4 space-y-2"></div>
+      </div>
+      
+      <!-- Error State -->
+      <div id="syncError" class="hidden p-8 text-center">
+        <span class="text-5xl block mb-4">❌</span>
+        <p id="syncErrorMsg" class="text-gray-400 mb-4"></p>
+        <button onclick="runSync()" class="neon-btn neon-btn-cyan px-6 py-2 rounded-lg">Retry</button>
+      </div>
+      
+      <!-- Footer -->
+      <div class="p-4 border-t border-gray-800 flex items-center justify-between">
+        <div id="syncSummary" class="text-sm text-gray-500"></div>
+        <div class="flex gap-2">
+          <button onclick="exportSyncReport()" class="neon-btn neon-btn-purple px-4 py-2 rounded-lg text-sm">📄 Export PDF</button>
+          <button onclick="closeSyncModal()" class="px-4 py-2 rounded-lg text-gray-400" style="background: rgba(100,100,100,0.2);">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <style>
     @keyframes slideUp {
       from { transform: translateY(100px); opacity: 0; }
@@ -1628,8 +1708,53 @@
     #logoutCancelBtn:hover {
       color: #fff;
     }
+    
+    /* Sync Modal Tabs */
+    .sync-tab {
+      color: #666;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    
+    .sync-tab:hover {
+      color: #00f0ff;
+    }
+    
+    .sync-tab.active {
+      color: #00f0ff;
+      border-bottom-color: #00f0ff;
+    }
+    
+    /* Sync Result Items */
+    .sync-item {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .sync-item:hover {
+      background: rgba(0,0,0,0.5);
+    }
+    
+    .sync-item.matched {
+      border-left: 3px solid #00ff88;
+    }
+    
+    .sync-item.admin-only {
+      border-left: 3px solid #ffff00;
+    }
+    
+    .sync-item.pancafe-only {
+      border-left: 3px solid #ff0044;
+    }
+    
+    .sync-item.mismatch {
+      border-left: 3px solid #b829ff;
+    }
   </style>
 
+  <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="js/dashboard.js"></script>
   <script type="module" src="js/bookings.js"></script>

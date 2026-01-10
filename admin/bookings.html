@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OceanZ - Admin Bookings</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen p-6">
 
@@ -17,8 +19,8 @@
         class="bg-gray-800 border border-gray-600 rounded px-4 py-2"/>
       <button onclick="fetchBookings()" 
         class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">🔄 Refresh</button>
-      <button onclick="downloadCSV()" 
-        class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded">📥 Export CSV</button>
+      <button onclick="downloadPDF()" 
+        class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded">📄 Export PDF</button>
     </div>
 
     <!-- Bookings -->
@@ -35,6 +37,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="../shared/pdf-export.js"></script>
   <script src="js/bookings-simple.js"></script>
 
   <style>

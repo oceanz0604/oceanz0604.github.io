@@ -97,20 +97,77 @@ window.fetchBookings = () => {
 };
 
 window.downloadCSV = () => {
-  const rows = [["Name", "Start", "End", "Duration", "PCs", "Price"]];
+  // Alias for PDF export (backward compatibility)
+  window.downloadPDF();
+};
+
+window.downloadPDF = () => {
+  const rows = [];
+  let approvedCount = 0, pendingCount = 0, declinedCount = 0;
+  let totalRevenue = 0;
+  
   document.querySelectorAll(".booking-card").forEach(card => {
     const cells = Array.from(card.querySelectorAll(".export-cell")).map(cell => cell.textContent);
-    rows.push(cells);
+    if (cells.length >= 6) {
+      rows.push(cells);
+      // Extract price (remove ₹ symbol)
+      const price = parseFloat(cells[5].replace('₹', '').replace(',', '')) || 0;
+      totalRevenue += price;
+    }
+    
+    // Count by status
+    const statusBadge = card.querySelector('.status-approved, .status-pending, .status-declined');
+    if (statusBadge) {
+      if (statusBadge.classList.contains('status-approved')) approvedCount++;
+      else if (statusBadge.classList.contains('status-pending')) pendingCount++;
+      else if (statusBadge.classList.contains('status-declined')) declinedCount++;
+    }
   });
 
-  const csv = rows.map(r => r.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "bookings_all.csv";
-  link.click();
-  URL.revokeObjectURL(url);
+  if (rows.length === 0) {
+    if (window.notifyWarning) {
+      window.notifyWarning("No bookings to export");
+    } else {
+      alert("No bookings to export");
+    }
+    return;
+  }
+
+  // Create PDF
+  const doc = PDFExport.createStyledPDF();
+  const today = new Date().toLocaleDateString('en-IN', { 
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+  let y = PDFExport.addPDFHeader(doc, 'Bookings Report', today);
+  
+  // Summary stats
+  y = PDFExport.addPDFSummary(doc, [
+    { label: 'Total Bookings', value: String(rows.length), color: 'neonCyan' },
+    { label: 'Approved', value: String(approvedCount), color: 'neonGreen' },
+    { label: 'Pending', value: String(pendingCount), color: 'neonYellow' },
+    { label: 'Revenue', value: `Rs.${totalRevenue}`, color: 'neonPurple' },
+  ], y);
+  
+  // Table
+  PDFExport.addPDFTable(doc, 
+    ['Name', 'Start', 'End', 'Duration', 'PCs', 'Price'],
+    rows,
+    y,
+    { 
+      columnStyles: {
+        5: { halign: 'right' } // Price column right-aligned
+      }
+    }
+  );
+  
+  PDFExport.savePDF(doc, `bookings_${new Date().toISOString().slice(0, 10)}`);
+  
+  if (window.notifySuccess) {
+    window.notifySuccess("Bookings report exported as PDF");
+  }
 };
 
 window.deleteBooking = async id => {
@@ -317,13 +374,15 @@ function renderTimetable(timetableBookings) {
         const end = Math.min(b.end, TIMETABLE_END_HOUR);
         if (end <= start) return;
 
-        const left = ((start - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
-        const width = ((end - start) / TIMETABLE_TOTAL_HOURS) * 100;
+        const leftPercent = ((start - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
+        const widthPercent = ((end - start) / TIMETABLE_TOTAL_HOURS) * 100;
 
         const block = document.createElement("div");
         block.className = `absolute top-1/2 -translate-y-1/2 h-6 rounded text-[10px] text-white px-1 flex items-center ${timetableColor(b.status)}`;
-        block.style.left = `calc(${left}% + ${PC_COL_WIDTH}px)`;
-        block.style.width = `calc(${width}% - 4px)`;
+        // Position relative to the time slots area (after the PC column)
+        // Formula: PC_COL_WIDTH + leftPercent% of (100% - PC_COL_WIDTH)
+        block.style.left = `calc(${PC_COL_WIDTH}px + (100% - ${PC_COL_WIDTH}px) * ${leftPercent / 100})`;
+        block.style.width = `calc((100% - ${PC_COL_WIDTH}px) * ${widthPercent / 100} - 4px)`;
         block.textContent = b.name;
 
         row.appendChild(block);
@@ -346,12 +405,13 @@ function renderCurrentTimeLine() {
 
   if (hours < TIMETABLE_START_HOUR || hours > TIMETABLE_END_HOUR) return;
 
-  const leftPercent = ((hours - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
+  const timePercent = ((hours - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
 
   const line = document.createElement("div");
   line.id = "currentTimeLine";
   line.className = "absolute top-0 bottom-0 w-[2px] z-20 pointer-events-none";
-  line.style.left = `calc(${leftPercent}% + ${PC_COL_WIDTH}px)`;
+  // Position relative to the time slots area (after the PC column)
+  line.style.left = `calc(${PC_COL_WIDTH}px + (100% - ${PC_COL_WIDTH}px) * ${timePercent / 100})`;
   line.style.background = "#ff0044";
   line.style.boxShadow = "0 0 10px #ff0044";
 
