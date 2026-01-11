@@ -358,7 +358,7 @@
       inset: 0;
       background: rgba(0, 0, 0, 0.6);
       backdrop-filter: blur(3px);
-      z-index: 39;
+      z-index: 55;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s ease;
@@ -648,18 +648,23 @@
     <div id="sidebar-backdrop" class="member-sidebar-backdrop md:hidden"></div>
 
     <!-- Sidebar -->
-    <aside id="member-sidebar" class="member-sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
-      <!-- Close button (mobile only) -->
-      <button id="sidebar-close" class="md:hidden absolute top-4 right-4 text-gray-500 hover:text-white" aria-label="Close menu">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
+    <aside id="member-sidebar" class="member-sidebar w-64 fixed inset-y-0 left-0 z-[60] hidden md:flex flex-col p-4">
+      <!-- Header with Close button (mobile only) -->
+      <div class="flex items-center justify-between mb-4 md:mb-0">
+        <span class="md:hidden text-xs text-gray-600 font-orbitron">MENU</span>
+        <button id="sidebar-close" class="md:hidden w-8 h-8 flex items-center justify-center rounded-lg" 
+          style="background: rgba(0,240,255,0.1); border: 1px solid rgba(0,240,255,0.3);" aria-label="Close menu">
+          <i data-lucide="x" class="w-4 h-4" style="color: var(--neon-cyan);"></i>
+        </button>
+      </div>
 
-      <!-- Logo -->
-      <div class="text-center mb-6 pt-2">
-        <div class="w-16 h-16 mx-auto mb-3">
+      <!-- Logo + User Info (Horizontal like admin) -->
+      <div class="mb-4 p-3 rounded-xl flex items-center gap-3" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+        <!-- Logo -->
+        <div class="w-10 h-10 shrink-0">
           <svg viewBox="0 0 100 100" class="w-full h-full">
             <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" 
-              fill="none" stroke="url(#sidebarGradient)" stroke-width="3"/>
+              fill="none" stroke="url(#sidebarGradient)" stroke-width="2"/>
             <defs>
               <linearGradient id="sidebarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:#00f0ff"/>
@@ -668,20 +673,18 @@
             </defs>
           </svg>
         </div>
-        <h2 class="font-orbitron text-lg font-bold glow-cyan" style="color: var(--neon-cyan);">OCEANZ</h2>
-        <p class="text-xs text-gray-500 tracking-widest">MEMBER PORTAL</p>
-      </div>
-
-      <!-- User Info -->
-      <div class="mb-6 px-2">
-        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
-          <div class="text-xs text-gray-500 mb-1">Logged in as</div>
-          <div id="sidebarUsername" class="font-orbitron text-sm truncate" style="color: var(--neon-cyan);">-</div>
+        <!-- Branding + User -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1">
+            <span class="font-orbitron text-sm font-bold" style="color: var(--neon-cyan);">OCEANZ</span>
+            <span class="text-xs text-gray-600">MEMBER</span>
+          </div>
+          <div id="sidebarUsername" class="font-orbitron text-xs truncate mt-0.5" style="color: var(--neon-pink);">-</div>
         </div>
       </div>
 
-      <!-- Nav Items -->
-      <nav id="memberNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin">
+      <!-- Nav Items with scroll -->
+      <nav id="memberNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin" style="max-height: calc(100vh - 180px);">
         <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="profile">
           <span class="text-lg">👤</span>
           <span class="font-medium">Profile</span>

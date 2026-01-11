@@ -43,13 +43,15 @@ const elements = {
   navAnalytics: $("nav-analytics"),
   navStaff: $("nav-staff"),
   navCash: $("nav-cash"),
+  navLeaderboard: $("nav-leaderboard"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
   rechargesSection: $("recharges-section"),
   analyticsSection: $("analytics-section"),
   staffSection: $("staff-section"),
-  cashSection: $("cash-section")
+  cashSection: $("cash-section"),
+  leaderboardSection: $("leaderboard-section")
 };
 
 // ==================== STATE ====================
@@ -97,8 +99,8 @@ function initializePermissions() {
 // ==================== VIEW SWITCHER ====================
 
 function switchView(view) {
-  // Cash register uses recharges permission
-  const permissionKey = view === "cash" ? "recharges" : view;
+  // Cash register uses recharges permission, leaderboard uses members permission
+  const permissionKey = view === "cash" ? "recharges" : view === "leaderboard" ? "members" : view;
   
   // Check permission before switching
   if (!hasPermission(permissionKey)) {
@@ -114,7 +116,8 @@ function switchView(view) {
     elements.rechargesSection,
     elements.analyticsSection,
     elements.staffSection,
-    elements.cashSection
+    elements.cashSection,
+    elements.leaderboardSection
   ];
 
   const navs = [
@@ -124,7 +127,8 @@ function switchView(view) {
     elements.navRecharges,
     elements.navAnalytics,
     elements.navStaff,
-    elements.navCash
+    elements.navCash,
+    elements.navLeaderboard
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -140,7 +144,8 @@ function switchView(view) {
     recharges: { section: elements.rechargesSection, nav: elements.navRecharges },
     analytics: { section: elements.analyticsSection, nav: elements.navAnalytics, onShow: () => window.loadAnalytics?.() },
     staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() },
-    cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() }
+    cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() },
+    leaderboard: { section: elements.leaderboardSection, nav: elements.navLeaderboard, onShow: () => window.initLeaderboards?.() }
   };
 
   const config = viewMap[view];
@@ -176,7 +181,8 @@ const navLinks = [
   { el: elements.navRecharges, view: "recharges" },
   { el: elements.navAnalytics, view: "analytics" },
   { el: elements.navStaff, view: "staff" },
-  { el: elements.navCash, view: "cash" }
+  { el: elements.navCash, view: "cash" },
+  { el: elements.navLeaderboard, view: "leaderboard" }
 ];
 
 navLinks.forEach(({ el, view }) => {
