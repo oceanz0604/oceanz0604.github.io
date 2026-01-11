@@ -220,18 +220,18 @@ window.loadCashRegister = function() {
         </div>
 
         <!-- History Table -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div class="cash-table-wrapper">
+          <table class="w-full text-sm cash-history-table">
             <thead>
               <tr class="text-left" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
                 <th class="py-3 px-2 font-orbitron text-xs" style="color: #00f0ff;">Date</th>
                 <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #00ff88;">Open</th>
                 <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #00ff88;">Close</th>
                 <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #b829ff;">Sale</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #ff6b00;">W/D</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #ff0044;">Exp</th>
-                <th class="py-3 px-2 font-orbitron text-xs" style="color: #666;">Denom</th>
-                <th class="py-3 px-2 font-orbitron text-xs" style="color: #666;">Note</th>
+                <th class="py-3 px-2 font-orbitron text-xs text-right cash-col-extra" style="color: #ff6b00;">W/D</th>
+                <th class="py-3 px-2 font-orbitron text-xs text-right cash-col-extra" style="color: #ff0044;">Exp</th>
+                <th class="py-3 px-2 font-orbitron text-xs cash-col-extra" style="color: #666;">Denom</th>
+                <th class="py-3 px-2 font-orbitron text-xs cash-col-extra" style="color: #666;">Note</th>
                 <th class="py-3 px-2"></th>
               </tr>
             </thead>
@@ -694,7 +694,7 @@ async function loadCashHistory() {
       const diffText = entry.difference !== 0 ? `(${entry.difference > 0 ? '+' : ''}${entry.difference})` : "";
       
       return `
-        <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+        <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors cash-row">
           <td class="py-3 px-2 font-orbitron text-xs">${formatDateShort(entry.date)}</td>
           <td class="py-3 px-2 text-right" style="color: #00ff88;">₹${(entry.opening || 0).toLocaleString("en-IN")}</td>
           <td class="py-3 px-2 text-right">
@@ -702,10 +702,10 @@ async function loadCashHistory() {
             ${diffText ? `<span class="text-xs ml-1" style="color: ${diffColor};">${diffText}</span>` : ""}
           </td>
           <td class="py-3 px-2 text-right font-bold" style="color: #b829ff;">₹${(entry.sale || 0).toLocaleString("en-IN")}</td>
-          <td class="py-3 px-2 text-right" style="color: #ff6b00;">${entry.withdrawal ? `₹${entry.withdrawal.toLocaleString("en-IN")}` : "-"}</td>
-          <td class="py-3 px-2 text-right" style="color: #ff0044;">${entry.expenses ? `₹${entry.expenses.toLocaleString("en-IN")}` : "-"}</td>
-          <td class="py-3 px-2 text-xs text-gray-500 max-w-[150px] truncate" title="${denomStr}">${denomStr}</td>
-          <td class="py-3 px-2 text-xs text-gray-400 max-w-[100px] truncate">${entry.comments || "-"}</td>
+          <td class="py-3 px-2 text-right cash-col-extra" style="color: #ff6b00;">${entry.withdrawal ? `₹${entry.withdrawal.toLocaleString("en-IN")}` : "-"}</td>
+          <td class="py-3 px-2 text-right cash-col-extra" style="color: #ff0044;">${entry.expenses ? `₹${entry.expenses.toLocaleString("en-IN")}` : "-"}</td>
+          <td class="py-3 px-2 text-xs text-gray-500 max-w-[150px] truncate cash-col-extra" title="${denomStr}">${denomStr}</td>
+          <td class="py-3 px-2 text-xs text-gray-400 max-w-[100px] truncate cash-col-extra">${entry.comments || "-"}</td>
           <td class="py-3 px-2">
             <button onclick="editCashEntry('${entry.date}')" class="text-cyan-400 hover:text-cyan-300 text-xs">✏️</button>
           </td>

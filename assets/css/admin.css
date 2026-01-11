@@ -658,6 +658,94 @@ body.admin-page::before {
   border-color: #ff0044;
 }
 
+/* ==================== CASH HISTORY TABLE ==================== */
+/* Cash table wrapper */
+.cash-table-wrapper {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .cash-table-wrapper {
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .cash-history-table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  
+  .cash-history-table thead {
+    display: none !important;
+  }
+  
+  .cash-history-table tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+  
+  .cash-history-table .cash-row {
+    display: flex !important;
+    align-items: center;
+    padding: 12px 16px !important;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  .cash-history-table td {
+    padding: 0 !important;
+    border: none !important;
+  }
+  
+  /* Date */
+  .cash-history-table td:nth-child(1) {
+    flex: 0 0 45px;
+    font-size: 10px !important;
+  }
+  
+  /* Opening */
+  .cash-history-table td:nth-child(2) {
+    flex: 0 0 auto;
+    font-size: 10px !important;
+  }
+  
+  /* Closing */
+  .cash-history-table td:nth-child(3) {
+    flex: 1 1 auto;
+    font-size: 10px !important;
+  }
+  
+  .cash-history-table td:nth-child(3) span:last-child {
+    font-size: 8px !important;
+  }
+  
+  /* Sale */
+  .cash-history-table td:nth-child(4) {
+    flex: 0 0 auto;
+    font-size: 11px !important;
+  }
+  
+  /* Hide extra columns on mobile */
+  .cash-col-extra {
+    display: none !important;
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  /* Actions */
+  .cash-history-table td:last-child {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+}
+
 /* ==================== RECHARGE TABLE ==================== */
 #rechargeList tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -665,6 +753,120 @@ body.admin-page::before {
 
 #rechargeList tr:last-child {
   border-bottom: none;
+}
+
+/* Recharge table wrapper */
+.recharge-table-wrapper {
+  overflow-x: auto;
+}
+
+/* Recharge table mobile - single line */
+@media (max-width: 640px) {
+  .recharge-table-wrapper {
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .recharge-table {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  
+  .recharge-table thead {
+    display: none !important;
+  }
+  
+  .recharge-table tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+  
+  #rechargeList tr {
+    display: flex !important;
+    align-items: center;
+    padding: 12px 16px !important;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  #rechargeList td {
+    padding: 0 !important;
+    border: none !important;
+  }
+  
+  /* Time - compact */
+  #rechargeList td:nth-child(1) {
+    flex: 0 0 55px;
+  }
+  
+  #rechargeList td:nth-child(1) > div:first-child {
+    font-size: 10px !important;
+  }
+  
+  #rechargeList td:nth-child(1) > div:last-child {
+    display: none;
+  }
+  
+  /* Member name - flexible, takes remaining space */
+  #rechargeList td:nth-child(2) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  
+  #rechargeList td:nth-child(2) span {
+    font-size: 11px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  
+  /* Amount */
+  #rechargeList td:nth-child(3) {
+    flex: 0 0 auto;
+    text-align: right;
+  }
+  
+  #rechargeList td:nth-child(3) span {
+    font-size: 11px !important;
+  }
+  
+  #rechargeList td:nth-child(3) > div {
+    display: none;
+  }
+  
+  /* Hide payment, note, admin on mobile */
+  #rechargeList td:nth-child(4),
+  #rechargeList td:nth-child(5),
+  #rechargeList td:nth-child(6) {
+    display: none !important;
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  /* Actions - compact, no extra space */
+  #rechargeList td:nth-child(7) {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  
+  #rechargeList td:nth-child(7) .flex {
+    gap: 4px;
+    justify-content: flex-end;
+  }
+  
+  #rechargeList td:nth-child(7) button {
+    padding: 4px !important;
+    font-size: 12px;
+  }
 }
 
 /* ==================== AUDIT STYLES ==================== */

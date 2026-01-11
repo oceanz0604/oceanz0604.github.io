@@ -1175,7 +1175,7 @@
                   <span id="rechargeCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,240,255,0.2);">0</span>
                 </h3>
                 <div class="relative">
-                  <input type="text" id="rechargeSearch" placeholder="Search by name, amount, note..." 
+                  <input type="text" id="rechargeSearch" placeholder="" 
                     class="neon-input px-4 py-2 pl-10 rounded-lg text-sm w-full sm:w-64"
                     oninput="filterRechargeList()"/>
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
@@ -1183,17 +1183,17 @@
               </div>
               
               <!-- Table -->
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm">
+              <div class="recharge-table-wrapper">
+                <table class="w-full text-sm recharge-table">
                   <thead class="bg-gray-900/50">
                     <tr class="text-left">
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-purple);">Time</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-cyan);">Member</th>
-                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amount</th>
-                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-yellow);">Payment</th>
-                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Note</th>
-                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Admin</th>
-                      <th class="px-4 py-3 text-right">Actions</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amt</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider recharge-col-payment" style="color: var(--neon-yellow);">Pay</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500 recharge-col-note">Note</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500 recharge-col-admin">Admin</th>
+                      <th class="px-4 py-3 text-right"></th>
                     </tr>
                   </thead>
                   <tbody id="rechargeList" class="divide-y divide-gray-800/50"></tbody>
@@ -1516,9 +1516,14 @@
       <!-- Member and Total -->
       <div class="space-y-4">
         <div class="grid grid-cols-2 gap-3">
-          <div class="relative col-span-2 md:col-span-1">
-            <label class="text-xs text-gray-500 mb-1 block">Member</label>
-            <input id="memberInput" placeholder="Search member..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+            <div class="relative col-span-2 md:col-span-1">
+            <label class="text-xs text-gray-500 mb-1 block">Member / Guest</label>
+            <div class="flex gap-2">
+              <input id="memberInput" placeholder="Search or type name..." class="neon-input flex-1 px-3 py-2 rounded-lg text-white"/>
+              <select id="guestTerminalSelect" class="neon-input px-2 py-2 rounded-lg text-white text-xs" style="width: auto; min-width: 90px;" onchange="selectGuestTerminal(this)">
+                <option value="">Guest ▾</option>
+              </select>
+            </div>
             <div id="memberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
           </div>
           <div>

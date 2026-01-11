@@ -8,6 +8,7 @@ import {
   BOOKING_APP_NAME, 
   FDB_APP_NAME,
   TIMEZONE,
+  CONSTANTS,
   getISTDate,
   formatToIST
 } from "../../shared/config.js";
@@ -131,6 +132,46 @@ window.clearSplit = () => {
   if (elements.creditInput) elements.creditInput.value = "";
   updateSplitRemaining();
 };
+
+// Initialize guest terminal dropdown from config
+function initGuestTerminalDropdown() {
+  const select = document.getElementById("guestTerminalSelect");
+  if (!select) return;
+  
+  const terminals = CONSTANTS.TIMETABLE_PCS || [];
+  
+  terminals.forEach(terminal => {
+    const option = document.createElement("option");
+    option.value = terminal.toUpperCase();
+    
+    // Create shorter display name
+    let displayName = terminal
+      .replace("CT-ROOM-", "CT")
+      .replace("T-ROOM-", "T")
+      .replace("XBOX ONE X", "Xbox");
+    
+    option.textContent = displayName;
+    select.appendChild(option);
+  });
+}
+
+// Handle guest terminal selection from dropdown
+window.selectGuestTerminal = (selectElement) => {
+  const memberInput = document.getElementById("memberInput");
+  if (memberInput && selectElement.value) {
+    // Use the exact terminal name in uppercase to match PanCafe transactions
+    memberInput.value = selectElement.value;
+    
+    // Hide suggestions
+    const suggestions = document.getElementById("memberSuggestions");
+    if (suggestions) suggestions.classList.add("hidden");
+  }
+  // Reset dropdown to placeholder
+  selectElement.selectedIndex = 0;
+};
+
+// Initialize guest dropdown when DOM is ready
+document.addEventListener("DOMContentLoaded", initGuestTerminalDropdown);
 
 // ==================== DATE PICKER ====================
 
@@ -650,16 +691,16 @@ function render() {
         <span class="font-orbitron font-bold" style="color: var(--neon-cyan);">${r.member}</span>
       </td>
       <td class="px-4 py-3 text-right">
-        <span class="font-orbitron font-bold text-lg" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
-        ${r.free > 0 ? `<div class="text-xs" style="color: #ffff00;">(₹${r.total || 0} + ₹${r.free} free)</div>` : ''}
+        <span class="font-orbitron font-bold" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
+        ${r.free > 0 ? `<div class="text-xs" style="color: #ffff00;">(+₹${r.free})</div>` : ''}
       </td>
-      <td class="px-4 py-3">
+      <td class="px-4 py-3 recharge-col-payment">
         <div class="flex flex-wrap gap-1">${paymentBadges}</div>
       </td>
-      <td class="px-4 py-3 text-gray-400 text-xs max-w-32 truncate" title="${r.note || ''}">
+      <td class="px-4 py-3 text-gray-400 text-xs max-w-32 truncate recharge-col-note" title="${r.note || ''}">
         ${r.note || "-"}
       </td>
-      <td class="px-4 py-3">
+      <td class="px-4 py-3 recharge-col-admin">
         <span class="text-xs px-2 py-1 rounded" style="background: rgba(0,240,255,0.1); color: var(--neon-cyan);">${r.admin || "Admin"}</span>
       </td>
       <td class="px-4 py-3 text-right">
@@ -667,16 +708,17 @@ function render() {
           ${pendingCreditAmount > 0 ? `
             <button onclick="collectCredit('${r.id}', ${pendingCreditAmount})" 
               class="text-xs px-2 py-1 rounded transition-all hover:scale-105"
-              style="background: rgba(255,107,0,0.2); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);">
-              Collect
+              style="background: rgba(255,107,0,0.2); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);"
+              title="Collect Credit">
+              💰
             </button>
           ` : ''}
           <button onclick="editRecharge('${r.id}')" 
-            class="p-1.5 rounded transition-all hover:scale-110 hover:bg-cyan-500/20" style="color: var(--neon-cyan);">
+            class="p-1 rounded transition-all hover:bg-cyan-500/20" style="color: var(--neon-cyan);" title="Edit">
             ✏️
           </button>
           <button onclick="deleteRecharge('${r.id}')" 
-            class="p-1.5 rounded transition-all hover:scale-110 hover:bg-red-500/20" style="color: #ff0044;">
+            class="p-1 rounded transition-all hover:bg-red-500/20" style="color: #ff0044;" title="Delete">
             🗑️
           </button>
         </div>
