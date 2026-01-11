@@ -65,72 +65,7 @@
       visibility: visible;
     }
 
-    /* Mobile Header */
-    .mobile-header {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 60px;
-      background: var(--card-bg);
-      border-bottom: 1px solid var(--card-border);
-      backdrop-filter: blur(10px);
-      z-index: 30;
-      padding: 0 1rem;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    @media (max-width: 767px) {
-      .mobile-header {
-        display: flex;
-      }
-      .main-content {
-        padding-top: 76px !important;
-      }
-    }
-
-    /* Hamburger Button */
-    .hamburger-btn {
-      width: 44px;
-      height: 44px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 5px;
-      background: transparent;
-      border: 1px solid rgba(255, 0, 68, 0.3);
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .hamburger-btn:hover {
-      background: rgba(255, 0, 68, 0.1);
-      border-color: var(--neon-red);
-    }
-
-    .hamburger-btn span {
-      display: block;
-      width: 20px;
-      height: 2px;
-      background: var(--neon-red);
-      transition: all 0.3s ease;
-    }
-
-    .hamburger-btn.active span:nth-child(1) {
-      transform: rotate(45deg) translate(5px, 5px);
-    }
-
-    .hamburger-btn.active span:nth-child(2) {
-      opacity: 0;
-    }
-
-    .hamburger-btn.active span:nth-child(3) {
-      transform: rotate(-45deg) translate(5px, -5px);
-    }
+    /* Mobile Header & Hamburger - Moved to admin.css */
 
     /* Close button for sidebar */
     .sidebar-close {
@@ -967,8 +902,8 @@
         <span></span>
         <span></span>
       </button>
-      <div class="flex items-center gap-2">
-        <svg viewBox="0 0 100 100" class="w-8 h-8">
+      <div class="mobile-header-brand">
+        <svg viewBox="0 0 100 100" class="w-7 h-7">
           <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
             fill="none" stroke="url(#mobileGradient)" stroke-width="3"/>
           <defs>
@@ -978,9 +913,14 @@
             </linearGradient>
           </defs>
         </svg>
-        <span class="font-orbitron text-sm font-bold" style="color: var(--neon-red);">OCEANZ ADMIN</span>
+        <div class="mobile-header-text">
+          <span class="mobile-header-title">OCEANZ</span>
+          <span class="mobile-header-subtitle">ADMIN</span>
+        </div>
       </div>
-      <div class="w-11"></div><!-- Spacer for centering -->
+      <div id="mobile-header-user" class="mobile-header-user">
+        <span class="mobile-user-initial">A</span>
+      </div>
     </header>
 
     <!-- Sidebar Backdrop -->

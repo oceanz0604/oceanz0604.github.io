@@ -75,8 +75,11 @@ function initializePermissions() {
   // Update role badge
   const currentUserNameEl = $("currentUserName");
   const currentUserRoleEl = $("currentUserRole");
+  const mobileUserInitial = document.querySelector(".mobile-user-initial");
   
-  if (currentUserNameEl) currentUserNameEl.textContent = session.name || session.email?.split("@")[0] || "Unknown";
+  const userName = session.name || session.email?.split("@")[0] || "Unknown";
+  if (currentUserNameEl) currentUserNameEl.textContent = userName;
+  if (mobileUserInitial) mobileUserInitial.textContent = userName.charAt(0).toUpperCase();
   if (currentUserRoleEl) {
     currentUserRoleEl.textContent = `${roleInfo.icon} ${roleInfo.name}`;
     currentUserRoleEl.style.background = `${roleInfo.color}20`;
