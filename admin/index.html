@@ -426,8 +426,14 @@
         // Verify session was created before redirecting
         const session = getStaffSession ? getStaffSession() : null;
         if (session) {
-          console.log("✅ Redirecting to dashboard with role:", session.role);
-          window.location.replace("dashboard.html");
+          console.log("✅ Redirecting with role:", session.role);
+          // COUNTER role goes to POS interface, others go to dashboard
+          if (session.role === "COUNTER") {
+            console.log("🧾 Counter role - redirecting to POS interface");
+            window.location.replace("counter.html");
+          } else {
+            window.location.replace("dashboard.html");
+          }
         } else {
           console.error("❌ Session not created - showing login form");
           document.getElementById("login-container").classList.remove("hidden");

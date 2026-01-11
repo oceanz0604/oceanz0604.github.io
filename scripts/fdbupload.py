@@ -14,6 +14,7 @@ Run frequency: Every 30 minutes (Windows Task Scheduler)
 """
 
 import os
+import re
 import shutil
 import fdb
 import json
@@ -29,6 +30,9 @@ from config import (
     FB_PATHS, HISTORY_FIELD_MAP, FIREBIRD_USER, FIREBIRD_PASSWORD,
     normalize_terminal_name, get_short_terminal_name
 )
+
+# Messages.msg file path (same folder as usdb.dat)
+MESSAGES_FILE = os.path.join(os.path.dirname(SOURCE_FDB_PATH), "messages.msg")
 
 # ==================== SYNC METADATA PATHS ====================
 
@@ -431,6 +435,168 @@ def process_and_upload_sessions(records):
     print(f"   ✅ Updated {total} sessions for {len(by_member)} members")
 
 
+# ==================== MESSAGES.MSG PARSING ====================
+
+def clean_rtf(content):
+    """Remove RTF formatting and extract plain text."""
+    content = content.replace('\\par\n', '\n')
+    content = content.replace('\\par', '\n')
+    content = re.sub(r'\{\\rtf1[^}]*\}', '', content)
+    content = re.sub(r'\{\\fonttbl[^}]*\}', '', content)
+    content = re.sub(r'\{\\colortbl[^}]*\}', '', content)
+    content = re.sub(r'\\cf\d+\s*', '', content)
+    content = re.sub(r'\\viewkind\d+', '', content)
+    content = re.sub(r'\\uc\d+', '', content)
+    content = re.sub(r'\\pard', '', content)
+    content = re.sub(r'\\f\d+', '', content)
+    content = re.sub(r'\\fs\d+', '', content)
+    content = re.sub(r'\\[a-z]+\d*\s*', '', content)
+    content = content.replace('{', '').replace('}', '')
+    content = re.sub(r'\n\s*\n', '\n', content)
+    lines = [line.strip() for line in content.split('\n')]
+    return '\n'.join(lines).strip()
+
+
+# Message patterns for parsing
+MSG_PATTERNS = {
+    'guest_session_start': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*([^:]+):\s*Session started \(Time Limited\)\s*\((\d+)\s*min\)'
+    ),
+    'guest_session_end': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*([^:]+):\s*Session closed\.\s*\[\s*Usage:\s*Rs\.\s*([\d.]+)\s*,\s*Total:\s*Rs\.\s*([\d.]+)\s*\]\*\s*Pre-Paid'
+    ),
+    'member_session_start': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*([^:]+):\s*Member session started\.\s*\(Member:([^)]+)\)'
+    ),
+    'member_session_end': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*([^:]+):\s*Session closed\.\s*\(Member:([^)]+)\)\s*\[\s*Usage:\s*Rs\.\s*([\d.]+)\s*,\s*Total:\s*Rs\.\s*([\d.]+)\s*\]'
+    ),
+    'money_loaded': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*Rs\.\s*([\d.]+)\s*money loaded\.\s*\(Member:\s*([^)]+)\)'
+    ),
+    'server_started': re.compile(
+        r'(\d{2}:\d{2}:\d{2})->\s*Server started\.\.\.\s*\((\d{2})\.(\d{2})\.(\d{4})\)'
+    ),
+}
+
+
+def parse_messages_file():
+    """Parse messages.msg and extract guest sessions."""
+    if not os.path.exists(MESSAGES_FILE):
+        print(f"   ⚠️ messages.msg not found at: {MESSAGES_FILE}")
+        return None
+    
+    try:
+        with open(MESSAGES_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except Exception as e:
+        print(f"   ❌ Failed to read messages.msg: {e}")
+        return None
+    
+    text = clean_rtf(content)
+    lines = text.split('\n')
+    
+    current_date = None
+    guest_sessions = []
+    active_guest_sessions = {}  # terminal -> start info
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Check for server start (to get date)
+        match = MSG_PATTERNS['server_started'].search(line)
+        if match:
+            time_str, day, month, year = match.groups()
+            current_date = f"{year}-{month}-{day}"
+            continue
+        
+        # Guest session start
+        match = MSG_PATTERNS['guest_session_start'].search(line)
+        if match:
+            time_str, terminal, duration = match.groups()
+            active_guest_sessions[terminal] = {
+                'date': current_date,
+                'start_time': time_str,
+                'terminal': terminal,
+                'duration_minutes': int(duration)
+            }
+            continue
+        
+        # Guest session end
+        match = MSG_PATTERNS['guest_session_end'].search(line)
+        if match:
+            time_str, terminal, usage, total = match.groups()
+            session_data = active_guest_sessions.pop(terminal, {})
+            
+            # Normalize terminal name
+            normalized_terminal = normalize_terminal_name(terminal) or terminal
+            short_terminal = get_short_terminal_name(terminal)
+            
+            session = {
+                'type': 'guest',
+                'date': current_date or session_data.get('date'),
+                'terminal': normalized_terminal,
+                'terminal_short': short_terminal,
+                'start_time': session_data.get('start_time'),
+                'end_time': time_str,
+                'duration_minutes': session_data.get('duration_minutes'),
+                'usage': float(usage),
+                'total': float(total),
+                'prepaid': True
+            }
+            guest_sessions.append(session)
+            continue
+    
+    return guest_sessions
+
+
+def upload_guest_sessions(guest_sessions):
+    """Upload parsed guest sessions to Firebase."""
+    if not guest_sessions:
+        print("   No guest sessions to upload")
+        return
+    
+    # Group by date
+    by_date = defaultdict(list)
+    for session in guest_sessions:
+        if session.get('date'):
+            by_date[session['date']].append(session)
+    
+    # Upload to Firebase
+    for date_str, sessions in by_date.items():
+        try:
+            # Create keyed entries
+            keyed_sessions = {}
+            for i, s in enumerate(sessions):
+                # Create unique key from date, terminal, time
+                key = f"{s['terminal_short']}_{s['end_time'].replace(':', '')}".replace(" ", "_")
+                keyed_sessions[key] = s
+            
+            ref = db.reference(f"{FB_PATHS.GUEST_SESSIONS}/{date_str}")
+            ref.update(keyed_sessions)
+        except Exception as e:
+            print(f"   ⚠️ Failed to upload guest sessions for {date_str}: {e}")
+    
+    # Also update daily summary with guest revenue
+    for date_str, sessions in by_date.items():
+        try:
+            total_revenue = sum(s['total'] for s in sessions)
+            total_count = len(sessions)
+            
+            ref = db.reference(f"daily-summary/{date_str}")
+            ref.update({
+                'guest_sessions': total_count,
+                'guest_revenue': total_revenue
+            })
+        except Exception:
+            pass
+    
+    total = sum(len(s) for s in by_date.values())
+    print(f"   ✅ Uploaded {total} guest sessions for {len(by_date)} dates")
+
+
 # ==================== LEADERBOARD PRE-COMPUTATION ====================
 
 def compute_and_upload_leaderboards(cursor):
@@ -511,6 +677,12 @@ def main():
         # 4. Pre-compute Leaderboards
         print("\n📊 Computing LEADERBOARDS...")
         compute_and_upload_leaderboards(cursor)
+        
+        # 5. Parse and upload guest sessions from messages.msg
+        print("\n📊 Processing GUEST SESSIONS (from messages.msg)...")
+        guest_sessions = parse_messages_file()
+        if guest_sessions:
+            upload_guest_sessions(guest_sessions)
         
         # Save sync state
         sync_state["last_sync_time"] = start_time.isoformat()

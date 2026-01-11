@@ -121,10 +121,12 @@ function renderStaffDashboard(container, staff, activities) {
             <input id="newStaffName" type="text" placeholder="Display Name" class="neon-input px-3 py-2 rounded-lg text-white"/>
             <input id="newStaffPassword" type="password" placeholder="Password (min 6)" class="neon-input px-3 py-2 rounded-lg text-white"/>
             <select id="newStaffRole" class="neon-select px-3 py-2 rounded-lg text-white">
-              <option value="STAFF">Staff</option>
-              <option value="MANAGER">Manager</option>
-              <option value="ADMIN">Admin</option>
-              <option value="SUPER_ADMIN">Super Admin</option>
+              <option value="COUNTER">🧾 Counter/Cashier</option>
+              <option value="STAFF">🎮 Staff</option>
+              <option value="FINANCE_MANAGER">💰 Finance Manager</option>
+              <option value="MANAGER">🎯 Manager</option>
+              <option value="ADMIN">⚡ Admin</option>
+              <option value="SUPER_ADMIN">👑 Super Admin</option>
             </select>
             <button onclick="addStaffMember()" id="addStaffBtn" class="neon-btn neon-btn-green rounded-lg px-4 py-2 text-sm font-orbitron">
               ADD
@@ -569,7 +571,9 @@ function createEditModal() {
         <div>
           <label class="text-xs text-gray-500 mb-1 block">Role</label>
           <select id="editStaffRole" class="neon-select w-full px-3 py-2 rounded-lg text-white">
+            <option value="COUNTER">🧾 Counter/Cashier</option>
             <option value="STAFF">🎮 Staff</option>
+            <option value="FINANCE_MANAGER">💰 Finance Manager</option>
             <option value="MANAGER">🎯 Manager</option>
             <option value="ADMIN">⚡ Admin</option>
             <option value="SUPER_ADMIN">👑 Super Admin</option>

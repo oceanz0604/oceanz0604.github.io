@@ -11,7 +11,7 @@ import {
   formatToIST,
   FB_PATHS
 } from "../../shared/config.js";
-import { getStaffSession } from "./permissions.js";
+import { getStaffSession, canEditData } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -372,6 +372,16 @@ window.calculateCashTotals = function() {
 // ==================== SAVE ENTRY ====================
 
 window.saveCashEntry = async function() {
+  // Check if user can edit (Finance Manager cannot)
+  if (!canEditData()) {
+    if (typeof notifyWarning === "function") {
+      notifyWarning("You have view-only access. Saving is not allowed.");
+    } else {
+      alert("You have view-only access. Saving is not allowed.");
+    }
+    return;
+  }
+  
   // Use editing date if present, otherwise today
   const dateToSave = window.editingDate || getISTDateString();
   

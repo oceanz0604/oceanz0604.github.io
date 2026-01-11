@@ -39,41 +39,94 @@ export const ROLES = {
     level: 100,
     color: "#ff0044",
     icon: "👑",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "staff", "settings"]
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "staff", "settings", "cash_register", "leaderboard"],
+    canEdit: true,
+    description: "Full access to all features"
   },
   ADMIN: {
     name: "Admin",
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics"]
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "cash_register", "leaderboard"],
+    canEdit: true,
+    description: "Full access except staff management"
   },
   MANAGER: {
     name: "Manager",
     level: 60,
     color: "#00f0ff",
     icon: "🎯",
-    permissions: ["dashboard", "bookings", "recharges", "members"]
+    permissions: ["dashboard", "bookings", "recharges", "members", "cash_register", "leaderboard"],
+    canEdit: true,
+    description: "Day-to-day operations management"
+  },
+  FINANCE_MANAGER: {
+    name: "Finance Manager",
+    level: 55,
+    color: "#ffd700",
+    icon: "💰",
+    permissions: ["dashboard", "analytics", "cash_register", "leaderboard"],
+    canEdit: false,  // View-only for finance data
+    description: "View-only access to financial reports"
+  },
+  COUNTER: {
+    name: "Counter/Cashier",
+    level: 30,
+    color: "#ff6b00",
+    icon: "🧾",
+    permissions: ["counter", "bookings"],  // Special "counter" permission for POS interface
+    canEdit: true,
+    usePOSInterface: true,  // Use simplified POS counter interface
+    description: "Add recharges and confirm bookings only"
   },
   STAFF: {
     name: "Staff",
     level: 40,
     color: "#00ff88",
     icon: "🎮",
-    permissions: ["dashboard", "bookings", "recharges"]
+    permissions: ["dashboard", "bookings", "recharges"],
+    canEdit: true,
+    description: "Basic staff access"
   }
 };
 
 // Module to navigation mapping
 export const MODULE_NAV_MAP = {
-  dashboard: { name: "Dashboard", icon: "monitor", view: "dashboard" },
-  bookings: { name: "Bookings", icon: "calendar", view: "bookings" },
-  recharges: { name: "Recharges", icon: "indian-rupee", view: "recharges" },
+  dashboard: { name: "Dashboard", icon: "layout-dashboard", view: "dashboard" },
+  bookings: { name: "Bookings", icon: "calendar-clock", view: "bookings" },
+  recharges: { name: "Recharges", icon: "wallet", view: "recharges" },
   members: { name: "Members", icon: "users", view: "members" },
   history: { name: "History", icon: "history", view: "history" },
   analytics: { name: "Analytics", icon: "bar-chart-3", view: "analytics" },
-  staff: { name: "Staff", icon: "shield", view: "staff" }
+  staff: { name: "Staff", icon: "shield-check", view: "staff" },
+  cash_register: { name: "Cash Register", icon: "banknote", view: "cash" },
+  leaderboard: { name: "Leaderboards", icon: "trophy", view: "leaderboard" },
+  counter: { name: "POS Counter", icon: "receipt", view: "counter", redirect: "counter.html" }
 };
+
+// Check if user can edit (vs view-only)
+export function canEditData() {
+  const session = getStaffSession();
+  if (!session) return false;
+  
+  const role = ROLES[session.role];
+  if (!role) return false;
+  
+  // Super admin always can edit
+  if (session.role === "SUPER_ADMIN") return true;
+  
+  return role.canEdit !== false;
+}
+
+// Check if user should use POS interface
+export function shouldUsePOSInterface() {
+  const session = getStaffSession();
+  if (!session) return false;
+  
+  const role = ROLES[session.role];
+  return role?.usePOSInterface === true;
+}
 
 // ==================== STAFF SESSION ====================
 
@@ -539,6 +592,8 @@ window.clearStaffSession = clearStaffSession;
 window.refreshSessionActivity = refreshSessionActivity;
 window.startPermissionListener = startPermissionListener;
 window.stopPermissionListener = stopPermissionListener;
+window.canEditData = canEditData;
+window.shouldUsePOSInterface = shouldUsePOSInterface;
 
 // Auto-start permission listener if user is already logged in
 // (for page reloads / returning to dashboard)

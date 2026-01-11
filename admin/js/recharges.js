@@ -16,7 +16,7 @@ import {
   getShortTerminalName,
   isGuestTerminal
 } from "../../shared/config.js";
-import { getStaffSession } from "./permissions.js";
+import { getStaffSession, canEditData } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -413,6 +413,12 @@ loadDay();
 // ==================== ADD RECHARGE MODAL ====================
 
 window.openAddRechargeModal = (isEdit = false) => {
+  // Check if user can edit (Finance Manager cannot)
+  if (!canEditData()) {
+    notifyWarning("You have view-only access. Editing is not allowed.");
+    return;
+  }
+  
   const modal = document.getElementById("addRechargeModal");
   const modalTitle = modal?.querySelector("h3");
   const saveBtn = modal?.querySelector("button[onclick='addRecharge()']");
@@ -753,6 +759,12 @@ let collectModalData = null;
 
 // Open collect credit modal
 window.collectCredit = (id, pendingAmount) => {
+  // Check if user can edit (Finance Manager cannot)
+  if (!canEditData()) {
+    notifyWarning("You have view-only access. Collecting credits is not allowed.");
+    return;
+  }
+  
   const r = state.find(x => x.id === id);
   if (!r) return;
 
@@ -927,6 +939,12 @@ window.confirmCollectCredit = () => {
 
 
 window.editRecharge = id => {
+  // Check if user can edit (Finance Manager cannot)
+  if (!canEditData()) {
+    notifyWarning("You have view-only access. Editing is not allowed.");
+    return;
+  }
+  
   const r = state.find(x => x.id === id);
   if (!r) return;
 
@@ -979,6 +997,12 @@ window.editRecharge = id => {
 };
 
 window.deleteRecharge = async id => {
+  // Check if user can edit (Finance Manager cannot)
+  if (!canEditData()) {
+    notifyWarning("You have view-only access. Deleting is not allowed.");
+    return;
+  }
+  
   const confirmed = await showConfirm("Delete this recharge entry?", {
     title: "Delete Entry",
     type: "error",
@@ -1317,65 +1341,71 @@ async function runSync() {
 // Fetch guest sessions from Firebase for a specific date
 async function fetchGuestSessionsForDate(date) {
   try {
-    // Guest sessions are stored at /sessions-by-member/guest/
-    const guestSnap = await fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once("value");
-    const guestData = guestSnap.val() || {};
-    
-    console.log("🔍 Guest sessions raw data:", guestData);
-    console.log("🔍 Looking for date:", date);
-    
-    // If no data at this path, try alternative paths
-    if (!guestData || Object.keys(guestData).length === 0) {
-      console.log("🔍 No guest sessions at sessions-by-member/guest, trying /sessions/...");
-      
-      // Try fetching from /sessions/ path (IP logs sessions)
-      const sessionsSnap = await fdbDb.ref(FB_PATHS.SESSIONS).once("value");
-      const sessionsData = sessionsSnap.val() || {};
-      console.log("🔍 Sessions data:", Object.keys(sessionsData).length, "entries");
-      
-      // Log sample session structure
-      const sampleKey = Object.keys(sessionsData)[0];
-      if (sampleKey) {
-        console.log("🔍 Sample session structure:", sessionsData[sampleKey]);
-      }
-    } else {
-      // Log sample guest session structure
-      const sampleKey = Object.keys(guestData)[0];
-      if (sampleKey) {
-        console.log("🔍 Sample guest session structure:", guestData[sampleKey]);
-      }
-    }
-    
     const sessions = [];
     
-    Object.entries(guestData).forEach(([sessionId, session]) => {
-      // Try multiple date field options
-      let sessionDate = session.DATE || session.date;
+    // PRIMARY: Fetch from new guest-sessions/{date} path (from messages.msg parsing)
+    try {
+      const guestSessionsSnap = await fdbDb.ref(`${FB_PATHS.GUEST_SESSIONS}/${date}`).once("value");
+      const guestSessionsData = guestSessionsSnap.val() || {};
       
-      // Try extracting from STARTPOINT (format could be "2025-01-11T10:30:00" or "2025-01-11 10:30:00")
-      if (!sessionDate && session.STARTPOINT) {
-        sessionDate = session.STARTPOINT.split('T')[0].split(' ')[0];
-      }
-      if (!sessionDate && session.startpoint) {
-        sessionDate = session.startpoint.split('T')[0].split(' ')[0];
-      }
+      console.log(`🔍 Guest sessions from messages.msg (${date}):`, Object.keys(guestSessionsData).length, "entries");
       
-      console.log(`🔍 Session ${sessionId}: date=${sessionDate}, terminal=${session.TERMINALNAME}, looking for ${date}`);
-      
-      if (sessionDate === date) {
-        sessions.push({
-          id: sessionId,
-          terminal: normalizeTerminalName(session.TERMINALNAME) || session.TERMINALNAME,
-          terminalShort: getShortTerminalName(session.TERMINALNAME),
-          minutes: session.USINGMIN || 0,
-          price: session.PRICE || 0,
-          startTime: session.STARTPOINT,
-          endTime: session.ENDPOINT
+      if (Object.keys(guestSessionsData).length > 0) {
+        // Log sample structure
+        const sampleKey = Object.keys(guestSessionsData)[0];
+        console.log("🔍 Sample guest session:", guestSessionsData[sampleKey]);
+        
+        Object.entries(guestSessionsData).forEach(([sessionId, session]) => {
+          sessions.push({
+            id: sessionId,
+            terminal: session.terminal || session.terminal_short,
+            terminalShort: session.terminal_short || getShortTerminalName(session.terminal),
+            minutes: session.duration_minutes || 0,
+            price: session.total || session.usage || 0,
+            startTime: session.start_time,
+            endTime: session.end_time,
+            source: "messages.msg"
+          });
         });
       }
-    });
+    } catch (e) {
+      console.log("🔍 No guest-sessions data, trying fallback...");
+    }
     
-    console.log(`🔍 Found ${sessions.length} guest sessions for ${date}`);
+    // FALLBACK: If no data from messages.msg, try sessions-by-member/guest
+    if (sessions.length === 0) {
+      const guestSnap = await fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once("value");
+      const guestData = guestSnap.val() || {};
+      
+      console.log("🔍 Fallback: Guest sessions from sessions-by-member/guest");
+      
+      Object.entries(guestData).forEach(([sessionId, session]) => {
+        let sessionDate = session.DATE || session.date;
+        
+        // Extract date from STARTPOINT if needed
+        if (!sessionDate && session.STARTPOINT) {
+          sessionDate = session.STARTPOINT.split('T')[0].split(' ')[0];
+        }
+        if (!sessionDate && session.startpoint) {
+          sessionDate = session.startpoint.split('T')[0].split(' ')[0];
+        }
+        
+        if (sessionDate === date) {
+          sessions.push({
+            id: sessionId,
+            terminal: normalizeTerminalName(session.TERMINALNAME) || session.TERMINALNAME,
+            terminalShort: getShortTerminalName(session.TERMINALNAME),
+            minutes: session.USINGMIN || 0,
+            price: session.PRICE || 0,
+            startTime: session.STARTPOINT,
+            endTime: session.ENDPOINT,
+            source: "sessions-by-member"
+          });
+        }
+      });
+    }
+    
+    console.log(`🔍 Total guest sessions found for ${date}: ${sessions.length}`);
     return sessions;
   } catch (error) {
     console.warn("Could not fetch guest sessions:", error);
