@@ -102,8 +102,18 @@ function initializePermissions() {
 // ==================== VIEW SWITCHER ====================
 
 function switchView(view) {
-  // Cash register uses recharges permission, leaderboard uses members permission
-  const permissionKey = view === "cash" ? "recharges" : view === "leaderboard" ? "members" : view;
+  // Map view names to permission keys
+  const permissionMap = {
+    "cash": "cash_register",
+    "leaderboard": "leaderboard",
+    "dashboard": "dashboard",
+    "members": "members",
+    "bookings": "bookings",
+    "recharges": "recharges",
+    "analytics": "analytics",
+    "staff": "staff"
+  };
+  const permissionKey = permissionMap[view] || view;
   
   // Check permission before switching
   if (!hasPermission(permissionKey)) {

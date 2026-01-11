@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>OceanZ - POS Counter</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="description" content="OceanZ Gaming Cafe - POS Counter for quick recharges"/>
+  <meta name="theme-color" content="#ff6b00"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="OceanZ POS"/>
+  <link rel="manifest" href="manifest.webmanifest"/>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/admin-icon.svg"/>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/common.css">
+  <link rel="stylesheet" href="../assets/css/admin.css">
+  <style>
+    :root {
+      --pos-orange: #ff6b00;
+      --pos-green: #00ff88;
+      --pos-cyan: #00f0ff;
+      --pos-purple: #b829ff;
+      --pos-red: #ff0044;
+    }
+    
+    body {
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    .pos-header {
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      border-bottom: 2px solid var(--pos-orange);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    
+    .pos-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    
+    /* Quick Amount Buttons */
+    .quick-amount-btn {
+      background: linear-gradient(145deg, rgba(255, 107, 0, 0.2), rgba(255, 107, 0, 0.1));
+      border: 2px solid var(--pos-orange);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .quick-amount-btn:hover {
+      transform: scale(1.02);
+      box-shadow: 0 0 30px rgba(255, 107, 0, 0.4);
+      border-color: var(--pos-orange);
+    }
+    
+    .quick-amount-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .quick-amount-btn.selected {
+      background: linear-gradient(145deg, rgba(255, 107, 0, 0.4), rgba(255, 107, 0, 0.2));
+      box-shadow: 0 0 40px rgba(255, 107, 0, 0.5), inset 0 0 20px rgba(255, 107, 0, 0.2);
+      border-color: var(--pos-orange);
+    }
+    
+    .quick-amount-btn .amount {
+      font-family: 'Orbitron', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--pos-orange);
+      text-shadow: 0 0 20px var(--pos-orange);
+    }
+    
+    .quick-amount-btn .label {
+      font-size: 0.9rem;
+      color: #888;
+      margin-top: 0.5rem;
+    }
+    
+    /* Guest Terminal Buttons */
+    .guest-btn {
+      background: linear-gradient(145deg, rgba(0, 240, 255, 0.1), rgba(0, 240, 255, 0.05));
+      border: 2px solid rgba(0, 240, 255, 0.3);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .guest-btn:hover {
+      border-color: var(--pos-cyan);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+    }
+    
+    .guest-btn.selected {
+      background: linear-gradient(145deg, rgba(0, 240, 255, 0.3), rgba(0, 240, 255, 0.1));
+      border-color: var(--pos-cyan);
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+    }
+    
+    .guest-btn .terminal-name {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--pos-cyan);
+    }
+    
+    /* Payment Method Buttons */
+    .payment-btn {
+      background: rgba(0, 0, 0, 0.4);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .payment-btn:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .payment-btn.selected {
+      border-width: 3px;
+    }
+    
+    .payment-btn.cash.selected {
+      background: rgba(0, 240, 255, 0.1);
+      border-color: var(--pos-cyan);
+    }
+    
+    .payment-btn.upi.selected {
+      background: rgba(184, 41, 255, 0.1);
+      border-color: var(--pos-purple);
+    }
+    
+    .payment-btn.credit.selected {
+      background: rgba(255, 107, 0, 0.1);
+      border-color: var(--pos-orange);
+    }
+    
+    /* Member Input */
+    .member-input-container {
+      position: relative;
+    }
+    
+    .member-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 107, 0, 0.3);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      font-size: 1.5rem;
+      font-family: 'Orbitron', monospace;
+      color: white;
+      width: 100%;
+      text-transform: uppercase;
+    }
+    
+    .member-input:focus {
+      outline: none;
+      border-color: var(--pos-orange);
+      box-shadow: 0 0 20px rgba(255, 107, 0, 0.3);
+    }
+    
+    .member-input::placeholder {
+      color: #555;
+      text-transform: none;
+    }
+    
+    /* Member Suggestions */
+    .member-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: rgba(10, 10, 15, 0.98);
+      border: 2px solid var(--pos-orange);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+    }
+    
+    .member-suggestions.show {
+      display: block;
+    }
+    
+    .member-suggestion {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .member-suggestion:hover {
+      background: rgba(255, 107, 0, 0.2);
+    }
+    
+    .member-suggestion .username {
+      font-family: 'Orbitron', monospace;
+      color: var(--pos-orange);
+      font-weight: 600;
+    }
+    
+    .member-suggestion .balance {
+      font-size: 0.8rem;
+      color: #888;
+    }
+    
+    /* Confirm Button */
+    .confirm-btn {
+      background: linear-gradient(135deg, var(--pos-green), #00cc66);
+      border: none;
+      border-radius: 16px;
+      padding: 1.5rem 3rem;
+      font-family: 'Orbitron', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #000;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      min-width: 250px;
+    }
+    
+    .confirm-btn:hover:not(:disabled) {
+      transform: scale(1.02);
+      box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
+    }
+    
+    .confirm-btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    
+    .confirm-btn:disabled {
+      background: #333;
+      color: #666;
+      cursor: not-allowed;
+    }
+    
+    /* Recent Transactions */
+    .recent-tx {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .recent-tx .member {
+      font-family: 'Orbitron', monospace;
+      color: var(--pos-orange);
+      font-weight: 600;
+    }
+    
+    .recent-tx .amount {
+      font-family: 'Orbitron', monospace;
+      color: var(--pos-green);
+      font-size: 1.2rem;
+    }
+    
+    .recent-tx .time {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    
+    /* Stats Card */
+    .pos-stat-card {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+    
+    .pos-stat-card .value {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    
+    .pos-stat-card .label {
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    /* Pending Bookings */
+    .pending-booking {
+      background: rgba(255, 255, 0, 0.1);
+      border: 2px solid rgba(255, 255, 0, 0.3);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .pending-booking:hover {
+      border-color: rgba(255, 255, 0, 0.5);
+      box-shadow: 0 0 15px rgba(255, 255, 0, 0.2);
+    }
+    
+    .pending-booking .info .member {
+      font-family: 'Orbitron', monospace;
+      color: #ffff00;
+      font-weight: 600;
+    }
+    
+    .pending-booking .info .details {
+      font-size: 0.8rem;
+      color: #888;
+    }
+    
+    .pending-booking .actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .pending-booking .approve-btn {
+      background: rgba(0, 255, 136, 0.2);
+      border: 1px solid var(--pos-green);
+      color: var(--pos-green);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .pending-booking .approve-btn:hover {
+      background: var(--pos-green);
+      color: #000;
+    }
+    
+    /* Custom Amount Input */
+    .custom-amount-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 107, 0, 0.3);
+      border-radius: 12px;
+      padding: 1rem;
+      font-size: 2rem;
+      font-family: 'Orbitron', monospace;
+      color: var(--pos-orange);
+      width: 100%;
+      text-align: center;
+    }
+    
+    .custom-amount-input:focus {
+      outline: none;
+      border-color: var(--pos-orange);
+      box-shadow: 0 0 20px rgba(255, 107, 0, 0.3);
+    }
+    
+    /* Toggle Section */
+    .toggle-section {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    
+    .toggle-header {
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .toggle-header:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .toggle-content {
+      padding: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: none;
+    }
+    
+    .toggle-content.show {
+      display: block;
+    }
+    
+    /* Success Animation */
+    .success-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 255, 136, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: successFlash 0.5s ease-out forwards;
+    }
+    
+    @keyframes successFlash {
+      0% { opacity: 0; }
+      30% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    
+    .success-overlay .checkmark {
+      font-size: 8rem;
+      color: var(--pos-green);
+      text-shadow: 0 0 50px var(--pos-green);
+      animation: popIn 0.3s ease-out;
+    }
+    
+    @keyframes popIn {
+      0% { transform: scale(0); }
+      70% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    
+    /* Mobile Optimizations */
+    @media (max-width: 768px) {
+      .quick-amount-btn {
+        padding: 1rem;
+      }
+      
+      .quick-amount-btn .amount {
+        font-size: 1.5rem;
+      }
+      
+      .member-input {
+        font-size: 1.2rem;
+        padding: 0.75rem 1rem;
+      }
+      
+      .confirm-btn {
+        font-size: 1.2rem;
+        padding: 1rem 2rem;
+        min-width: auto;
+        width: 100%;
+      }
+      
+      .pos-stat-card .value {
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body class="text-white">
+  
+  <!-- Loading Screen -->
+  <div id="posLoadingScreen" class="fixed inset-0 z-[100] flex items-center justify-center" style="background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);">
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto mb-4 relative">
+        <div class="absolute inset-0 border-4 border-t-orange-500 border-r-red-500 border-b-orange-500 border-l-red-500 rounded-full animate-spin"></div>
+        <div class="absolute inset-2 border-4 border-t-cyan-500 border-r-purple-500 border-b-cyan-500 border-l-purple-500 rounded-full animate-spin" style="animation-direction: reverse; animation-duration: 0.8s;"></div>
+      </div>
+      <p class="text-gray-400 font-orbitron text-sm tracking-wider">LOADING POS...</p>
+    </div>
+  </div>
+
+  <!-- Main App (hidden until loaded) -->
+  <div id="posApp" class="hidden">
+  
+  <!-- Header -->
+  <header class="pos-header">
+    <div class="pos-container">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <svg viewBox="0 0 100 100" class="w-10 h-10">
+            <polygon points="50,5 95,25 95,60 50,95 5,60 5,25" 
+              fill="none" stroke="url(#posGradient)" stroke-width="3"/>
+            <defs>
+              <linearGradient id="posGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#ff6b00"/>
+                <stop offset="100%" style="stop-color:#ff0044"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div>
+            <h1 class="font-orbitron text-xl font-bold" style="color: var(--pos-orange);">OCEANZ POS</h1>
+            <p class="text-xs text-gray-500">Quick Recharge Counter</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <div id="posUserName" class="font-orbitron text-sm" style="color: var(--pos-cyan);">-</div>
+            <div id="posDateTime" class="text-xs text-gray-500"></div>
+          </div>
+          <button onclick="posLogout()" class="p-2 rounded-lg hover:bg-red-500/20 transition-colors" title="Logout">
+            <i data-lucide="log-out" class="w-5 h-5" style="color: var(--pos-red);"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Main Content -->
+  <main class="pos-container py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Left Column: Recharge Form -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Member Input -->
+        <div class="neon-card rounded-2xl p-6">
+          <h3 class="font-orbitron text-sm mb-4 text-gray-400 uppercase tracking-wider">
+            <i data-lucide="user" class="w-4 h-4 inline mr-2"></i> Member / Guest
+          </h3>
+          
+          <div class="member-input-container">
+            <input type="text" id="posMemberInput" class="member-input" placeholder="Type member name or select guest terminal..." autocomplete="off"/>
+            <div id="posMemberSuggestions" class="member-suggestions"></div>
+          </div>
+          
+          <!-- Guest Terminal Quick Select -->
+          <div class="mt-4">
+            <p class="text-xs text-gray-500 mb-2">Quick Guest Terminals:</p>
+            <div id="guestTerminals" class="grid grid-cols-4 sm:grid-cols-7 gap-2">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+        
+        <!-- Quick Amounts -->
+        <div class="neon-card rounded-2xl p-6">
+          <h3 class="font-orbitron text-sm mb-4 text-gray-400 uppercase tracking-wider">
+            <i data-lucide="zap" class="w-4 h-4 inline mr-2"></i> Quick Recharge
+          </h3>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <button class="quick-amount-btn" data-amount="50">
+              <div class="amount">₹50</div>
+              <div class="label">30 min</div>
+            </button>
+            <button class="quick-amount-btn" data-amount="100">
+              <div class="amount">₹100</div>
+              <div class="label">1 hour</div>
+            </button>
+            <button class="quick-amount-btn" data-amount="200">
+              <div class="amount">₹200</div>
+              <div class="label">2 hours</div>
+            </button>
+            <button class="quick-amount-btn" data-amount="300">
+              <div class="amount">₹300</div>
+              <div class="label">3 hours</div>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <button class="quick-amount-btn" data-amount="400">
+              <div class="amount">₹400</div>
+              <div class="label">4 hours</div>
+            </button>
+            <button class="quick-amount-btn" data-amount="500">
+              <div class="amount">₹500</div>
+              <div class="label">5 hours</div>
+            </button>
+            <button class="quick-amount-btn" data-amount="1000">
+              <div class="amount">₹1000</div>
+              <div class="label">Popular</div>
+            </button>
+            <div class="quick-amount-btn" style="border-style: dashed; cursor: default;">
+              <input type="number" id="posCustomAmount" class="custom-amount-input" placeholder="₹" min="10" step="10"/>
+              <div class="label">Custom</div>
+            </div>
+          </div>
+          
+          <!-- Selected Amount Display -->
+          <div class="text-center p-4 rounded-xl" style="background: rgba(255, 107, 0, 0.1); border: 1px solid rgba(255, 107, 0, 0.3);">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Selected Amount</p>
+            <p id="posSelectedAmount" class="font-orbitron text-4xl font-bold" style="color: var(--pos-orange); text-shadow: 0 0 30px var(--pos-orange);">₹0</p>
+          </div>
+        </div>
+        
+        <!-- Payment Method -->
+        <div class="neon-card rounded-2xl p-6">
+          <h3 class="font-orbitron text-sm mb-4 text-gray-400 uppercase tracking-wider">
+            <i data-lucide="credit-card" class="w-4 h-4 inline mr-2"></i> Payment Method
+          </h3>
+          
+          <div class="grid grid-cols-3 gap-4">
+            <button id="paymentCash" class="payment-btn cash selected" onclick="selectPayment('cash')">
+              <i data-lucide="banknote" class="w-6 h-6" style="color: var(--pos-cyan);"></i>
+              <span class="font-orbitron" style="color: var(--pos-cyan);">CASH</span>
+            </button>
+            <button id="paymentUpi" class="payment-btn upi" onclick="selectPayment('upi')">
+              <i data-lucide="smartphone" class="w-6 h-6" style="color: var(--pos-purple);"></i>
+              <span class="font-orbitron" style="color: var(--pos-purple);">UPI</span>
+            </button>
+            <button id="paymentCredit" class="payment-btn credit" onclick="selectPayment('credit')">
+              <i data-lucide="clock" class="w-6 h-6" style="color: var(--pos-orange);"></i>
+              <span class="font-orbitron" style="color: var(--pos-orange);">CREDIT</span>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Confirm Button -->
+        <div class="text-center">
+          <button id="posConfirmBtn" class="confirm-btn" onclick="confirmRecharge()" disabled>
+            <i data-lucide="check-circle" class="w-6 h-6 inline mr-2"></i>
+            ADD RECHARGE
+          </button>
+        </div>
+        
+      </div>
+      
+      <!-- Right Column: Stats & Recent -->
+      <div class="space-y-6">
+        
+        <!-- Today's Stats -->
+        <div class="neon-card rounded-2xl p-6">
+          <h3 class="font-orbitron text-sm mb-4 text-gray-400 uppercase tracking-wider">
+            <i data-lucide="trending-up" class="w-4 h-4 inline mr-2"></i> Today's Stats
+          </h3>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div class="pos-stat-card">
+              <div class="value" id="posTotalCash" style="color: var(--pos-cyan);">₹0</div>
+              <div class="label">Cash</div>
+            </div>
+            <div class="pos-stat-card">
+              <div class="value" id="posTotalUpi" style="color: var(--pos-purple);">₹0</div>
+              <div class="label">UPI</div>
+            </div>
+            <div class="pos-stat-card">
+              <div class="value" id="posTotalCredit" style="color: var(--pos-orange);">₹0</div>
+              <div class="label">Credit</div>
+            </div>
+            <div class="pos-stat-card">
+              <div class="value" id="posTransactions" style="color: var(--pos-green);">0</div>
+              <div class="label">Transactions</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Pending Bookings -->
+        <div class="toggle-section">
+          <div class="toggle-header" onclick="toggleSection('bookingsSection')">
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar-clock" class="w-5 h-5" style="color: #ffff00;"></i>
+              <span class="font-orbitron text-sm">PENDING BOOKINGS</span>
+              <span id="pendingCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,255,0,0.2); color: #ffff00;">0</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div id="bookingsSection" class="toggle-content">
+            <div id="posPendingBookings">
+              <p class="text-gray-500 text-center text-sm py-4">No pending bookings</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Recent Transactions -->
+        <div class="toggle-section">
+          <div class="toggle-header" onclick="toggleSection('recentSection')">
+            <div class="flex items-center gap-2">
+              <i data-lucide="history" class="w-5 h-5" style="color: var(--pos-green);"></i>
+              <span class="font-orbitron text-sm">RECENT RECHARGES</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div id="recentSection" class="toggle-content show">
+            <div id="posRecentTransactions">
+              <p class="text-gray-500 text-center text-sm py-4">No transactions yet</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="neon-card rounded-2xl p-4">
+          <a href="dashboard.html" class="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors">
+            <i data-lucide="layout-dashboard" class="w-5 h-5 text-gray-400"></i>
+            <span class="text-gray-400">Go to Full Dashboard</span>
+            <i data-lucide="chevron-right" class="w-4 h-4 text-gray-600 ml-auto"></i>
+          </a>
+        </div>
+        
+      </div>
+    </div>
+  </main>
+  
+  <!-- Success Overlay (hidden by default) -->
+  <div id="successOverlay" class="success-overlay" style="display: none;">
+    <div class="checkmark">✓</div>
+  </div>
+  
+  </div><!-- End posApp -->
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  
+  <script type="module">
+    import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, AUTH_APP_NAME, FB_PATHS, CONSTANTS, isGuestTerminal, getISTDate } from "../shared/config.js";
+    import { getStaffSession, clearStaffSession, handleStaffLogout, ROLES, logStaffActivity, refreshSessionActivity } from "./js/permissions.js";
+    import { notifySuccess, notifyError, notifyWarning, showConfirm } from "../shared/notify.js";
+    
+    // ==================== FIREBASE INIT ====================
+    
+    // Auth app
+    let authApp = firebase.apps.find(a => a.name === AUTH_APP_NAME);
+    if (!authApp) authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
+    const auth = authApp.auth();
+    
+    // Database apps
+    let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
+    if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+    
+    let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
+    if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+    
+    const bookingDb = bookingApp.database();
+    const fdbDb = fdbApp.database();
+    
+    // ==================== STATE ====================
+    
+    let selectedMember = "";
+    let selectedAmount = 0;
+    let selectedPayment = "cash";
+    let allMembers = [];
+    let todayStats = { cash: 0, upi: 0, credit: 0, count: 0 };
+    let recentTransactions = [];
+    let isInitialized = false;
+    
+    // Get today's date in IST
+    function getTodayIST() {
+      const now = getISTDate();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, "0");
+      const day = String(now.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Get IST timestamp
+    function getISTTimestamp() {
+      const now = getISTDate();
+      return now.toISOString();
+    }
+    
+    // ==================== AUTH CHECK ====================
+    
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        console.log("👋 No user - redirecting to login");
+        window.location.replace("index.html");
+        return;
+      }
+      
+      // Check session
+      const session = getStaffSession();
+      if (!session) {
+        console.log("❌ No session - redirecting to login");
+        window.location.replace("index.html");
+        return;
+      }
+      
+      console.log("✅ Auth verified:", session.name, "Role:", session.role);
+      
+      if (!isInitialized) {
+        isInitialized = true;
+        initializePOS(session);
+      }
+    });
+    
+    // ==================== INIT ====================
+    
+    async function initializePOS(session) {
+      // Show app, hide loading
+      document.getElementById("posLoadingScreen").classList.add("hidden");
+      document.getElementById("posApp").classList.remove("hidden");
+      
+      lucide.createIcons();
+      
+      // Update UI
+      document.getElementById("posUserName").textContent = session.name || session.email;
+      updateDateTime();
+      setInterval(updateDateTime, 1000);
+      
+      // Load data
+      try {
+        await Promise.all([
+          loadMembers(),
+          loadTodayStats(),
+          loadPendingBookings()
+        ]);
+        console.log("✅ POS data loaded successfully");
+      } catch (err) {
+        console.error("Error loading POS data:", err);
+        notifyError("Failed to load some data. Please refresh.");
+      }
+      
+      // Setup guest terminals
+      setupGuestTerminals();
+      
+      // Setup event listeners
+      setupEventListeners();
+      
+      // Setup real-time listeners for auto-refresh
+      setupRealtimeListeners();
+      
+      // Reinitialize lucide icons after dynamic content
+      lucide.createIcons();
+    }
+    
+    // ==================== REAL-TIME LISTENERS ====================
+    
+    function setupRealtimeListeners() {
+      const today = getTodayIST();
+      
+      // Listen for recharge changes
+      bookingDb.ref(FB_PATHS.RECHARGES).orderByChild("date").equalTo(today).on("value", (snap) => {
+        const recharges = snap.val() || {};
+        
+        todayStats = { cash: 0, upi: 0, credit: 0, count: 0 };
+        recentTransactions = [];
+        
+        Object.entries(recharges).forEach(([id, r]) => {
+          todayStats.count++;
+          todayStats.cash += (r.cashPaid || 0);
+          todayStats.upi += (r.upiPaid || 0);
+          todayStats.credit += (r.creditAmount || 0);
+          
+          recentTransactions.push({
+            id,
+            member: r.member,
+            amount: r.amount,
+            time: r.timestamp,
+            payment: r.paymentType
+          });
+        });
+        
+        recentTransactions.sort((a, b) => new Date(b.time) - new Date(a.time));
+        
+        updateStatsUI();
+        updateRecentUI();
+      });
+      
+      // Listen for booking changes
+      bookingDb.ref(FB_PATHS.BOOKINGS).orderByChild("date").equalTo(today).on("value", async (snap) => {
+        const bookings = snap.val() || {};
+        
+        const pending = Object.entries(bookings)
+          .filter(([_, b]) => b.status === "pending")
+          .map(([id, b]) => ({ id, ...b }));
+        
+        document.getElementById("pendingCount").textContent = pending.length;
+        
+        const container = document.getElementById("posPendingBookings");
+        if (pending.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-center text-sm py-4">No pending bookings</p>';
+          return;
+        }
+        
+        container.innerHTML = pending.map(b => `
+          <div class="pending-booking">
+            <div class="info">
+              <div class="member">${b.username || "Unknown"}</div>
+              <div class="details">${b.pc} • ${b.startTime} - ${b.endTime}</div>
+            </div>
+            <div class="actions">
+              <button class="approve-btn" onclick="approveBooking('${b.id}')">
+                <i data-lucide="check" class="w-4 h-4 inline"></i> Approve
+              </button>
+            </div>
+          </div>
+        `).join("");
+        
+        lucide.createIcons();
+      });
+      
+      console.log("📡 Real-time listeners active");
+    }
+    
+    function updateDateTime() {
+      const now = new Date();
+      const options = { 
+        weekday: 'short', 
+        day: 'numeric', 
+        month: 'short',
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      };
+      document.getElementById("posDateTime").textContent = now.toLocaleString('en-IN', options);
+    }
+    
+    // ==================== LOAD DATA ====================
+    
+    async function loadMembers() {
+      try {
+        const snap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+        const membersData = snap.val() || [];
+        allMembers = Array.isArray(membersData) ? membersData.filter(Boolean) : Object.values(membersData);
+        console.log(`Loaded ${allMembers.length} members`);
+      } catch (err) {
+        console.error("Error loading members:", err);
+      }
+    }
+    
+    async function loadTodayStats() {
+      try {
+        const today = getTodayIST();
+        console.log("📅 Loading stats for:", today);
+        const snap = await bookingDb.ref(FB_PATHS.RECHARGES).orderByChild("date").equalTo(today).once("value");
+        const recharges = snap.val() || {};
+        
+        todayStats = { cash: 0, upi: 0, credit: 0, count: 0 };
+        recentTransactions = [];
+        
+        Object.entries(recharges).forEach(([id, r]) => {
+          todayStats.count++;
+          todayStats.cash += (r.cashPaid || 0);
+          todayStats.upi += (r.upiPaid || 0);
+          todayStats.credit += (r.creditAmount || 0);
+          
+          recentTransactions.push({
+            id,
+            member: r.member,
+            amount: r.amount,
+            time: r.timestamp,
+            payment: r.paymentType
+          });
+        });
+        
+        // Sort by time descending
+        recentTransactions.sort((a, b) => new Date(b.time) - new Date(a.time));
+        
+        updateStatsUI();
+        updateRecentUI();
+      } catch (err) {
+        console.error("Error loading today stats:", err);
+      }
+    }
+    
+    async function loadPendingBookings() {
+      try {
+        const today = getTodayIST();
+        console.log("📅 Loading bookings for:", today);
+        const snap = await bookingDb.ref(FB_PATHS.BOOKINGS).orderByChild("date").equalTo(today).once("value");
+        const bookings = snap.val() || {};
+        
+        const pending = Object.entries(bookings)
+          .filter(([_, b]) => b.status === "pending")
+          .map(([id, b]) => ({ id, ...b }));
+        
+        document.getElementById("pendingCount").textContent = pending.length;
+        
+        const container = document.getElementById("posPendingBookings");
+        if (pending.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-center text-sm py-4">No pending bookings</p>';
+          return;
+        }
+        
+        container.innerHTML = pending.map(b => `
+          <div class="pending-booking">
+            <div class="info">
+              <div class="member">${b.username || "Unknown"}</div>
+              <div class="details">${b.pc} • ${b.startTime} - ${b.endTime}</div>
+            </div>
+            <div class="actions">
+              <button class="approve-btn" onclick="approveBooking('${b.id}')">
+                <i data-lucide="check" class="w-4 h-4 inline"></i> Approve
+              </button>
+            </div>
+          </div>
+        `).join("");
+        
+        lucide.createIcons();
+      } catch (err) {
+        console.error("Error loading bookings:", err);
+      }
+    }
+    
+    // ==================== UI UPDATES ====================
+    
+    function updateStatsUI() {
+      document.getElementById("posTotalCash").textContent = `₹${todayStats.cash.toLocaleString()}`;
+      document.getElementById("posTotalUpi").textContent = `₹${todayStats.upi.toLocaleString()}`;
+      document.getElementById("posTotalCredit").textContent = `₹${todayStats.credit.toLocaleString()}`;
+      document.getElementById("posTransactions").textContent = todayStats.count;
+    }
+    
+    function updateRecentUI() {
+      const container = document.getElementById("posRecentTransactions");
+      const recent = recentTransactions.slice(0, 10);
+      
+      if (recent.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center text-sm py-4">No transactions yet</p>';
+        return;
+      }
+      
+      container.innerHTML = recent.map(tx => {
+        const time = new Date(tx.time).toLocaleTimeString('en-IN', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata'
+        });
+        const paymentColor = tx.payment === 'cash' ? 'var(--pos-cyan)' : 
+                            tx.payment === 'upi' ? 'var(--pos-purple)' : 'var(--pos-orange)';
+        
+        return `
+          <div class="recent-tx">
+            <div>
+              <div class="member">${tx.member}</div>
+              <div class="time">${time}</div>
+            </div>
+            <div class="amount" style="color: ${paymentColor};">₹${tx.amount}</div>
+          </div>
+        `;
+      }).join("");
+    }
+    
+    function updateSelectedAmount() {
+      document.getElementById("posSelectedAmount").textContent = `₹${selectedAmount.toLocaleString()}`;
+      updateConfirmButton();
+    }
+    
+    function updateConfirmButton() {
+      const btn = document.getElementById("posConfirmBtn");
+      btn.disabled = !selectedMember || selectedAmount <= 0;
+    }
+    
+    // ==================== SETUP ====================
+    
+    function setupGuestTerminals() {
+      const terminals = CONSTANTS.TIMETABLE_PCS || [];
+      const container = document.getElementById("guestTerminals");
+      
+      container.innerHTML = terminals.map(t => {
+        const shortName = t.replace("CT-ROOM-", "CT").replace("T-ROOM-", "T").replace(" ONE X", "");
+        return `
+          <button class="guest-btn" data-terminal="${t}" onclick="selectGuestTerminal('${t}')">
+            <div class="terminal-name">${shortName}</div>
+          </button>
+        `;
+      }).join("");
+    }
+    
+    function setupEventListeners() {
+      // Quick amount buttons
+      document.querySelectorAll(".quick-amount-btn[data-amount]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".quick-amount-btn").forEach(b => b.classList.remove("selected"));
+          btn.classList.add("selected");
+          selectedAmount = parseInt(btn.dataset.amount);
+          document.getElementById("posCustomAmount").value = "";
+          updateSelectedAmount();
+        });
+      });
+      
+      // Custom amount input
+      document.getElementById("posCustomAmount").addEventListener("input", (e) => {
+        document.querySelectorAll(".quick-amount-btn[data-amount]").forEach(b => b.classList.remove("selected"));
+        e.target.closest(".quick-amount-btn").classList.add("selected");
+        selectedAmount = parseInt(e.target.value) || 0;
+        updateSelectedAmount();
+      });
+      
+      // Member input
+      const memberInput = document.getElementById("posMemberInput");
+      const suggestions = document.getElementById("posMemberSuggestions");
+      
+      memberInput.addEventListener("input", (e) => {
+        const query = e.target.value.toUpperCase().trim();
+        selectedMember = query;
+        
+        // Clear guest selection
+        document.querySelectorAll(".guest-btn").forEach(b => b.classList.remove("selected"));
+        
+        if (query.length < 1) {
+          suggestions.classList.remove("show");
+          updateConfirmButton();
+          return;
+        }
+        
+        const matches = allMembers
+          .filter(m => m.USERNAME && m.USERNAME.toUpperCase().includes(query))
+          .slice(0, 8);
+        
+        if (matches.length === 0) {
+          suggestions.classList.remove("show");
+          updateConfirmButton();
+          return;
+        }
+        
+        suggestions.innerHTML = matches.map(m => `
+          <div class="member-suggestion" data-username="${m.USERNAME}">
+            <div class="username">${m.USERNAME}</div>
+            <div class="balance">Balance: ₹${(m.TOPLAMBAKIYE || 0).toLocaleString()}</div>
+          </div>
+        `).join("");
+        
+        suggestions.classList.add("show");
+        
+        // Add click handlers
+        suggestions.querySelectorAll(".member-suggestion").forEach(s => {
+          s.addEventListener("click", () => {
+            memberInput.value = s.dataset.username;
+            selectedMember = s.dataset.username;
+            suggestions.classList.remove("show");
+            updateConfirmButton();
+          });
+        });
+        
+        updateConfirmButton();
+      });
+      
+      // Close suggestions on click outside
+      document.addEventListener("click", (e) => {
+        if (!memberInput.contains(e.target) && !suggestions.contains(e.target)) {
+          suggestions.classList.remove("show");
+        }
+      });
+    }
+    
+    // ==================== ACTIONS ====================
+    
+    window.selectGuestTerminal = function(terminal) {
+      document.querySelectorAll(".guest-btn").forEach(b => b.classList.remove("selected"));
+      document.querySelector(`.guest-btn[data-terminal="${terminal}"]`)?.classList.add("selected");
+      
+      document.getElementById("posMemberInput").value = terminal;
+      selectedMember = terminal;
+      document.getElementById("posMemberSuggestions").classList.remove("show");
+      updateConfirmButton();
+    };
+    
+    window.selectPayment = function(method) {
+      selectedPayment = method;
+      document.querySelectorAll(".payment-btn").forEach(b => b.classList.remove("selected"));
+      document.getElementById(`payment${method.charAt(0).toUpperCase() + method.slice(1)}`).classList.add("selected");
+    };
+    
+    window.toggleSection = function(sectionId) {
+      const section = document.getElementById(sectionId);
+      section.classList.toggle("show");
+    };
+    
+    window.confirmRecharge = async function() {
+      if (!selectedMember || selectedAmount <= 0) {
+        notifyError("Please select member and amount");
+        return;
+      }
+      
+      const session = getStaffSession();
+      if (!session) {
+        notifyError("Session expired. Please login again.");
+        window.location.href = "index.html";
+        return;
+      }
+      
+      const btn = document.getElementById("posConfirmBtn");
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 inline animate-spin"></i> Processing...';
+      
+      try {
+        const today = getTodayIST();
+        const timestamp = getISTTimestamp();
+        const entry = {
+          member: selectedMember,
+          amount: selectedAmount,
+          paymentType: selectedPayment,
+          cashPaid: selectedPayment === "cash" ? selectedAmount : 0,
+          upiPaid: selectedPayment === "upi" ? selectedAmount : 0,
+          creditAmount: selectedPayment === "credit" ? selectedAmount : 0,
+          creditPaid: selectedPayment !== "credit",
+          freeAmount: 0,
+          date: today,
+          timestamp: timestamp,
+          addedBy: session.email,
+          addedByName: session.name || session.email
+        };
+        
+        console.log("💾 Saving recharge:", entry);
+        await bookingDb.ref(FB_PATHS.RECHARGES).push(entry);
+        
+        // Log activity
+        await logStaffActivity("recharge", "Added recharge", `${selectedMember}: ₹${selectedAmount} (${selectedPayment})`);
+        
+        // Show success
+        showSuccessAnimation();
+        
+        // Update stats
+        todayStats.count++;
+        if (selectedPayment === "cash") todayStats.cash += selectedAmount;
+        else if (selectedPayment === "upi") todayStats.upi += selectedAmount;
+        else todayStats.credit += selectedAmount;
+        
+        recentTransactions.unshift({
+          member: selectedMember,
+          amount: selectedAmount,
+          time: timestamp,
+          payment: selectedPayment
+        });
+        
+        notifySuccess(`Recharge added: ${selectedMember} - ₹${selectedAmount}`);
+        
+        updateStatsUI();
+        updateRecentUI();
+        
+        // Reset form
+        resetForm();
+        
+        refreshSessionActivity();
+        
+      } catch (err) {
+        console.error("Error adding recharge:", err);
+        notifyError("Failed to add recharge: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check-circle" class="w-6 h-6 inline mr-2"></i> ADD RECHARGE';
+        lucide.createIcons();
+        updateConfirmButton();
+      }
+    };
+    
+    function resetForm() {
+      selectedMember = "";
+      selectedAmount = 0;
+      selectedPayment = "cash";
+      
+      document.getElementById("posMemberInput").value = "";
+      document.getElementById("posCustomAmount").value = "";
+      document.querySelectorAll(".quick-amount-btn").forEach(b => b.classList.remove("selected"));
+      document.querySelectorAll(".guest-btn").forEach(b => b.classList.remove("selected"));
+      document.querySelectorAll(".payment-btn").forEach(b => b.classList.remove("selected"));
+      document.getElementById("paymentCash").classList.add("selected");
+      
+      updateSelectedAmount();
+    }
+    
+    function showSuccessAnimation() {
+      const overlay = document.getElementById("successOverlay");
+      overlay.style.display = "flex";
+      
+      setTimeout(() => {
+        overlay.style.display = "none";
+      }, 500);
+    }
+    
+    window.approveBooking = async function(bookingId) {
+      const session = getStaffSession();
+      if (!session) {
+        notifyError("Session expired. Please login again.");
+        return;
+      }
+      
+      try {
+        await bookingDb.ref(`${FB_PATHS.BOOKINGS}/${bookingId}`).update({
+          status: "approved",
+          approvedBy: session.email,
+          approvedByName: session.name || session.email,
+          approvedAt: getISTTimestamp()
+        });
+        
+        await logStaffActivity("booking", "Approved booking", `Booking ID: ${bookingId}`);
+        
+        notifySuccess("Booking approved!");
+        
+        // Reload pending bookings
+        await loadPendingBookings();
+        
+      } catch (err) {
+        console.error("Error approving booking:", err);
+        notifyError("Failed to approve booking: " + err.message);
+      }
+    };
+    
+    window.posLogout = async function() {
+      const confirmed = await showConfirm(
+        "Are you sure you want to logout?",
+        { title: "Logout Confirmation", confirmText: "Logout", cancelText: "Cancel", type: "warning" }
+      );
+      
+      if (confirmed) {
+        try {
+          await handleStaffLogout();
+          await auth.signOut();
+        } catch (err) {
+          console.error("Logout error:", err);
+        }
+        clearStaffSession();
+        window.location.href = "index.html";
+      }
+    };
+  </script>
+</body>
+</html>
+

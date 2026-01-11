@@ -58,7 +58,8 @@ export async function loadAnalytics() {
       timeout(bookingDb.ref(FB_PATHS.BOOKINGS).once('value'), 10000),
       timeout(fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once('value'), 10000),
       timeout(fdbDb.ref(FB_PATHS.SESSIONS).once('value'), 10000),
-      timeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once('value'), 10000)
+      timeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once('value'), 10000),
+      timeout(fdbDb.ref(FB_PATHS.GUEST_SESSIONS).once('value'), 10000) // New messages.msg data
     ]);
 
     // Process results safely
@@ -90,12 +91,38 @@ export async function loadAnalytics() {
       console.warn("⚠️ Sessions failed:", results[3].reason);
     }
     
+    // Merge guest sessions from both sources
     if (results[4].status === 'fulfilled') {
-      guestSessions = Object.values(results[4].value?.val?.() || {});
-      console.log("✅ Guest sessions loaded:", guestSessions.length);
-    } else {
-      console.warn("⚠️ Guest sessions failed:", results[4].reason);
+      const oldGuestSessions = Object.values(results[4].value?.val?.() || {});
+      guestSessions = [...oldGuestSessions];
+      console.log("✅ Legacy guest sessions loaded:", oldGuestSessions.length);
     }
+    
+    // Also load from new messages.msg parsed data
+    if (results[5].status === 'fulfilled') {
+      const newGuestData = results[5].value?.val?.() || {};
+      // Flatten date-based structure: { "2026-01-09": { "CT1_120000": {...} }, ... }
+      let newCount = 0;
+      Object.values(newGuestData).forEach(dateData => {
+        if (dateData && typeof dateData === 'object') {
+          Object.values(dateData).forEach(session => {
+            // Normalize to same format as legacy data
+            guestSessions.push({
+              TERMINAL_SHORT: session.terminal_short || session.terminal,
+              TERMINALNAME: session.terminal,
+              PRICE: session.total || session.usage || 0,
+              USINGMIN: session.duration_minutes || 0,
+              DATE: session.date,
+              source: 'messages.msg'
+            });
+            newCount++;
+          });
+        }
+      });
+      console.log("✅ New guest sessions (messages.msg) loaded:", newCount);
+    }
+    
+    console.log("✅ Total guest sessions:", guestSessions.length);
     
     console.log(`📊 Data loading complete`);
   } catch (error) {

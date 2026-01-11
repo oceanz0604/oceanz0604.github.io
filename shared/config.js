@@ -62,6 +62,9 @@ export const FB_PATHS = {
   // Leaderboards (pre-computed)
   LEADERBOARDS: "leaderboards",               // /leaderboards/all-time, /monthly/{YYYY-MM}, /weekly/{YYYY-Wxx}
   
+  // Guest sessions (from messages.msg parsing)
+  GUEST_SESSIONS: "guest-sessions",           // /guest-sessions/{YYYY-MM-DD}/{terminal_time}
+  
   // Sync metadata
   SYNC_META: "sync-meta",                     // /sync-meta/{script_name}
   
