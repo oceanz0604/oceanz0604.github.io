@@ -275,6 +275,12 @@ function loadProfile() {
   if (sidebarUsername) {
     sidebarUsername.textContent = member.USERNAME;
   }
+  
+  // Update mobile avatar initial
+  const mobileAvatarInitial = document.querySelector(".mobile-avatar-initial");
+  if (mobileAvatarInitial && member.USERNAME) {
+    mobileAvatarInitial.textContent = member.USERNAME.charAt(0).toUpperCase();
+  }
 
   const detailList = document.getElementById("memberDetailsList");
   if (detailList) {

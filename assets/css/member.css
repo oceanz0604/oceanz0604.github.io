@@ -102,6 +102,90 @@ body.member-page .neon-btn:hover {
   box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
 }
 
+/* ==================== MEMBER MOBILE HEADER ==================== */
+.member-mobile-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(180deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0.95) 100%);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+  backdrop-filter: blur(20px);
+  z-index: 40;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 240, 255, 0.05);
+}
+
+.mobile-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-header-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.mobile-header-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.mobile-header-subtitle {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.55rem;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 2px;
+}
+
+.member-hamburger-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  color: var(--neon-cyan);
+}
+
+.member-hamburger-btn:hover,
+.member-hamburger-btn:active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.5);
+  transform: scale(1.02);
+}
+
+.mobile-member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(255, 0, 255, 0.2));
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-avatar-initial {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--neon-cyan);
+}
+
 /* ==================== MEMBER INPUTS ==================== */
 body.member-page .neon-input {
   border: 1px solid rgba(0, 240, 255, 0.3);

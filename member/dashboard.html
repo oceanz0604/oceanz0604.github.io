@@ -727,15 +727,30 @@
     <!-- Main Content -->
     <main class="flex-1 ml-0 md:ml-64 min-h-screen">
       <!-- Mobile Header -->
-      <div class="md:hidden sticky top-0 z-30 p-4" style="background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--card-border);">
-        <div class="flex items-center justify-between">
-          <button id="sidebar-toggle" class="p-2 rounded-lg" style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--neon-cyan);">
-            <i data-lucide="menu" class="w-5 h-5" style="color: var(--neon-cyan);"></i>
-          </button>
-          <span class="font-orbitron font-bold glow-cyan" style="color: var(--neon-cyan);">OCEANZ</span>
-          <div class="w-9"></div>
+      <header class="member-mobile-header md:hidden">
+        <button id="sidebar-toggle" class="member-hamburger-btn" aria-label="Toggle menu">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="mobile-header-brand">
+          <svg viewBox="0 0 100 100" class="w-7 h-7">
+            <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" 
+              fill="none" stroke="url(#memberMobileGradient)" stroke-width="3"/>
+            <defs>
+              <linearGradient id="memberMobileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#00f0ff"/>
+                <stop offset="100%" style="stop-color:#ff00ff"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="mobile-header-text">
+            <span class="mobile-header-title" style="color: var(--neon-cyan);">OCEANZ</span>
+            <span class="mobile-header-subtitle">MEMBER</span>
+          </div>
         </div>
-      </div>
+        <div id="mobile-member-avatar" class="mobile-member-avatar">
+          <span class="mobile-avatar-initial">M</span>
+        </div>
+      </header>
 
       <!-- Tab Content -->
       <div id="tab-content" class="p-4 md:p-6 space-y-6">
