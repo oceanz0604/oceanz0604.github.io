@@ -50,7 +50,7 @@ body.admin-page::before {
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
-  z-index: 35;
+  z-index: 55; /* Above mobile header (50) but below sidebar (60) */
   opacity: 0;
   visibility: hidden;
   transition: all 0.3s ease;
@@ -61,31 +61,246 @@ body.admin-page::before {
   visibility: visible;
 }
 
-/* Close button for sidebar */
-.sidebar-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 32px;
-  height: 32px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 0, 68, 0.1);
-  border: 1px solid rgba(255, 0, 68, 0.3);
-  border-radius: 8px;
-  color: var(--neon-red);
-  cursor: pointer;
+/* Close button for sidebar - styles now inline in HTML */
+.sidebar-close:hover {
+  background: rgba(255, 0, 68, 0.2) !important;
+  transform: scale(1.05);
+}
+
+/* ==================== LEADERBOARD ==================== */
+.lb-tab-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: #888;
   transition: all 0.3s ease;
 }
 
-.sidebar-close:hover {
-  background: rgba(255, 0, 68, 0.2);
+.lb-tab-btn:hover {
+  background: rgba(255, 255, 0, 0.05);
+  color: #ccc;
 }
 
-@media (max-width: 767px) {
-  .sidebar-close {
-    display: flex;
+.lb-tab-btn.active {
+  background: rgba(255, 255, 0, 0.1);
+  border-color: rgba(255, 255, 0, 0.3);
+  color: #ffff00;
+}
+
+.leaderboard-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.leaderboard-item:hover {
+  background: rgba(0, 240, 255, 0.05);
+  border-color: rgba(0, 240, 255, 0.2);
+  transform: translateX(4px);
+}
+
+.leaderboard-item.highlight {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+}
+
+/* Left section: rank + avatar */
+.lb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.rank-badge {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: bold;
+  font-family: 'Orbitron', monospace;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.rank-badge.rank-1 {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 165, 0, 0.2));
+  border: 1px solid #ffd700;
+  color: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.rank-badge.rank-2 {
+  background: linear-gradient(135deg, rgba(192, 192, 192, 0.3), rgba(150, 150, 150, 0.2));
+  border: 1px solid #c0c0c0;
+  color: #c0c0c0;
+}
+
+.rank-badge.rank-3 {
+  background: linear-gradient(135deg, rgba(205, 127, 50, 0.3), rgba(180, 100, 30, 0.2));
+  border: 1px solid #cd7f32;
+  color: #cd7f32;
+}
+
+.rank-badge.rank-other {
+  background: rgba(0, 240, 255, 0.2);
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  color: #00f0ff;
+}
+
+.lb-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid;
+  flex-shrink: 0;
+}
+
+/* Content section */
+.lb-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-name {
+  font-family: 'Orbitron', monospace;
+  font-weight: bold;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lb-you {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: #ff6b00;
+  background: rgba(255, 107, 0, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.lb-stats {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.lb-hours {
+  color: #b829ff;
+}
+
+.lb-last {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* Badges section */
+.lb-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 160px;
+}
+
+.lb-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 0, 0.2);
+  border: 1px solid rgba(255, 255, 0, 0.5);
+  color: #ffff00;
+  white-space: nowrap;
+}
+
+/* Time display for monthly */
+.lb-time {
+  font-family: 'Orbitron', monospace;
+  font-weight: bold;
+  font-size: 1rem;
+  color: #ffff00;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.cyber-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent);
+}
+
+/* Leaderboard mobile styles */
+@media (max-width: 640px) {
+  .leaderboard-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+  
+  .lb-left {
+    gap: 8px;
+  }
+  
+  .rank-badge {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  
+  .lb-avatar {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .lb-name {
+    font-size: 0.9rem;
+    gap: 6px;
+  }
+  
+  .streak-badge {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+  }
+  
+  .lb-stats {
+    font-size: 0.75rem;
+  }
+  
+  .lb-last {
+    font-size: 0.65rem;
+  }
+  
+  .lb-badges {
+    max-width: 100%;
+    justify-content: flex-start;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  
+  .lb-badge {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+  }
+  
+  .lb-time {
+    font-size: 0.85rem;
   }
 }
 
@@ -443,6 +658,11 @@ body.admin-login::before {
 @media (max-width: 767px) {
   html { font-size: 14px; }
   
+  body.admin-page {
+    overflow-x: hidden !important;
+    width: 100vw;
+  }
+  
   .font-orbitron { letter-spacing: 0.5px; }
   
   h1, .text-3xl { font-size: 1.5rem !important; }
@@ -454,17 +674,32 @@ body.admin-login::before {
     min-height: 44px;
   }
   
-  /* Main content */
+  /* Main content - constrain width */
   .main-content {
     padding: 1rem !important;
     padding-top: 80px !important;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  
+  /* Container constraints */
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding: 0 !important;
   }
   
   /* Sidebar */
   .sidebar {
     width: 85vw !important;
     max-width: 320px;
-    padding-top: 1rem;
+    padding-top: 0 !important;
+    z-index: 60 !important; /* Above mobile header */
+  }
+  
+  /* Add padding for sidebar content to avoid close button area */
+  .sidebar > *:first-child {
+    margin-top: 1rem;
   }
   
   .sidebar .nav-item {
@@ -472,7 +707,7 @@ body.admin-login::before {
     font-size: 0.95rem;
   }
   
-  /* Mobile header */
+  /* Mobile header - below sidebar when open */
   .mobile-header {
     position: fixed;
     top: 0;
@@ -480,7 +715,7 @@ body.admin-login::before {
     right: 0;
     height: 64px;
     padding: 0 16px;
-    z-index: 50;
+    z-index: 40; /* Below sidebar backdrop (55) and sidebar (60) */
   }
   
   /* Stat cards */
@@ -504,20 +739,76 @@ body.admin-login::before {
     font-size: 1rem !important;
   }
   
-  /* Tables */
+  /* Tables - responsive without horizontal scroll */
   .overflow-x-auto {
-    margin: 0 -1rem;
-    padding: 0 1rem;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
   }
   
   table {
-    min-width: 600px;
+    width: 100% !important;
+    min-width: unset !important;
+    table-layout: fixed;
   }
   
   table th, table td {
-    padding: 10px 8px !important;
-    font-size: 0.75rem !important;
+    padding: 8px 4px !important;
+    font-size: 0.7rem !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  /* Hide less important columns on mobile */
+  table th:nth-child(5),
+  table td:nth-child(5),
+  table th:nth-child(6),
+  table td:nth-child(6) {
+    display: none;
+  }
+  
+  /* Convert table to card layout for very small screens */
+  @media (max-width: 480px) {
+    table thead {
+      display: none;
+    }
+    
+    table tbody tr {
+      display: block;
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    table tbody td {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0 !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.8rem !important;
+    }
+    
+    table tbody td:last-child {
+      border-bottom: none;
+    }
+    
+    table tbody td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #888;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+    }
+    
+    /* Show all columns in card view */
+    table th:nth-child(5),
+    table td:nth-child(5),
+    table th:nth-child(6),
+    table td:nth-child(6) {
+      display: flex;
+    }
   }
   
   /* Credit items */
@@ -616,6 +907,129 @@ body.admin-login::before {
     padding: 16px !important;
   }
   
+  /* Sync Modal */
+  #syncModal > div {
+    max-width: calc(100vw - 2rem) !important;
+    max-height: calc(100vh - 2rem) !important;
+  }
+  
+  #syncModal .grid-cols-2.md\\:grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  
+  #syncModal .stat-card {
+    padding: 8px !important;
+  }
+  
+  #syncModal .stat-card .text-2xl {
+    font-size: 1rem !important;
+  }
+  
+  .sync-tab {
+    padding: 8px 10px !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .sync-item {
+    padding: 10px !important;
+  }
+  
+  .sync-item .grid-cols-2,
+  .sync-item .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+  
+  /* Action buttons container */
+  .grid.grid-cols-1.md\\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  
+  /* Date picker and buttons row */
+  .flex.gap-2 {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  
+  .flex.gap-2 > * {
+    flex: 1 1 auto;
+    min-width: fit-content;
+  }
+  
+  /* Outstanding credits section */
+  #outstandingCreditsList {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  
+  /* Outstanding credit items - mobile layout */
+  #outstandingCreditsList .credit-item {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px !important;
+    border-radius: 8px;
+  }
+  
+  #outstandingCreditsList .credit-item > .flex-1 {
+    width: 100%;
+  }
+  
+  #outstandingCreditsList .credit-item > .flex-1 > .flex {
+    gap: 6px !important;
+  }
+  
+  /* Member name and amount in single row */
+  #outstandingCreditsList .font-orbitron {
+    font-size: 0.8rem !important;
+  }
+  
+  /* Days badge and partial payment badge */
+  #outstandingCreditsList .text-xs.px-2 {
+    padding: 2px 6px !important;
+    font-size: 0.65rem !important;
+  }
+  
+  /* Date and note row */
+  #outstandingCreditsList .text-gray-500 {
+    font-size: 0.65rem !important;
+    margin-top: 4px !important;
+    line-height: 1.3;
+  }
+  
+  /* Action buttons row - full width */
+  #outstandingCreditsList .credit-item > .shrink-0 {
+    width: 100%;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  
+  /* Collect button */
+  #outstandingCreditsList .mark-paid-btn {
+    padding: 6px 12px !important;
+    font-size: 0.7rem !important;
+    gap: 4px !important;
+  }
+  
+  /* Delete button */
+  #outstandingCreditsList .credit-item > .shrink-0 button:last-child {
+    padding: 6px !important;
+  }
+  
+  /* Timetable container */
+  #timetableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  #timetableWrapper {
+    min-width: 600px;
+  }
+  
   /* Admin login mobile */
   body.admin-login {
     padding: 1rem !important;
@@ -673,6 +1087,20 @@ body.admin-login::before {
   
   #addRechargeModal .grid-cols-3.gap-3 {
     grid-template-columns: 1fr 1fr 1fr !important;
+  }
+  
+  /* Outstanding credits - extra small */
+  #outstandingCreditsList .credit-item {
+    padding: 8px !important;
+  }
+  
+  #outstandingCreditsList .font-orbitron {
+    font-size: 0.75rem !important;
+  }
+  
+  #outstandingCreditsList .mark-paid-btn {
+    padding: 5px 10px !important;
+    font-size: 0.65rem !important;
   }
 }
 

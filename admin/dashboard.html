@@ -810,9 +810,7 @@
       }
       
       /* Outstanding credits mobile */
-      #outstandingCreditsList .flex.items-center {
-        flex-wrap: wrap;
-      }
+      /* Removed - handled by admin.css */
       
       /* Search input mobile */
       #rechargeSearch {
@@ -990,10 +988,14 @@
 
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar w-64 fixed inset-y-0 left-0 z-40 hidden md:flex flex-col p-4">
-      <!-- Close button (mobile only) -->
-      <button id="sidebar-close" class="sidebar-close" aria-label="Close menu">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
+      <!-- Header with Close button (mobile only) -->
+      <div class="flex items-center justify-between mb-4 md:mb-0">
+        <span class="md:hidden text-xs text-gray-600 font-orbitron">MENU</span>
+        <button id="sidebar-close" class="sidebar-close md:hidden w-8 h-8 flex items-center justify-center rounded-lg" 
+          style="background: rgba(255,0,68,0.1); border: 1px solid rgba(255,0,68,0.3);" aria-label="Close menu">
+          <i data-lucide="x" class="w-4 h-4" style="color: var(--neon-red);"></i>
+        </button>
+      </div>
       
       <!-- Logo + User Info (Horizontal) -->
       <div class="mb-4 p-3 rounded-xl flex items-center gap-3" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
@@ -1050,6 +1052,10 @@
         <a id="nav-cash" href="#" data-permission="recharges" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="banknote" class="w-5 h-5"></i>
           <span class="font-medium">Cash Register</span>
+        </a>
+        <a id="nav-leaderboard" href="#" data-permission="members" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="trophy" class="w-5 h-5"></i>
+          <span class="font-medium">Leaderboards</span>
         </a>
       </nav>
 
@@ -1283,6 +1289,74 @@
             <i data-lucide="banknote" class="w-7 h-7"></i> CASH REGISTER
           </h2>
           <div id="cash-register-content"></div>
+        </div>
+
+        <!-- Leaderboards Section -->
+        <div id="leaderboard-section" class="hidden">
+          <h2 class="font-orbitron text-2xl font-bold mb-6 flex items-center gap-3" style="color: var(--neon-yellow);">
+            <i data-lucide="trophy" class="w-7 h-7"></i> LEADERBOARDS
+          </h2>
+          
+          <div class="space-y-6">
+            <!-- Stats Summary -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="neon-card rounded-xl p-4 text-center">
+                <div class="text-gray-400 text-xs uppercase tracking-wider">Active Players</div>
+                <div id="lb-activePlayers" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-cyan);">-</div>
+              </div>
+              <div class="neon-card rounded-xl p-4 text-center">
+                <div class="text-gray-400 text-xs uppercase tracking-wider">Total Hours</div>
+                <div id="lb-totalHours" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-purple);">-</div>
+              </div>
+              <div class="neon-card rounded-xl p-4 text-center">
+                <div class="text-gray-400 text-xs uppercase tracking-wider">Top Player</div>
+                <div id="lb-topPlayer" class="text-lg font-bold font-orbitron mt-1 truncate" style="color: var(--neon-yellow);">-</div>
+              </div>
+              <div class="neon-card rounded-xl p-4 text-center">
+                <div class="text-gray-400 text-xs uppercase tracking-wider">Their Hours</div>
+                <div id="lb-topPlayerHours" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">-</div>
+              </div>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="flex flex-wrap gap-2">
+              <button id="lb-tab-alltime" class="lb-tab-btn active px-4 py-2 rounded-lg font-orbitron text-sm" onclick="switchLeaderboardTab('alltime')">
+                🏆 Hall of Fame
+              </button>
+              <button id="lb-tab-monthly" class="lb-tab-btn px-4 py-2 rounded-lg font-orbitron text-sm" onclick="switchLeaderboardTab('monthly')">
+                📅 Monthly
+              </button>
+            </div>
+
+            <!-- All-Time Leaderboard -->
+            <div id="lb-alltime-content" class="neon-card rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 class="font-orbitron text-lg font-bold flex items-center gap-3" style="color: var(--neon-yellow);">
+                  🏆 HALL OF FAME - ALL TIME
+                </h3>
+              </div>
+              <div class="cyber-line my-4"></div>
+              <div id="adminLeaderboardList" class="space-y-3">
+                <p class="text-gray-500 text-center">Loading leaderboard...</p>
+              </div>
+            </div>
+
+            <!-- Monthly Leaderboard -->
+            <div id="lb-monthly-content" class="hidden neon-card rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 class="font-orbitron text-lg font-bold flex items-center gap-3" style="color: var(--neon-cyan);">
+                  📅 MONTHLY LEADERBOARD
+                </h3>
+                <select id="monthSelector" onchange="loadSelectedMonth()" class="neon-input px-3 py-2 rounded-lg text-sm font-orbitron" style="max-width: 180px;">
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+              <div class="cyber-line my-4"></div>
+              <div id="adminMonthlyLeaderboard" class="space-y-3">
+                <p class="text-gray-500 text-center">Select a month to view leaderboard...</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -1756,11 +1830,101 @@
 
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
+  <script type="module" src="../shared/leaderboard.js"></script>
   <script type="module" src="js/dashboard.js"></script>
   <script type="module" src="js/bookings.js"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/analytics.js"></script>
   <script type="module" src="js/staff.js"></script>
   <script type="module" src="js/cash-register.js"></script>
+  
+  <!-- Leaderboard handlers -->
+  <script type="module">
+    import { loadHallOfFame, loadMonthlyLeaderboard, getAvailableMonths, getLeaderboardStats } from '../shared/leaderboard.js';
+    
+    let leaderboardLoaded = false;
+    let currentLbTab = 'alltime';
+    
+    // Switch leaderboard tab
+    window.switchLeaderboardTab = function(tab) {
+      currentLbTab = tab;
+      
+      // Update tab buttons
+      document.querySelectorAll('.lb-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = 'rgba(255,255,255,0.05)';
+        btn.style.color = '#888';
+        btn.style.border = '1px solid transparent';
+      });
+      
+      const activeBtn = document.getElementById(`lb-tab-${tab}`);
+      if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = 'rgba(255,255,0,0.1)';
+        activeBtn.style.color = '#ffff00';
+        activeBtn.style.border = '1px solid rgba(255,255,0,0.3)';
+      }
+      
+      // Show/hide content
+      document.getElementById('lb-alltime-content').classList.toggle('hidden', tab !== 'alltime');
+      document.getElementById('lb-monthly-content').classList.toggle('hidden', tab !== 'monthly');
+      
+      // Load monthly data if switching to monthly tab
+      if (tab === 'monthly') {
+        const selector = document.getElementById('monthSelector');
+        if (selector && selector.value) {
+          loadMonthlyLeaderboard('adminMonthlyLeaderboard', null, selector.value);
+        }
+      }
+    };
+    
+    // Load selected month
+    window.loadSelectedMonth = function() {
+      const selector = document.getElementById('monthSelector');
+      if (selector && selector.value) {
+        loadMonthlyLeaderboard('adminMonthlyLeaderboard', null, selector.value);
+      }
+    };
+    
+    // Initialize leaderboards when section is shown
+    window.initLeaderboards = async function() {
+      if (leaderboardLoaded) return;
+      leaderboardLoaded = true;
+      
+      // Load stats
+      const stats = await getLeaderboardStats();
+      document.getElementById('lb-activePlayers').textContent = stats.activePlayers;
+      document.getElementById('lb-totalHours').textContent = stats.totalHours.toLocaleString();
+      document.getElementById('lb-topPlayer').textContent = stats.topPlayer;
+      document.getElementById('lb-topPlayerHours').textContent = stats.topPlayerHours.toLocaleString();
+      
+      // Load hall of fame
+      await loadHallOfFame('adminLeaderboardList');
+      
+      // Load available months for selector
+      const months = await getAvailableMonths();
+      const selector = document.getElementById('monthSelector');
+      if (selector && months.length > 0) {
+        selector.innerHTML = months.map((m, i) => {
+          const date = new Date(m + '-01');
+          const label = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+          return `<option value="${m}" ${i === 0 ? 'selected' : ''}>${label}</option>`;
+        }).join('');
+        
+        // Auto-load current month
+        loadMonthlyLeaderboard('adminMonthlyLeaderboard', null, months[0]);
+      } else {
+        selector.innerHTML = '<option value="">No data available</option>';
+      }
+      
+      // Style the initial active tab
+      const activeBtn = document.getElementById('lb-tab-alltime');
+      if (activeBtn) {
+        activeBtn.style.background = 'rgba(255,255,0,0.1)';
+        activeBtn.style.color = '#ffff00';
+        activeBtn.style.border = '1px solid rgba(255,255,0,0.3)';
+      }
+    };
+  </script>
 </body>
 </html>

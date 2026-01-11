@@ -20,6 +20,9 @@ const OPTIONAL_ASSETS = [
   '/admin/index.html',
   '/admin/dashboard.html',
   '/shared/config.js',
+  '/shared/utils.js',
+  '/shared/leaderboard.js',
+  '/shared/notify.js',
   '/manifest.webmanifest',
   '/admin/manifest.webmanifest'
 ];

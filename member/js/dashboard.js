@@ -7,6 +7,7 @@ import {
   getISTDate, formatDate, calculatePrice, minutesToReadable, 
   getActivityIcon, getAvatarUrl, filterToCurrentMonth, calculateStreak 
 } from '../../shared/utils.js';
+import { loadHallOfFame, loadMonthlyLeaderboard as loadMonthlyLB } from '../../shared/leaderboard.js';
 
 // ==================== FIREBASE INIT ====================
 
@@ -450,137 +451,8 @@ function loadMemberHistory(username) {
 }
 
 // ==================== LEADERBOARD ====================
-
-async function loadLeaderboard() {
-  const membersSnap = await secondDb.ref('fdb/MEMBERS').once("value");
-  const historyRef = secondDb.ref("history");
-  const members = Object.values(membersSnap.val() || {});
-  const now = new Date();
-
-  const leaderboard = members
-    .filter(m => m.TOTALACTMINUTE)
-    .sort((a, b) => b.TOTALACTMINUTE - a.TOTALACTMINUTE)
-    .slice(0, 10);
-
-  const historyData = await Promise.all(
-    leaderboard.map(async m => {
-      const snapshot = await historyRef.child(m.USERNAME).once("value");
-      const entries = Object.values(snapshot.val() || {});
-      const spent = entries.reduce((sum, h) => sum + (h.CHARGE < 0 ? -h.CHARGE : 0), 0);
-      const lastDate = entries
-        .map(h => new Date(`${h.DATE}T${h.TIME?.split('.')[0] || '00:00:00'}`))
-        .sort((a, b) => b - a)[0];
-      return { username: m.USERNAME, spent, lastDate, streak: calculateStreak(entries) };
-    })
-  );
-
-  const maxSpent = Math.max(...historyData.map(h => h.spent));
-  const maxMinutes = leaderboard[0]?.TOTALACTMINUTE ?? 0;
-  const list = document.getElementById("leaderboardList");
-  if (!list) return;
-
-  list.innerHTML = "";
-
-  leaderboard.forEach((m, i) => {
-    const avatar = getAvatarUrl(m.USERNAME);
-    const timeInHours = Math.round(m.TOTALACTMINUTE / 60);
-    const since = m.RECDATE ? new Date(m.RECDATE).toLocaleDateString("en-IN", { year: 'numeric', month: 'short' }) : "N/A";
-    const { spent, lastDate, streak } = historyData.find(h => h.username === m.USERNAME) || {};
-
-    const badges = [];
-    if (i === 0) badges.push("🥇 Champion");
-    else if (i === 1) badges.push("🥈 Runner Up");
-    else if (i === 2) badges.push("🥉 Third Place");
-    if (m.TOTALACTMINUTE === maxMinutes) badges.push("👑 Grinder");
-    if (spent === maxSpent) badges.push("🏅 Big Spender");
-    if (lastDate) {
-      const inactiveDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
-      if (inactiveDays > 7) badges.push("🐢 Ghost");
-    }
-
-    let ringStyle = "border-color: #666;";
-    if (lastDate) {
-      const diffDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
-      ringStyle = diffDays <= 2 ? "border-color: #00ff88; box-shadow: 0 0 10px rgba(0,255,136,0.5);" : 
-                  diffDays <= 7 ? "border-color: #ffff00; box-shadow: 0 0 10px rgba(255,255,0,0.5);" : 
-                  "border-color: #666;";
-    }
-
-    const streakBadge = streak > 0 ? `<span class="text-sm flex items-center gap-1"><span class="animate-pulse">🔥</span><span style="color: #ff6b00;">${streak}-Day</span></span>` : "";
-
-    const rankBadge = i < 3 ? `<div class="rank-badge rank-${i+1} font-orbitron text-sm">${i+1}</div>` : 
-                              `<div class="rank-badge font-orbitron text-sm" style="background: rgba(0,240,255,0.2); border: 1px solid rgba(0,240,255,0.5); color: #00f0ff;">${i+1}</div>`;
-
-    const row = document.createElement("div");
-    row.className = "leaderboard-item flex items-center gap-4 p-4 rounded-xl";
-    row.innerHTML = `
-      ${rankBadge}
-      <img src="${avatar}" class="w-12 h-12 rounded-full border-2" style="${ringStyle}" />
-      <div class="flex-1 min-w-0">
-        <div class="font-orbitron font-bold flex items-center flex-wrap gap-2" style="color: #00f0ff;">${m.USERNAME} ${streakBadge}</div>
-        <div class="text-sm text-gray-400">⏱️ <span style="color: #b829ff;">${timeInHours} hrs</span> • Since: ${since}</div>
-        <div class="text-xs text-gray-600">Last: ${lastDate?.toLocaleDateString("en-IN") || "N/A"}</div>
-      </div>
-      ${badges.length ? `<div class="flex flex-wrap gap-1 justify-end text-xs">
-        ${badges.map(b => `<span class="inline-block rounded-full px-2 py-0.5 font-medium" style="background: rgba(255,255,0,0.2); border: 1px solid rgba(255,255,0,0.5); color: #ffff00;">${b}</span>`).join("")}
-      </div>` : ""}
-    `;
-    list.appendChild(row);
-  });
-}
-
-async function loadMonthlyLeaderboard(loggedUserName) {
-  if (!loggedUserName) return;
-
-  const monthKey = new Date().toISOString().slice(0, 7);
-  const snap = await secondDb.ref(`leaderboards/monthly/${monthKey}`).get();
-  const container = document.getElementById("monthlyLeaderboard");
-  
-  if (!container) return;
-  if (!snap.exists()) {
-    container.innerHTML = "<p class='text-gray-400'>No data for this month.</p>";
-    return;
-  }
-
-  const data = snap.val();
-  let list = Object.entries(data).map(([memberId, info]) => ({
-    memberId,
-    username: info.username,
-    minutes: info.total_minutes,
-    hoursLabel: minutesToReadable(info.total_minutes),
-    count: info.sessions_count
-  })).sort((a, b) => b.minutes - a.minutes);
-
-  const userEntry = list.find(x => x.username?.toLowerCase() === loggedUserName.toLowerCase().trim());
-  const top10 = list.slice(0, 10);
-  let html = "";
-
-  if (userEntry && !top10.includes(userEntry)) {
-    html += `
-      <div class="leaderboard-item highlight p-4 mb-4 rounded-lg">
-        <div class="font-orbitron font-bold" style="color: #00ff88;">${userEntry.username} <span class="text-xs">(YOU)</span></div>
-        <div class="text-gray-400 text-sm">Your Rank: <span style="color: #ffff00;">#${list.indexOf(userEntry) + 1}</span></div>
-        <div class="text-gray-400 text-sm">Playtime: <span style="color: #b829ff;">${userEntry.hoursLabel}</span></div>
-      </div>`;
-  }
-
-  top10.forEach((row, i) => {
-    const isUser = row.username?.toLowerCase() === loggedUserName.toLowerCase().trim();
-    const rankBadge = i < 3 ? `<div class="rank-badge rank-${i+1} font-orbitron text-sm shrink-0">${i+1}</div>` : 
-                              `<div class="rank-badge font-orbitron text-sm shrink-0" style="background: rgba(0,240,255,0.2); border: 1px solid rgba(0,240,255,0.5); color: #00f0ff;">${i+1}</div>`;
-    html += `
-      <div class="leaderboard-item ${isUser ? 'highlight' : ''} flex items-center gap-4 p-4 rounded-lg">
-        ${rankBadge}
-        <div class="flex-1 min-w-0">
-          <div class="font-orbitron font-bold" style="color: ${isUser ? '#00ff88' : '#00f0ff'};">${row.username} ${isUser ? '<span class="text-xs">(YOU)</span>' : ''}</div>
-          <div class="text-gray-500 text-sm">Sessions: <span style="color: #b829ff;">${row.count}</span></div>
-        </div>
-        <div class="font-orbitron font-bold text-right" style="color: #ffff00;">${row.hoursLabel}</div>
-      </div>`;
-  });
-
-  container.innerHTML = html;
-}
+// Now using shared module: ../../shared/leaderboard.js
+// Functions: loadHallOfFame, loadMonthlyLB (imported at top)
 
 // ==================== ANALYTICS ====================
 
@@ -1038,8 +910,9 @@ async function loadUserSeasonStats(username) {
 window.addEventListener("DOMContentLoaded", () => {
   loadMemberHistory(member.USERNAME);
   loadAnalytics(member.ID);
-  loadMonthlyLeaderboard(member.USERNAME);
-  loadLeaderboard();
+  // Use shared leaderboard module
+  loadMonthlyLB("monthlyLeaderboard", member.USERNAME);
+  loadHallOfFame("leaderboardList", member.USERNAME);
   loadProfile();
   populateTimeDropdowns();
   setupDateButtons();
