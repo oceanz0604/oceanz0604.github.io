@@ -8,7 +8,8 @@ import {
   BOOKING_APP_NAME,
   TIMEZONE,
   getISTDate,
-  formatToIST
+  formatToIST,
+  FB_PATHS
 } from "../../shared/config.js";
 import { getStaffSession } from "./permissions.js";
 
@@ -97,10 +98,20 @@ window.loadCashRegister = function() {
           </div>
           <div>
             <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Withdrawal</label>
-            <input type="number" id="withdrawal" placeholder="₹0" 
-              class="neon-input w-full px-4 py-3 rounded-lg text-white text-lg font-orbitron" 
-              style="border-color: rgba(255,107,0,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
-            <p class="text-xs text-gray-600 mt-1">Cash taken out</p>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <input type="number" id="withdrawalCash" placeholder="₹ Cash" 
+                  class="neon-input w-full px-3 py-2 rounded-lg text-white font-orbitron" 
+                  style="border-color: rgba(255,107,0,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
+                <p class="text-[10px] text-gray-600 mt-0.5 text-center">💵 Cash</p>
+              </div>
+              <div>
+                <input type="number" id="withdrawalCoins" placeholder="₹ Coins" 
+                  class="neon-input w-full px-3 py-2 rounded-lg text-white font-orbitron" 
+                  style="border-color: rgba(255,200,0,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
+                <p class="text-[10px] text-gray-600 mt-0.5 text-center">🪙 Coins</p>
+              </div>
+            </div>
           </div>
           <div>
             <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Expenses</label>
@@ -295,7 +306,9 @@ window.calculateDenominations = function() {
 window.calculateCashTotals = function() {
   const opening = Number(document.getElementById("openingBalance")?.value) || 0;
   const sale = Number(document.getElementById("todaySale")?.value) || 0;
-  const withdrawal = Number(document.getElementById("withdrawal")?.value) || 0;
+  const withdrawalCash = Number(document.getElementById("withdrawalCash")?.value) || 0;
+  const withdrawalCoins = Number(document.getElementById("withdrawalCoins")?.value) || 0;
+  const withdrawal = withdrawalCash + withdrawalCoins;
   const expenses = Number(document.getElementById("expenses")?.value) || 0;
   const actual = window.currentActualCash || 0;
   
@@ -377,7 +390,9 @@ window.saveCashEntry = async function() {
     date: dateToSave,
     opening: Number(document.getElementById("openingBalance")?.value) || 0,
     sale: Number(document.getElementById("todaySale")?.value) || 0,
-    withdrawal: Number(document.getElementById("withdrawal")?.value) || 0,
+    withdrawalCash: Number(document.getElementById("withdrawalCash")?.value) || 0,
+    withdrawalCoins: Number(document.getElementById("withdrawalCoins")?.value) || 0,
+    withdrawal: (Number(document.getElementById("withdrawalCash")?.value) || 0) + (Number(document.getElementById("withdrawalCoins")?.value) || 0),
     expenses: Number(document.getElementById("expenses")?.value) || 0,
     actualClosing: actualClosing,
     comments: document.getElementById("cashComments")?.value || "",
@@ -434,7 +449,8 @@ function resetFormToToday() {
   }
   
   // Clear form fields
-  document.getElementById("withdrawal").value = "";
+  document.getElementById("withdrawalCash").value = "";
+  document.getElementById("withdrawalCoins").value = "";
   document.getElementById("expenses").value = "";
   document.getElementById("cashComments").value = "";
   DENOMINATIONS.forEach(d => {
@@ -481,7 +497,8 @@ async function loadTodayEntry() {
       document.getElementById("todaySale").value = data.sale || "";
       if (saleDisplay) saleDisplay.textContent = `₹${(data.sale || 0).toLocaleString("en-IN")}`;
       
-      document.getElementById("withdrawal").value = data.withdrawal || "";
+      document.getElementById("withdrawalCash").value = data.withdrawalCash || data.withdrawal || "";
+      document.getElementById("withdrawalCoins").value = data.withdrawalCoins || "";
       document.getElementById("expenses").value = data.expenses || "";
       document.getElementById("cashComments").value = data.comments || "";
       
@@ -513,7 +530,7 @@ async function autoFetchOpeningBalance() {
   
   try {
     // Find the most recent entry
-    const snapshot = await db.ref("cash_register").orderByKey().limitToLast(5).once("value");
+    const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().limitToLast(5).once("value");
     const entries = snapshot.val();
     
     if (entries) {
@@ -560,7 +577,7 @@ async function autoFetchTodaySale() {
   
   try {
     // Get all recharges (to include credit collections from any date that were paid today)
-    const allSnapshot = await db.ref("recharges").once("value");
+    const allSnapshot = await db.ref(FB_PATHS.RECHARGES).once("value");
     const allRecharges = allSnapshot.val() || {};
     
     let totalCash = 0;
@@ -659,7 +676,7 @@ async function loadCashHistory() {
   tableBody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-gray-500">Loading...</td></tr>`;
   
   try {
-    const snapshot = await db.ref("cash_register").orderByKey().once("value");
+    const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().once("value");
     const allData = snapshot.val() || {};
     
     // Filter by selected month
@@ -769,7 +786,8 @@ window.editCashEntry = async function(date) {
     document.getElementById("todaySale").value = data.sale || "";
     if (saleDisplay) saleDisplay.textContent = `₹${(data.sale || 0).toLocaleString("en-IN")}`;
     
-    document.getElementById("withdrawal").value = data.withdrawal || "";
+    document.getElementById("withdrawalCash").value = data.withdrawalCash || data.withdrawal || "";
+    document.getElementById("withdrawalCoins").value = data.withdrawalCoins || "";
     document.getElementById("expenses").value = data.expenses || "";
     document.getElementById("cashComments").value = data.comments || "";
     

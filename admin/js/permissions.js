@@ -4,8 +4,8 @@
  */
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { BOOKING_DB_CONFIG, BOOKING_APP_NAME } from "../../shared/config.js";
+import { getDatabase, ref, get, set, update, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { BOOKING_DB_CONFIG, BOOKING_APP_NAME, FB_PATHS } from "../../shared/config.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -79,7 +79,12 @@ export const MODULE_NAV_MAP = {
 
 const SESSION_KEY = "oceanz_staff_session";
 const SESSION_TIMESTAMP_KEY = "oceanz_staff_session_time";
+const SESSION_PERMISSION_VERSION_KEY = "oceanz_staff_permission_version";
 const SESSION_MAX_AGE_DAYS = 7; // Session expires after 7 days of inactivity
+
+// Real-time permission listener
+let permissionListener = null;
+let permissionListenerStaffId = null;
 
 // Get current staff session from localStorage (persistent for PWA)
 export function getStaffSession() {
@@ -111,6 +116,10 @@ export function getStaffSession() {
 export function setStaffSession(staffData) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(staffData));
   localStorage.setItem(SESSION_TIMESTAMP_KEY, new Date().toISOString());
+  // Store permission version for change detection
+  if (staffData.permissionVersion || staffData.lastPermissionUpdate) {
+    localStorage.setItem(SESSION_PERMISSION_VERSION_KEY, staffData.permissionVersion || staffData.lastPermissionUpdate);
+  }
 }
 
 // Update session activity timestamp (call on user actions)
@@ -124,8 +133,169 @@ export function refreshSessionActivity() {
 export function clearStaffSession() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+  localStorage.removeItem(SESSION_PERMISSION_VERSION_KEY);
   // Also clear any legacy sessionStorage
   sessionStorage.removeItem(SESSION_KEY);
+  // Stop permission listener
+  stopPermissionListener();
+}
+
+// ==================== REAL-TIME PERMISSION MONITORING ====================
+
+/**
+ * Start listening for permission changes on the current user's staff record.
+ * If permissions change, the user is notified and logged out.
+ */
+export function startPermissionListener() {
+  const session = getStaffSession();
+  if (!session?.id || !db || session.temporary) {
+    console.log("Permission listener not started - no valid session");
+    return;
+  }
+  
+  // Don't start duplicate listeners
+  if (permissionListenerStaffId === session.id && permissionListener) {
+    return;
+  }
+  
+  // Stop any existing listener
+  stopPermissionListener();
+  
+  console.log(`🔒 Starting permission listener for staff: ${session.id}`);
+  
+  const staffRef = ref(db, `staff/${session.id}`);
+  
+  // Store the initial permission version
+  const currentVersion = localStorage.getItem(SESSION_PERMISSION_VERSION_KEY);
+  
+  permissionListenerStaffId = session.id;
+  permissionListener = onValue(staffRef, (snapshot) => {
+    if (!snapshot.exists()) {
+      // Staff record was deleted - force logout
+      console.warn("Staff record deleted - forcing logout");
+      handlePermissionChange("deleted", "Your account has been removed by an administrator.");
+      return;
+    }
+    
+    const staffData = snapshot.val();
+    
+    // Check if staff was deactivated
+    if (staffData.active === false) {
+      console.warn("Staff deactivated - forcing logout");
+      handlePermissionChange("deactivated", "Your account has been deactivated.");
+      return;
+    }
+    
+    // Check if permission version changed (indicates role/permission update)
+    const newVersion = staffData.permissionVersion || staffData.lastPermissionUpdate;
+    const storedVersion = localStorage.getItem(SESSION_PERMISSION_VERSION_KEY);
+    
+    if (newVersion && storedVersion && newVersion !== storedVersion) {
+      console.warn("Permissions updated - forcing session refresh");
+      handlePermissionChange("updated", "Your permissions have been updated. Please log in again to apply changes.");
+      return;
+    }
+    
+    // Check if role changed
+    const storedSession = getStaffSession();
+    if (storedSession && staffData.role !== storedSession.role) {
+      console.warn("Role changed - updating session");
+      // Update local session with new role
+      storedSession.role = staffData.role;
+      storedSession.name = staffData.name || storedSession.name;
+      setStaffSession(storedSession);
+      
+      // If on dashboard, refresh permissions display
+      if (typeof window.refreshPermissionsUI === 'function') {
+        window.refreshPermissionsUI();
+      }
+      
+      // Show notification
+      showPermissionNotification("info", "Your role has been updated to " + staffData.role);
+    }
+    
+  }, (error) => {
+    console.error("Permission listener error:", error);
+  });
+}
+
+/**
+ * Stop the permission listener
+ */
+export function stopPermissionListener() {
+  if (permissionListener && permissionListenerStaffId) {
+    try {
+      const staffRef = ref(db, `staff/${permissionListenerStaffId}`);
+      off(staffRef, 'value', permissionListener);
+    } catch (e) {
+      console.warn("Error stopping permission listener:", e);
+    }
+    permissionListener = null;
+    permissionListenerStaffId = null;
+  }
+}
+
+/**
+ * Handle permission change - show notification and force logout
+ */
+function handlePermissionChange(type, message) {
+  // Stop listener to prevent multiple triggers
+  stopPermissionListener();
+  
+  // Show modal notification
+  showPermissionModal(type, message);
+  
+  // Clear session after a short delay
+  setTimeout(() => {
+    clearStaffSession();
+  }, 500);
+}
+
+/**
+ * Show permission change modal
+ */
+function showPermissionModal(type, message) {
+  // Remove any existing modal
+  const existingModal = document.getElementById('permissionChangeModal');
+  if (existingModal) existingModal.remove();
+  
+  const iconMap = {
+    deleted: '🚫',
+    deactivated: '⚠️',
+    updated: '🔄'
+  };
+  
+  const modal = document.createElement('div');
+  modal.id = 'permissionChangeModal';
+  modal.className = 'fixed inset-0 z-[100] flex items-center justify-center';
+  modal.style.cssText = 'background: rgba(0,0,0,0.9); backdrop-filter: blur(10px);';
+  
+  modal.innerHTML = `
+    <div class="neon-card rounded-2xl w-full max-w-md p-8 mx-4 text-center" style="border-color: rgba(255,0,68,0.5);">
+      <div class="text-6xl mb-4">${iconMap[type] || '🔒'}</div>
+      <h3 class="font-orbitron text-xl font-bold mb-3" style="color: #ff0044;">Session Ended</h3>
+      <p class="text-gray-400 mb-6">${message}</p>
+      <button onclick="window.location.href='index.html'" 
+        class="w-full px-6 py-3 rounded-lg font-orbitron font-bold transition-all"
+        style="background: linear-gradient(135deg, #ff0044, #cc0033); color: #fff;">
+        Login Again
+      </button>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+/**
+ * Show a non-blocking notification for minor permission updates
+ */
+function showPermissionNotification(type, message) {
+  // Use the existing notify system if available
+  if (typeof window.notifyInfo === 'function') {
+    window.notifyInfo(message);
+  } else {
+    console.log(`[${type}] ${message}`);
+  }
 }
 
 // ==================== STAFF LOOKUP ====================
@@ -135,7 +305,7 @@ export async function getStaffByEmail(email) {
   if (!email) return null;
   
   try {
-    const staffRef = ref(db, "staff");
+    const staffRef = ref(db, FB_PATHS.STAFF);
     const snapshot = await get(staffRef);
     
     if (!snapshot.exists()) return null;
@@ -177,7 +347,7 @@ export async function handleStaffLogin(email, displayName = null) {
     
     // If no staff record exists, check if this is the first user (make them super admin)
     if (!staffRecord) {
-      const staffRef = ref(db, "staff");
+      const staffRef = ref(db, FB_PATHS.STAFF);
       const snapshot = await get(staffRef);
       
       const isFirstUser = !snapshot.exists() || Object.keys(snapshot.val() || {}).length === 0;
@@ -209,6 +379,9 @@ export async function handleStaffLogin(email, displayName = null) {
     
     // Save to session
     setStaffSession(staffRecord);
+    
+    // Start real-time permission listener
+    startPermissionListener();
     
     // Log activity (non-blocking)
     logStaffActivity("login", "Logged in").catch(err => console.warn("Activity log failed:", err));
@@ -364,4 +537,16 @@ window.logStaffActivity = logStaffActivity;
 window.getStaffSession = getStaffSession;
 window.clearStaffSession = clearStaffSession;
 window.refreshSessionActivity = refreshSessionActivity;
+window.startPermissionListener = startPermissionListener;
+window.stopPermissionListener = stopPermissionListener;
+
+// Auto-start permission listener if user is already logged in
+// (for page reloads / returning to dashboard)
+setTimeout(() => {
+  const session = getStaffSession();
+  if (session && session.id && !session.temporary) {
+    console.log("🔒 Auto-starting permission listener for existing session");
+    startPermissionListener();
+  }
+}, 1000);
 

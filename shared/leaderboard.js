@@ -3,7 +3,7 @@
  * Used by both member and admin dashboards
  */
 
-import { FDB_DATASET_CONFIG, FDB_APP_NAME } from './config.js';
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, FB_PATHS } from './config.js';
 import { minutesToReadable, getAvatarUrl, calculateStreak } from './utils.js';
 
 // ==================== FIREBASE INIT ====================
@@ -22,9 +22,10 @@ export async function loadHallOfFame(containerId, highlightUsername = null) {
   container.innerHTML = `<p class="text-gray-500 text-center animate-pulse">Loading leaderboard...</p>`;
 
   try {
-    const membersSnap = await fdbDb.ref('fdb/MEMBERS').once("value");
-    const historyRef = fdbDb.ref("history");
-    const members = Object.values(membersSnap.val() || {});
+    const membersSnap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+    const historyRef = fdbDb.ref(FB_PATHS.HISTORY);
+    const membersData = membersSnap.val();
+    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
     const now = new Date();
 
     const leaderboard = members
@@ -121,7 +122,7 @@ export async function loadMonthlyLeaderboard(containerId, highlightUsername = nu
 
   try {
     const targetMonth = monthKey || new Date().toISOString().slice(0, 7);
-    const snap = await fdbDb.ref(`leaderboards/monthly/${targetMonth}`).get();
+    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly/${targetMonth}`).get();
 
     if (!snap.exists()) {
       container.innerHTML = `<p class="text-gray-400 text-center">No data for ${targetMonth}</p>`;
@@ -186,7 +187,7 @@ export async function loadMonthlyLeaderboard(containerId, highlightUsername = nu
 
 export async function getAvailableMonths() {
   try {
-    const snap = await fdbDb.ref('leaderboards/monthly').once("value");
+    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly`).once("value");
     if (!snap.exists()) return [];
     return Object.keys(snap.val()).sort().reverse();
   } catch (error) {
@@ -199,8 +200,9 @@ export async function getAvailableMonths() {
 
 export async function getLeaderboardStats() {
   try {
-    const membersSnap = await fdbDb.ref('fdb/MEMBERS').once("value");
-    const members = Object.values(membersSnap.val() || {});
+    const membersSnap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+    const membersData = membersSnap.val();
+    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
     
     const activePlayers = members.filter(m => m.TOTALACTMINUTE > 0).length;
     const totalHours = Math.round(members.reduce((sum, m) => sum + (m.TOTALACTMINUTE || 0), 0) / 60);

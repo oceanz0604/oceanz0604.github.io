@@ -2,19 +2,12 @@
  * OceanZ Gaming Cafe - Simple Admin Bookings View
  */
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAc0Gz1Em0TUeGnKD4jQjZl5fn_FyoWCLo",
-  databaseURL: "https://gaming-cafe-booking-630f9-default-rtdb.asia-southeast1.firebasedatabase.app",
-  authDomain: "gaming-cafe-booking-630f9.firebaseapp.com",
-  projectId: "gaming-cafe-booking-630f9",
-  storageBucket: "gaming-cafe-booking-630f9.firebasestorage.app",
-  messagingSenderId: "872841235480",
-  appId: "1:872841235480:web:58cfe4fc38cc8a037b076d",
-  measurementId: "G-PSLG65XMBT"
-};
+import { BOOKING_DB_CONFIG, BOOKING_APP_NAME, FB_PATHS } from "../../shared/config.js";
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Initialize Firebase
+let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
+if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+const db = bookingApp.database();
 
 const cardsContainer = document.getElementById("bookingCards");
 
@@ -24,7 +17,7 @@ function fetchBookings() {
   const filterDate = document.getElementById("filterDate").value;
   cardsContainer.innerHTML = "<p>Loading bookings...</p>";
 
-  db.ref("bookings").once("value", snapshot => {
+  db.ref(FB_PATHS.BOOKINGS).once("value", snapshot => {
     const data = snapshot.val();
     cardsContainer.innerHTML = "";
 

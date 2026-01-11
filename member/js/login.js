@@ -2,7 +2,7 @@
  * OceanZ Gaming Cafe - Member Login
  */
 
-import { FDB_DATASET_CONFIG, FDB_APP_NAME } from "../../shared/config.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, FB_PATHS } from "../../shared/config.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -83,10 +83,11 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
     return;
   }
 
-  fdbDb.ref("fdb/MEMBERS").once("value")
+  fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value")
     .then(snapshot => {
-      const members = snapshot.val() || {};
-      const match = Object.values(members).find(m =>
+      const membersData = snapshot.val();
+      const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
+      const match = members.find(m =>
         m.USERNAME?.toLowerCase() === username && m.PASSWORD === password
       );
 

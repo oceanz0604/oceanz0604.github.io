@@ -12,7 +12,8 @@ import {
   formatToIST,
   getISTHours,
   getISTDate,
-  getISTToday
+  getISTToday,
+  FB_PATHS
 } from "../../shared/config.js";
 import { getStaffSession } from "./permissions.js";
 
@@ -134,7 +135,7 @@ function timetableColor(status) {
 
 // ==================== REAL-TIME LISTENER ====================
 
-const bookingsRef = ref(db, "bookings");
+const bookingsRef = ref(db, FB_PATHS.BOOKINGS);
 
 onValue(bookingsRef, snapshot => {
   const data = snapshot.val();
@@ -148,7 +149,7 @@ onValue(bookingsRef, snapshot => {
 // ==================== EXPORTS FOR GLOBAL ACCESS ====================
 
 window.fetchBookings = () => {
-  get(ref(db, "bookings")).then(snapshot => renderBookings(snapshot.val()));
+  get(ref(db, FB_PATHS.BOOKINGS)).then(snapshot => renderBookings(snapshot.val()));
 };
 
 window.downloadCSV = () => {
