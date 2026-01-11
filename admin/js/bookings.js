@@ -34,6 +34,9 @@ const db = getDatabase(bookingApp);
 const { TIMETABLE_PCS, TIMETABLE_START_HOUR, TIMETABLE_END_HOUR, PC_COL_WIDTH } = CONSTANTS;
 const TIMETABLE_TOTAL_HOURS = TIMETABLE_END_HOUR - TIMETABLE_START_HOUR;
 
+// Global storage for bookings data (for modal access)
+let currentBookingsData = {};
+
 // ==================== UTILITIES (IST TIMEZONE) ====================
 
 function formatDate(isoString) {
@@ -72,10 +75,61 @@ function initTimetableToggle() {
 // Initialize toggle when DOM is ready
 document.addEventListener("DOMContentLoaded", initTimetableToggle);
 
+// Status colors for timetable blocks
+function getTimetableBlockStyle(booking) {
+  const now = getISTDate();
+  const startTime = new Date(booking.startTime);
+  const endTime = new Date(booking.endTime);
+  const minutesUntilStart = (startTime - now) / 60000;
+  
+  // Currently running
+  if (startTime <= now && endTime > now) {
+    return {
+      class: "timetable-block-running",
+      bg: "linear-gradient(135deg, #00ff88, #00cc6a)",
+      border: "#00ff88",
+      pulse: true,
+      label: "🎮 LIVE"
+    };
+  }
+  
+  // Starting within 15 minutes
+  if (minutesUntilStart > 0 && minutesUntilStart <= 15 && booking.status === "Approved") {
+    return {
+      class: "timetable-block-soon",
+      bg: "linear-gradient(135deg, #ff6b00, #ff9500)",
+      border: "#ff6b00",
+      pulse: true,
+      label: "⏰ SOON"
+    };
+  }
+  
+  // Approved (future)
+  if (booking.status === "Approved") {
+    return {
+      class: "timetable-block-approved",
+      bg: "linear-gradient(135deg, #00f0ff, #0099cc)",
+      border: "#00f0ff",
+      pulse: false,
+      label: null
+    };
+  }
+  
+  // Pending
+  return {
+    class: "timetable-block-pending",
+    bg: "linear-gradient(135deg, #ffff00, #ccaa00)",
+    border: "#ffff00",
+    pulse: false,
+    label: "⏳"
+  };
+}
+
+// Legacy function for backward compatibility
 function timetableColor(status) {
   return status === "Approved" 
-    ? "bg-gradient-to-r from-green-600 to-green-500" 
-    : "bg-gradient-to-r from-yellow-600 to-yellow-500";
+    ? "timetable-block-approved" 
+    : "timetable-block-pending";
 }
 
 // ==================== REAL-TIME LISTENER ====================
@@ -84,6 +138,7 @@ const bookingsRef = ref(db, "bookings");
 
 onValue(bookingsRef, snapshot => {
   const data = snapshot.val();
+  currentBookingsData = data || {};
   renderBookings(data);
   renderTimeHeader();
   renderTimetable(buildTimetableBookings(data));
@@ -209,18 +264,30 @@ window.declineBooking = async id => {
 
 function createSection(title, cards, collapsed = false) {
   const section = document.createElement("div");
-  section.className = "mb-6";
+  section.className = "mb-4";
   const contentId = `content-${title.replace(/\s+/g, "-").toLowerCase()}`;
+  
+  // Icons for different section types
+  const icons = {
+    "Upcoming Bookings": "🕐",
+    "Ongoing Bookings": "🎮",
+    "Past Bookings": "📋"
+  };
+  const icon = icons[title] || "📅";
+  const count = cards.length;
 
   section.innerHTML = `
-    <button onclick="document.getElementById('${contentId}').classList.toggle('hidden')"
-      class="w-full flex justify-between items-center px-4 py-3 rounded-t-xl font-orbitron text-sm font-bold tracking-wider"
-      style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,0,68,0.3); border-bottom: none; color: #ff0044;">
-      <span>${title}</span>
-      <i data-lucide="chevron-down" class="w-5 h-5"></i>
+    <button onclick="document.getElementById('${contentId}').classList.toggle('hidden'); this.querySelector('.section-chevron').classList.toggle('rotate-180')"
+      class="w-full flex justify-between items-center px-4 py-2.5 rounded-lg font-orbitron text-xs font-bold tracking-wider transition-all hover:bg-opacity-60"
+      style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,0,68,0.2);">
+      <span class="flex items-center gap-2">
+        <span>${icon}</span>
+        <span style="color: #ff0044;">${title}</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px]" style="background: rgba(255,0,68,0.2); color: #ff6666;">${count}</span>
+      </span>
+      <i data-lucide="chevron-down" class="w-4 h-4 section-chevron transition-transform ${collapsed ? '' : 'rotate-180'}" style="color: #ff0044;"></i>
     </button>
-    <div id="${contentId}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 rounded-b-xl ${collapsed ? "hidden" : ""}"
-      style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,0,68,0.2); border-top: none;"></div>
+    <div id="${contentId}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-3 ${collapsed ? "hidden" : ""}"></div>
   `;
 
   const contentDiv = section.querySelector(`#${contentId}`);
@@ -253,47 +320,66 @@ function renderBookings(bookingsData) {
     };
 
     const card = document.createElement("div");
-    card.className = "booking-card rounded-xl p-4";
+    card.className = `booking-card booking-card-${statusText.toLowerCase()}`;
+    card.dataset.bookingKey = key;
 
-    // Build action info
-    let actionInfo = "";
+    // Format time nicely
+    const startTimeStr = new Date(booking.start).toLocaleTimeString("en-IN", { 
+      hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
+    });
+    const endTimeStr = new Date(booking.end).toLocaleTimeString("en-IN", { 
+      hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
+    });
+    const dateStr = new Date(booking.start).toLocaleDateString("en-IN", { 
+      day: "numeric", month: "short", timeZone: "Asia/Kolkata" 
+    });
+
+    // Compact action info
+    let actionBy = "";
     if (booking.approvedBy) {
-      actionInfo = `<div class="text-xs mt-2 pt-2 border-t border-gray-700">
-        <span style="color: #00ff88;">✓ Approved by ${booking.approvedBy}</span>
-      </div>`;
+      actionBy = `<span class="text-[9px] text-gray-600">✓ ${booking.approvedBy}</span>`;
     } else if (booking.declinedBy) {
-      actionInfo = `<div class="text-xs mt-2 pt-2 border-t border-gray-700">
-        <span style="color: #ff0044;">✕ Declined by ${booking.declinedBy}</span>
-        ${booking.note ? `<br><span class="text-gray-500">Reason: ${booking.note}</span>` : ""}
-      </div>`;
+      actionBy = `<span class="text-[9px]" style="color: #ff6666;">✕ ${booking.declinedBy}</span>`;
     }
 
     card.innerHTML = `
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="font-orbitron text-sm font-bold export-cell" style="color: #00f0ff;">${booking.name}</h3>
-        <span class="text-xs font-bold px-3 py-1 rounded-full ${statusClasses[statusText]}">${statusText}</span>
+      <div class="booking-card-clickable" onclick="openBookingModal('${key}')">
+        <div class="booking-card-header">
+          <div class="booking-card-name">
+            <h3 class="font-orbitron export-cell">${booking.name}</h3>
+            <span class="booking-status-badge ${statusClasses[statusText]}">${statusText}</span>
+          </div>
+          <span class="booking-card-price export-cell">₹${booking.price}</span>
+        </div>
+        <div class="booking-card-details">
+          <span>${dateStr}</span>
+          <span class="booking-card-divider">•</span>
+          <span>${booking.pcs.join(", ")}</span>
+          <span class="booking-card-divider">•</span>
+          <span>${startTimeStr} → ${endTimeStr}</span>
+        </div>
       </div>
-      <div class="grid grid-cols-1 gap-2 text-sm text-gray-400">
-        <div><span class="text-gray-500">Start:</span> <span class="export-cell">${formatDate(booking.start)}</span></div>
-        <div><span class="text-gray-500">End:</span> <span class="export-cell">${formatDate(booking.end)}</span></div>
-        <div><span class="text-gray-500">Duration:</span> <span class="export-cell" style="color: #b829ff;">${booking.duration} mins</span></div>
-        <div><span class="text-gray-500">Terminal:</span> <span class="export-cell" style="color: #00ff88;">${booking.pcs.join(", ")}</span></div>
-        <div><span class="text-gray-500">Price:</span> <span class="export-cell" style="color: #ffff00;">₹${booking.price}</span></div>
-        ${booking.note && !booking.declinedBy ? `<div><span class="text-gray-500">Note:</span> ${booking.note}</div>` : ""}
+      <div class="hidden">
+        <span class="export-cell">${formatDate(booking.start)}</span>
+        <span class="export-cell">${formatDate(booking.end)}</span>
+        <span class="export-cell">${booking.duration} mins</span>
+        <span class="export-cell">${booking.pcs.join(", ")}</span>
       </div>
-      ${actionInfo}
-      <div class="flex flex-wrap gap-2 mt-4">
-        ${(group === "upcoming" || group === "ongoing") && statusText === "Pending" ? `
-          <button onclick="approveBooking('${key}')" class="neon-btn neon-btn-green flex items-center gap-1 text-xs px-3 py-2 rounded-lg">
-            <i data-lucide='check-circle' class='w-4 h-4'></i> Approve
+      <div class="booking-card-actions">
+        <div class="booking-card-meta">${actionBy}</div>
+        <div class="booking-card-buttons">
+          ${(group === "upcoming" || group === "ongoing") && statusText === "Pending" ? `
+            <button onclick="approveBooking('${key}')" class="booking-action-btn booking-action-approve" title="Approve">
+              <i data-lucide='check' class='w-2.5 h-2.5'></i>
+            </button>
+            <button onclick="declineBooking('${key}')" class="booking-action-btn booking-action-decline" title="Decline">
+              <i data-lucide='x' class='w-2.5 h-2.5'></i>
+            </button>
+          ` : ""}
+          <button onclick="deleteBooking('${key}')" class="booking-action-btn booking-action-delete" title="Delete">
+            <i data-lucide="trash-2" class="w-2.5 h-2.5"></i>
           </button>
-          <button onclick="declineBooking('${key}')" class="neon-btn flex items-center gap-1 text-xs px-3 py-2 rounded-lg">
-            <i data-lucide='x-circle' class='w-4 h-4'></i> Decline
-          </button>
-        ` : ""}
-        <button onclick="deleteBooking('${key}')" class="neon-btn neon-btn-purple flex items-center gap-1 text-xs px-3 py-2 rounded-lg">
-          <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
-        </button>
+        </div>
       </div>
     `;
 
@@ -307,6 +393,167 @@ function renderBookings(bookingsData) {
   lucide?.createIcons();
 }
 
+// ==================== SEARCH/FILTER ====================
+
+function filterBookings(searchTerm) {
+  const cards = document.querySelectorAll(".booking-card");
+  const term = searchTerm.toLowerCase().trim();
+  const clearBtn = document.getElementById("bookingSearchClear");
+  
+  // Show/hide clear button
+  if (clearBtn) {
+    clearBtn.classList.toggle("hidden", !term);
+  }
+  
+  cards.forEach(card => {
+    const name = card.querySelector("h3")?.textContent?.toLowerCase() || "";
+    const match = !term || name.includes(term);
+    card.style.display = match ? "" : "none";
+  });
+  
+  // Update section visibility and counts
+  document.querySelectorAll("#bookingCards > div").forEach(section => {
+    const visibleCards = section.querySelectorAll(".booking-card:not([style*='display: none'])");
+    const countBadge = section.querySelector(".rounded-full");
+    if (countBadge) {
+      countBadge.textContent = visibleCards.length;
+    }
+    // Hide section if no visible cards
+    const contentDiv = section.querySelector("[id^='content-']");
+    if (contentDiv && visibleCards.length === 0) {
+      section.style.display = "none";
+    } else {
+      section.style.display = "";
+    }
+  });
+}
+
+window.filterBookings = filterBookings;
+
+// ==================== BOOKING DETAILS MODAL ====================
+
+function openBookingModal(bookingKey) {
+  const booking = currentBookingsData[bookingKey];
+  if (!booking) {
+    window.notifyError?.("Booking not found");
+    return;
+  }
+  
+  const modal = document.getElementById("bookingDetailsModal");
+  if (!modal) return;
+  
+  // Determine status
+  const now = getISTDate();
+  const startTime = new Date(booking.start);
+  const endTime = new Date(booking.end);
+  const isExpired = endTime < now;
+  const statusText = isExpired ? "Expired" : (booking.status || "Pending");
+  
+  // Format dates
+  const dateStr = startTime.toLocaleDateString("en-IN", { 
+    weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" 
+  });
+  const startTimeStr = startTime.toLocaleTimeString("en-IN", { 
+    hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
+  });
+  const endTimeStr = endTime.toLocaleTimeString("en-IN", { 
+    hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
+  });
+  
+  // Calculate duration in minutes
+  const durationMins = Math.round((endTime - startTime) / 60000);
+  const hours = Math.floor(durationMins / 60);
+  const mins = durationMins % 60;
+  const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  
+  // Populate modal
+  document.getElementById("bookingModalName").textContent = booking.name || "Unknown";
+  document.getElementById("bookingModalDate").textContent = dateStr;
+  document.getElementById("bookingModalPC").textContent = booking.pcs?.join(", ") || "-";
+  document.getElementById("bookingModalTime").textContent = `${startTimeStr} → ${endTimeStr}`;
+  document.getElementById("bookingModalDuration").textContent = durationStr;
+  document.getElementById("bookingModalPrice").textContent = `₹${booking.price || 0}`;
+  
+  // Status badge
+  const statusColors = {
+    Pending: { bg: "rgba(255,255,0,0.15)", border: "rgba(255,255,0,0.4)", color: "#ffff00" },
+    Approved: { bg: "rgba(0,255,136,0.15)", border: "rgba(0,255,136,0.4)", color: "#00ff88" },
+    Declined: { bg: "rgba(255,0,68,0.15)", border: "rgba(255,0,68,0.4)", color: "#ff0044" },
+    Expired: { bg: "rgba(100,100,100,0.15)", border: "rgba(100,100,100,0.4)", color: "#888" }
+  };
+  const statusStyle = statusColors[statusText] || statusColors.Pending;
+  document.getElementById("bookingModalStatus").innerHTML = 
+    `<span class="px-2 py-0.5 rounded text-[10px] font-bold" style="background: ${statusStyle.bg}; border: 1px solid ${statusStyle.border}; color: ${statusStyle.color};">${statusText}</span>`;
+  
+  // Action info
+  const actionInfo = document.getElementById("bookingModalActionInfo");
+  if (booking.approvedBy) {
+    actionInfo.innerHTML = `<span style="color: #00ff88;">✓ Approved by ${booking.approvedBy}</span>`;
+    actionInfo.classList.remove("hidden");
+  } else if (booking.declinedBy) {
+    actionInfo.innerHTML = `<span style="color: #ff0044;">✕ Declined by ${booking.declinedBy}</span>`;
+    actionInfo.classList.remove("hidden");
+  } else {
+    actionInfo.classList.add("hidden");
+  }
+  
+  // Note
+  const noteWrapper = document.getElementById("bookingModalNoteWrapper");
+  if (booking.note) {
+    document.getElementById("bookingModalNote").textContent = booking.note;
+    noteWrapper.classList.remove("hidden");
+  } else {
+    noteWrapper.classList.add("hidden");
+  }
+  
+  // Action buttons
+  const actionsDiv = document.getElementById("bookingModalActions");
+  let actionsHtml = "";
+  
+  if (!isExpired && statusText === "Pending") {
+    actionsHtml += `
+      <button onclick="approveBooking('${bookingKey}'); closeBookingModal();" 
+        class="flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
+        style="background: linear-gradient(135deg, rgba(0,255,136,0.2), rgba(0,200,100,0.1)); border: 1px solid #00ff88; color: #00ff88;">
+        <i data-lucide="check" class="w-4 h-4"></i> Approve
+      </button>
+      <button onclick="declineBooking('${bookingKey}'); closeBookingModal();" 
+        class="flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
+        style="background: linear-gradient(135deg, rgba(255,107,0,0.2), rgba(200,80,0,0.1)); border: 1px solid #ff6b00; color: #ff6b00;">
+        <i data-lucide="x" class="w-4 h-4"></i> Decline
+      </button>
+    `;
+  }
+  
+  actionsHtml += `
+    <button onclick="deleteBooking('${bookingKey}'); closeBookingModal();" 
+      class="py-2.5 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all hover:brightness-110"
+      style="background: linear-gradient(135deg, rgba(255,0,68,0.2), rgba(200,0,50,0.1)); border: 1px solid #ff0044; color: #ff0044;">
+      <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
+    </button>
+  `;
+  
+  actionsDiv.innerHTML = actionsHtml;
+  
+  // Show modal
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  
+  // Reinitialize lucide icons
+  lucide?.createIcons();
+}
+
+function closeBookingModal() {
+  const modal = document.getElementById("bookingDetailsModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+}
+
+window.openBookingModal = openBookingModal;
+window.closeBookingModal = closeBookingModal;
+
 // ==================== TIMETABLE ====================
 
 function buildTimetableBookings(bookingsData) {
@@ -314,8 +561,8 @@ function buildTimetableBookings(bookingsData) {
 
   const today = getISTToday();
 
-  return Object.values(bookingsData)
-    .map(b => {
+  return Object.entries(bookingsData)
+    .map(([key, b]) => {
       if (!Array.isArray(b.pcs) || !b.pcs.length) return null;
 
       const startDate = new Date(b.start);
@@ -329,11 +576,14 @@ function buildTimetableBookings(bookingsData) {
       else return null;
 
       return {
+        key,
         pc,
         name: b.name || "Booking",
         start: timetableTimeIndex(b.start),
         end: timetableTimeIndex(b.end),
-        status: b.status || "Pending"
+        status: b.status || "Pending",
+        startTime: b.start,
+        endTime: b.end
       };
     })
     .filter(Boolean);
@@ -345,7 +595,7 @@ function renderTimeHeader() {
 
   header.innerHTML = "<div></div>";
   for (let h = TIMETABLE_START_HOUR; h < TIMETABLE_END_HOUR; h++) {
-    header.innerHTML += `<div class="text-center font-orbitron" style="border-left: 1px solid rgba(255,0,68,0.2); color: #666;">${String(h).padStart(2, "0")}:00</div>`;
+    header.innerHTML += `<div class="text-center font-orbitron text-[10px]" style="border-left: 1px solid rgba(255,0,68,0.2); color: #666;">${h}</div>`;
   }
 }
 
@@ -357,7 +607,7 @@ function renderTimetable(timetableBookings) {
 
   TIMETABLE_PCS.forEach(pc => {
     const row = document.createElement("div");
-    row.className = "timetable-row grid grid-cols-[140px_repeat(12,_1fr)] relative h-8 rounded";
+    row.className = "timetable-row grid grid-cols-[140px_repeat(12,_1fr)] relative h-10 rounded";
 
     row.innerHTML = `<div class="flex items-center justify-center text-[10px] font-orbitron font-bold border-r" style="color: #00f0ff; border-color: rgba(255,0,68,0.2);">${pc}</div>`;
 
@@ -376,25 +626,72 @@ function renderTimetable(timetableBookings) {
 
         const leftPercent = ((start - TIMETABLE_START_HOUR) / TIMETABLE_TOTAL_HOURS) * 100;
         const widthPercent = ((end - start) / TIMETABLE_TOTAL_HOURS) * 100;
+        
+        // Get dynamic styling based on status and time
+        const style = getTimetableBlockStyle(b);
 
         const block = document.createElement("div");
-        block.className = `absolute top-1/2 -translate-y-1/2 h-6 rounded text-[10px] text-white px-1 flex items-center ${timetableColor(b.status)}`;
-        // Position relative to the time slots area (after the PC column)
-        // Formula: PC_COL_WIDTH + leftPercent% of (100% - PC_COL_WIDTH)
+        block.className = `timetable-block ${style.class} ${style.pulse ? 'timetable-pulse' : ''}`;
         block.style.left = `calc(${PC_COL_WIDTH}px + (100% - ${PC_COL_WIDTH}px) * ${leftPercent / 100})`;
         block.style.width = `calc((100% - ${PC_COL_WIDTH}px) * ${widthPercent / 100} - 4px)`;
-        block.textContent = b.name;
+        block.style.background = style.bg;
+        block.style.borderColor = style.border;
+        block.style.cursor = "pointer";
+        block.dataset.bookingKey = b.key;
+        
+        // Click handler to open booking modal
+        block.addEventListener("click", () => openBookingModal(b.key));
+        
+        // Content with optional status label
+        const labelHtml = style.label ? `<span class="timetable-label">${style.label}</span>` : '';
+        block.innerHTML = `<span class="timetable-name">${b.name}</span>${labelHtml}`;
 
         row.appendChild(block);
       });
 
     body.appendChild(row);
   });
+  
+  // Update legend counts
+  updateTimetableLegend(timetableBookings);
+}
+
+function updateTimetableLegend(bookings) {
+  const now = getISTDate();
+  
+  let running = 0, soon = 0, approved = 0, pending = 0;
+  
+  bookings.forEach(b => {
+    const startTime = new Date(b.startTime);
+    const endTime = new Date(b.endTime);
+    const minutesUntilStart = (startTime - now) / 60000;
+    
+    if (startTime <= now && endTime > now) {
+      running++;
+    } else if (minutesUntilStart > 0 && minutesUntilStart <= 15 && b.status === "Approved") {
+      soon++;
+    } else if (b.status === "Approved") {
+      approved++;
+    } else {
+      pending++;
+    }
+  });
+  
+  // Update legend badges if they exist
+  const runningEl = document.getElementById("legendRunning");
+  const soonEl = document.getElementById("legendSoon");
+  const approvedEl = document.getElementById("legendApproved");
+  const pendingEl = document.getElementById("legendPending");
+  
+  if (runningEl) runningEl.textContent = running;
+  if (soonEl) soonEl.textContent = soon;
+  if (approvedEl) approvedEl.textContent = approved;
+  if (pendingEl) pendingEl.textContent = pending;
 }
 
 function renderCurrentTimeLine() {
-  const wrapper = document.getElementById("timetableWrapper");
-  if (!wrapper) return;
+  const inner = document.getElementById("timetableInner");
+  if (!inner) return;
 
   const oldLine = document.getElementById("currentTimeLine");
   if (oldLine) oldLine.remove();
@@ -415,7 +712,7 @@ function renderCurrentTimeLine() {
   line.style.background = "#ff0044";
   line.style.boxShadow = "0 0 10px #ff0044";
 
-  wrapper.appendChild(line);
+  inner.appendChild(line);
 }
 
 setInterval(renderCurrentTimeLine, 60 * 1000);

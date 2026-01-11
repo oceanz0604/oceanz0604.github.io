@@ -483,14 +483,179 @@ body.admin-page::before {
 
 /* ==================== BOOKING CARD ==================== */
 .booking-card {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 0, 68, 0.2);
-  transition: all 0.3s ease;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.booking-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: transparent;
 }
 
 .booking-card:hover {
-  border-color: var(--neon-red);
-  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Card status accents */
+.booking-card-pending::before { background: #ffff00; }
+.booking-card-approved::before { background: #00ff88; }
+.booking-card-declined::before { background: #ff0044; }
+.booking-card-expired::before { background: #666; }
+
+/* Booking card layout */
+.booking-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.booking-card-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.booking-card-name h3 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00f0ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.booking-card-price {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffff00;
+  flex-shrink: 0;
+}
+
+.booking-card-details {
+  font-size: 10px;
+  color: #888;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.booking-card-divider {
+  color: #444;
+}
+
+.booking-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.booking-card-meta {
+  flex: 1;
+}
+
+.booking-card-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+/* Clickable area */
+.booking-card-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.booking-card-clickable:hover {
+  opacity: 0.85;
+}
+
+/* Status badges - compact */
+.booking-status-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.status-pending {
+  background: rgba(255, 255, 0, 0.15);
+  border: 1px solid rgba(255, 255, 0, 0.4);
+  color: #ffff00;
+}
+
+.status-approved {
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  color: #00ff88;
+}
+
+.status-declined {
+  background: rgba(255, 0, 68, 0.15);
+  border: 1px solid rgba(255, 0, 68, 0.4);
+  color: #ff0044;
+}
+
+/* Booking action buttons - icon only */
+.booking-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+}
+
+.booking-action-approve {
+  border-color: rgba(0, 255, 136, 0.3);
+  color: #00ff88;
+}
+
+.booking-action-approve:hover {
+  background: rgba(0, 255, 136, 0.2);
+  border-color: #00ff88;
+}
+
+.booking-action-decline {
+  border-color: rgba(255, 107, 0, 0.3);
+  color: #ff6b00;
+}
+
+.booking-action-decline:hover {
+  background: rgba(255, 107, 0, 0.2);
+  border-color: #ff6b00;
+}
+
+.booking-action-delete {
+  border-color: rgba(255, 0, 68, 0.3);
+  color: #ff0044;
+}
+
+.booking-action-delete:hover {
+  background: rgba(255, 0, 68, 0.2);
+  border-color: #ff0044;
 }
 
 /* ==================== RECHARGE TABLE ==================== */
@@ -579,14 +744,141 @@ body.admin-page::before {
 /* ==================== TIMETABLE ==================== */
 .timetable-row {
   background: rgba(0, 0, 0, 0.3);
+  transition: background 0.3s ease;
 }
 
+.timetable-row:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Base timetable block */
 .timetable-block {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #000;
+  text-shadow: none;
+  overflow: hidden;
+  cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .timetable-block:hover {
-  transform: scaleY(1.1);
+  transform: translateY(-50%) scale(1.02);
+  z-index: 10;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.timetable-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.timetable-label {
+  font-size: 8px;
+  font-weight: 700;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* Running (LIVE) */
+.timetable-block-running {
+  color: #000;
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+}
+
+/* Starting Soon */
+.timetable-block-soon {
+  color: #000;
+  box-shadow: 0 0 15px rgba(255, 107, 0, 0.5);
+}
+
+/* Approved */
+.timetable-block-approved {
+  color: #000;
+}
+
+/* Pending */
+.timetable-block-pending {
+  color: #000;
+}
+
+/* Pulse animation for live/soon */
+.timetable-pulse {
+  animation: timetablePulse 2s ease-in-out infinite;
+}
+
+@keyframes timetablePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Timetable Legend */
+.timetable-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #999;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.legend-dot-running {
+  background: linear-gradient(135deg, #00ff88, #00cc6a);
+  border-color: #00ff88;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+.legend-dot-soon {
+  background: linear-gradient(135deg, #ff6b00, #ff9500);
+  border-color: #ff6b00;
+  box-shadow: 0 0 8px rgba(255, 107, 0, 0.5);
+}
+
+.legend-dot-approved {
+  background: linear-gradient(135deg, #00f0ff, #0099cc);
+  border-color: #00f0ff;
+}
+
+.legend-dot-pending {
+  background: linear-gradient(135deg, #ffff00, #ccaa00);
+  border-color: #ffff00;
+}
+
+.legend-count {
+  font-family: 'Orbitron', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
 }
 
 /* ==================== LOGOUT BUTTON ==================== */
@@ -912,12 +1204,20 @@ body.admin-login::before {
   
   /* Bookings */
   .booking-card {
-    padding: 12px !important;
+    padding: 8px 10px !important;
   }
   
-  .booking-card .flex.gap-4 {
-    flex-direction: column;
-    gap: 8px !important;
+  .booking-action-btn {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .booking-search-wrapper input {
+    width: 120px !important;
+  }
+  
+  .booking-card-details {
+    font-size: 9px;
   }
   
   /* Audit log */
@@ -1082,6 +1382,38 @@ body.admin-login::before {
   
   #timetableWrapper {
     min-width: 600px;
+  }
+  
+  /* Timetable legend mobile */
+  .timetable-legend {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  
+  .legend-item {
+    font-size: 10px;
+    gap: 4px;
+  }
+  
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .legend-count {
+    font-size: 10px;
+  }
+  
+  /* Timetable blocks mobile */
+  .timetable-block {
+    height: 28px;
+    font-size: 9px;
+    padding: 0 4px;
+  }
+  
+  .timetable-label {
+    font-size: 7px;
   }
   
   /* Admin login mobile */
