@@ -5,7 +5,7 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST } from "../../shared/config.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS } from "../../shared/config.js";
 import { 
   getStaffSession, 
   hasPermission, 
@@ -25,9 +25,9 @@ const db = getDatabase(fdbApp);
 
 // ==================== DATABASE REFS ====================
 
-const terminalsRef = ref(db, "status");
-const sessionsRef = ref(db, "sessions");
-const membersRef = ref(db, "fdb/MEMBERS");
+const terminalsRef = ref(db, FB_PATHS.LEGACY_STATUS);
+const sessionsRef = ref(db, FB_PATHS.SESSIONS);
+const membersRef = ref(db, FB_PATHS.LEGACY_MEMBERS);
 
 // ==================== DOM ELEMENTS ====================
 

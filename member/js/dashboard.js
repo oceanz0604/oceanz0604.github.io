@@ -2,7 +2,7 @@
  * OceanZ Gaming Cafe - Member Dashboard
  */
 
-import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, CONSTANTS } from '../../shared/config.js';
+import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, CONSTANTS, FB_PATHS } from '../../shared/config.js';
 import { 
   getISTDate, formatDate, calculatePrice, minutesToReadable, 
   getActivityIcon, getAvatarUrl, filterToCurrentMonth, calculateStreak 
@@ -188,7 +188,7 @@ function fetchUnavailablePCs(start, end, callback) {
   const selectedDate = bookingDateInput?.value;
   if (!selectedDate) return callback(new Set());
 
-  db.ref("bookings").once("value", snap => {
+  db.ref(FB_PATHS.BOOKINGS).once("value", snap => {
     const bookings = snap.val() || {};
     const unavailable = new Set();
     const startTime = new Date(`${selectedDate}T${start}:00+05:30`);
@@ -298,7 +298,7 @@ function loadProfile() {
 }
 
 function loadStreak() {
-  secondDb.ref(`history/${member.USERNAME}`).once("value").then(snapshot => {
+  secondDb.ref(`${FB_PATHS.HISTORY}/${member.USERNAME}`).once("value").then(snapshot => {
     const entries = Object.values(snapshot.val() || {});
     const streak = calculateStreak(entries);
     const streakDiv = document.getElementById("streakInfo");
@@ -315,7 +315,7 @@ function loadRecentActivity(username) {
   const recentDiv = document.getElementById("recentActivity");
   if (!recentDiv) return;
 
-  secondDb.ref(`history/${username}`).once("value").then(snapshot => {
+  secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).once("value").then(snapshot => {
     const data = snapshot.val();
     if (!data || Object.keys(data).length === 0) {
       recentDiv.innerHTML = `<p class="text-gray-400">No recent activity found.</p>`;
@@ -346,7 +346,7 @@ function loadMemberBookings(memberUsername) {
   
   container.innerHTML = "<p class='text-sm text-gray-400'>Loading your bookings...</p>";
 
-  db.ref("bookings").once("value").then(snapshot => {
+  db.ref(FB_PATHS.BOOKINGS).once("value").then(snapshot => {
     const data = snapshot.val();
     if (!data) {
       container.innerHTML = "<p class='text-sm text-gray-400'>No bookings found.</p>";
@@ -428,7 +428,7 @@ function loadMemberHistory(username) {
   
   list.innerHTML = `<p class="text-gray-400">⏳ Loading your history...</p>`;
 
-  secondDb.ref(`history/${username}`).once("value").then(snapshot => {
+  secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).once("value").then(snapshot => {
     const history = snapshot.val();
     if (!history || Object.keys(history).length === 0) {
       list.innerHTML = `<p class="text-gray-500">No history available.</p>`;
@@ -463,7 +463,7 @@ function loadMemberHistory(username) {
 // ==================== ANALYTICS ====================
 
 async function loadAnalytics(memberId) {
-  const snapshot = await secondDb.ref(`sessions-by-member/${memberId}`).once("value");
+  const snapshot = await secondDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/${memberId}`).once("value");
   if (!snapshot.exists()) return;
 
   const sessions = Object.values(snapshot.val());
@@ -649,7 +649,7 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
     price: duration * selectedPCs.length * CONSTANTS.RATE_PER_HOUR / 60
   };
 
-  db.ref("bookings").push(booking, () => {
+  db.ref(FB_PATHS.BOOKINGS).push(booking, () => {
     const resultDiv = document.getElementById("bookingResult");
     resultDiv.classList.remove("hidden");
     resultDiv.textContent = "✅ Booking successful!";
@@ -703,9 +703,10 @@ async function loadWeeklyLeaderboard(loggedUserName) {
     const weekNum = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
     const weekKey = `${now.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
 
-    const historyRef = secondDb.ref("history");
-    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
-    const members = Object.values(membersSnap.val() || {});
+    const historyRef = secondDb.ref(FB_PATHS.HISTORY);
+    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+    const membersData = membersSnap.val();
+    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
 
     // Get start of week (Monday)
     const dayOfWeek = now.getDay();
@@ -780,9 +781,10 @@ async function loadSeasonLeaderboard(loggedUserName) {
     const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const seasonStartStr = seasonStart.toISOString().split("T")[0];
 
-    const historyRef = secondDb.ref("history");
-    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
-    const members = Object.values(membersSnap.val() || {});
+    const historyRef = secondDb.ref(FB_PATHS.HISTORY);
+    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+    const membersData = membersSnap.val();
+    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
 
     // Calculate season stats for each member
     const seasonStats = await Promise.all(
@@ -871,9 +873,10 @@ async function loadUserSeasonStats(username) {
     const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const seasonStartStr = seasonStart.toISOString().split("T")[0];
 
-    const historyRef = secondDb.ref("history");
-    const membersSnap = await secondDb.ref("fdb/MEMBERS").once("value");
-    const members = Object.values(membersSnap.val() || {});
+    const historyRef = secondDb.ref(FB_PATHS.HISTORY);
+    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
+    const membersData = membersSnap.val();
+    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
 
     // Get all member stats
     const allStats = await Promise.all(

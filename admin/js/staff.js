@@ -6,7 +6,7 @@
 import { initializeApp, getApps, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, get, set, push, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getAuth, createUserWithEmailAndPassword, updatePassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { BOOKING_DB_CONFIG, BOOKING_APP_NAME } from "../../shared/config.js";
+import { BOOKING_DB_CONFIG, BOOKING_APP_NAME, FB_PATHS } from "../../shared/config.js";
 import { getStaffSession, logStaffActivity, ROLES, hasPermission } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
@@ -67,8 +67,8 @@ async function updateUserPassword(email, currentPassword, newPassword) {
 
 // ==================== REFS ====================
 
-const staffRef = ref(db, "staff");
-const activityLogRef = ref(db, "activity_log");
+const staffRef = ref(db, FB_PATHS.STAFF);
+const activityLogRef = ref(db, FB_PATHS.ACTIVITY_LOG);
 
 // Note: ROLES is imported from permissions.js
 
@@ -681,13 +681,23 @@ async function saveStaffEdit() {
   }
   
   try {
-    // Update database record
-    await update(ref(db, `staff/${currentEditId}`), {
+    // Build update object
+    const updateData = {
       name,
       role,
       updatedAt: new Date().toISOString(),
       updatedBy: currentSession?.email || "Unknown"
-    });
+    };
+    
+    // If role changed, update permission version to trigger session refresh
+    if (role !== staff.role) {
+      updateData.lastPermissionUpdate = new Date().toISOString();
+      updateData.permissionVersion = Date.now().toString();
+      console.log(`🔒 Role changed: ${staff.role} → ${role}, updating permission version`);
+    }
+    
+    // Update database record
+    await update(ref(db, `staff/${currentEditId}`), updateData);
     
     // Handle password change if provided
     if (currentPwd && newPwd) {

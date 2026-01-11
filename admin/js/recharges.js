@@ -9,8 +9,12 @@ import {
   FDB_APP_NAME,
   TIMEZONE,
   CONSTANTS,
+  FB_PATHS,
   getISTDate,
-  formatToIST
+  formatToIST,
+  normalizeTerminalName,
+  getShortTerminalName,
+  isGuestTerminal
 } from "../../shared/config.js";
 import { getStaffSession } from "./permissions.js";
 
@@ -185,8 +189,16 @@ if (elements.datePicker) {
 
 // ==================== MEMBER AUTOCOMPLETE ====================
 
-fdbDb.ref("fdb/MEMBERS").once("value").then(snap => {
-  allMembers = Object.values(snap.val() || []);
+// Load members from Firebase (supports both new and legacy format)
+fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value").then(snap => {
+  const data = snap.val();
+  if (Array.isArray(data)) {
+    allMembers = data.filter(m => m); // Legacy array format
+  } else if (data && typeof data === "object") {
+    allMembers = Object.values(data); // New object format
+  } else {
+    allMembers = [];
+  }
 });
 
 elements.memberInput?.addEventListener("input", () => {
@@ -234,7 +246,7 @@ function loadDay() {
 
 // Load all outstanding credits across all dates
 function loadAllOutstandingCredits() {
-  rechargeDb.ref("recharges").once("value").then(snap => {
+  rechargeDb.ref(FB_PATHS.RECHARGES).once("value").then(snap => {
     const allCredits = [];
     
     Object.entries(snap.val() || {}).forEach(([date, dayData]) => {
@@ -984,7 +996,7 @@ window.deleteRecharge = async id => {
 // ==================== AUDIT LOG ====================
 
 function logAudit(action, ref, amount = "") {
-  rechargeDb.ref("recharge_audit").push({
+  rechargeDb.ref(FB_PATHS.RECHARGE_AUDIT).push({
     action,
     ref,
     amount,
@@ -1002,7 +1014,7 @@ function loadAudit() {
 
   el.innerHTML = `<div class="text-center text-gray-500 py-4">Loading...</div>`;
 
-  rechargeDb.ref("recharge_audit").limitToLast(auditLimit).once("value").then(snap => {
+  rechargeDb.ref(FB_PATHS.RECHARGE_AUDIT).limitToLast(auditLimit).once("value").then(snap => {
     auditData = Object.values(snap.val() || {}).reverse();
     
     if (countEl) countEl.textContent = auditData.length;
@@ -1107,7 +1119,7 @@ window.exportMonthPDF = () => {
   const ym = selectedDate.slice(0, 7);
   const monthName = new Date(selectedDate).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
-  rechargeDb.ref("recharges").once("value").then(snap => {
+  rechargeDb.ref(FB_PATHS.RECHARGES).once("value").then(snap => {
     const allData = snap.val() || {};
     const rows = [];
     let totalCash = 0, totalUPI = 0, totalCredit = 0, totalFree = 0, grandTotal = 0;
@@ -1244,18 +1256,30 @@ async function runSync() {
     // Get PanCafe history entries for all members for selected date
     const panCafeEntries = await fetchPanCafeEntriesForDate(selectedDate);
     
-    // Match entries
-    const results = matchEntries(adminEntries, panCafeEntries);
+    // Get guest sessions from Firebase for matching
+    const guestSessionsData = await fetchGuestSessionsForDate(selectedDate);
+    console.log(`📋 Found ${guestSessionsData.length} guest sessions in Firebase for ${selectedDate}`);
+    
+    // Debug: Log all unique member names from both sides
+    const adminMembers = [...new Set(adminEntries.map(e => e.member))];
+    const panCafeMembers = [...new Set(panCafeEntries.map(e => e.member))];
+    console.log("📋 Admin members:", adminMembers);
+    console.log("📋 PanCafe members:", panCafeMembers);
+    
+    // Match entries (with guest sessions data)
+    const results = matchEntries(adminEntries, panCafeEntries, guestSessionsData);
     syncResults = results;
     
     // Update counts
     const matched = results.filter(r => r.status === "matched").length;
     const adminOnly = results.filter(r => r.status === "admin-only").length;
+    const guestVerified = results.filter(r => r.status === "guest-verified").length;
+    const guestUnverified = results.filter(r => r.status === "guest-session").length;
     const panCafeOnly = results.filter(r => r.status === "pancafe-only").length;
     const mismatch = results.filter(r => r.status === "mismatch").length;
     
-    document.getElementById("syncMatched").textContent = matched;
-    document.getElementById("syncOnlyAdmin").textContent = adminOnly;
+    document.getElementById("syncMatched").textContent = matched + guestVerified;
+    document.getElementById("syncOnlyAdmin").textContent = adminOnly + guestUnverified;
     document.getElementById("syncOnlyPanCafe").textContent = panCafeOnly;
     document.getElementById("syncMismatch").textContent = mismatch;
     
@@ -1264,7 +1288,10 @@ async function runSync() {
     if (summary) {
       const totalAdmin = adminEntries.length;
       const totalPanCafe = panCafeEntries.length;
-      summary.textContent = `Admin: ${totalAdmin} entries | PanCafe: ${totalPanCafe} entries`;
+      const guestNote = (guestVerified + guestUnverified) > 0 
+        ? ` | 🎮 ${guestVerified + guestUnverified} guest (${guestVerified} verified)` 
+        : "";
+      summary.textContent = `Admin: ${totalAdmin} | PanCafe: ${totalPanCafe}${guestNote}`;
     }
     
     // Render results
@@ -1287,9 +1314,78 @@ async function runSync() {
   }
 }
 
+// Fetch guest sessions from Firebase for a specific date
+async function fetchGuestSessionsForDate(date) {
+  try {
+    // Guest sessions are stored at /sessions-by-member/guest/
+    const guestSnap = await fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once("value");
+    const guestData = guestSnap.val() || {};
+    
+    console.log("🔍 Guest sessions raw data:", guestData);
+    console.log("🔍 Looking for date:", date);
+    
+    // If no data at this path, try alternative paths
+    if (!guestData || Object.keys(guestData).length === 0) {
+      console.log("🔍 No guest sessions at sessions-by-member/guest, trying /sessions/...");
+      
+      // Try fetching from /sessions/ path (IP logs sessions)
+      const sessionsSnap = await fdbDb.ref(FB_PATHS.SESSIONS).once("value");
+      const sessionsData = sessionsSnap.val() || {};
+      console.log("🔍 Sessions data:", Object.keys(sessionsData).length, "entries");
+      
+      // Log sample session structure
+      const sampleKey = Object.keys(sessionsData)[0];
+      if (sampleKey) {
+        console.log("🔍 Sample session structure:", sessionsData[sampleKey]);
+      }
+    } else {
+      // Log sample guest session structure
+      const sampleKey = Object.keys(guestData)[0];
+      if (sampleKey) {
+        console.log("🔍 Sample guest session structure:", guestData[sampleKey]);
+      }
+    }
+    
+    const sessions = [];
+    
+    Object.entries(guestData).forEach(([sessionId, session]) => {
+      // Try multiple date field options
+      let sessionDate = session.DATE || session.date;
+      
+      // Try extracting from STARTPOINT (format could be "2025-01-11T10:30:00" or "2025-01-11 10:30:00")
+      if (!sessionDate && session.STARTPOINT) {
+        sessionDate = session.STARTPOINT.split('T')[0].split(' ')[0];
+      }
+      if (!sessionDate && session.startpoint) {
+        sessionDate = session.startpoint.split('T')[0].split(' ')[0];
+      }
+      
+      console.log(`🔍 Session ${sessionId}: date=${sessionDate}, terminal=${session.TERMINALNAME}, looking for ${date}`);
+      
+      if (sessionDate === date) {
+        sessions.push({
+          id: sessionId,
+          terminal: normalizeTerminalName(session.TERMINALNAME) || session.TERMINALNAME,
+          terminalShort: getShortTerminalName(session.TERMINALNAME),
+          minutes: session.USINGMIN || 0,
+          price: session.PRICE || 0,
+          startTime: session.STARTPOINT,
+          endTime: session.ENDPOINT
+        });
+      }
+    });
+    
+    console.log(`🔍 Found ${sessions.length} guest sessions for ${date}`);
+    return sessions;
+  } catch (error) {
+    console.warn("Could not fetch guest sessions:", error);
+    return [];
+  }
+}
+
 async function fetchPanCafeEntriesForDate(date) {
   // Fetch all history data from fdb-dataset
-  const historySnap = await fdbDb.ref("history").once("value");
+  const historySnap = await fdbDb.ref(FB_PATHS.HISTORY).once("value");
   const historyData = historySnap.val() || {};
   
   const entries = [];
@@ -1323,15 +1419,56 @@ async function fetchPanCafeEntriesForDate(date) {
   return entries;
 }
 
-function matchEntries(adminEntries, panCafeEntries) {
+// Normalize terminal/member names for comparison
+// Handles various formats: CT-ROOM-1, CT-ROOM 1, CTROOM1, CT1, etc.
+function normalizeMemberName(name) {
+  if (!name) return "";
+  let n = name.toUpperCase().trim();
+  
+  // Remove common prefixes/variations
+  n = n.replace(/[-_\s]+/g, ""); // Remove hyphens, underscores, spaces
+  n = n.replace(/ROOM/g, "");    // Remove "ROOM"
+  
+  // Normalize Xbox variations
+  if (n.includes("XBOX")) return "XBOX";
+  
+  // Normalize PlayStation variations  
+  if (n === "PS" || n.includes("PLAYSTATION")) return "PS";
+  
+  return n;
+}
+
+// Check if two member names match (handles format variations)
+function membersMatch(name1, name2) {
+  if (!name1 || !name2) return false;
+  
+  // First try exact match (case-insensitive)
+  const n1 = name1.toUpperCase().trim();
+  const n2 = name2.toUpperCase().trim();
+  if (n1 === n2) return true;
+  
+  // Then try normalized match
+  const norm1 = normalizeMemberName(name1);
+  const norm2 = normalizeMemberName(name2);
+  
+  // Debug logging for guest sessions
+  if (norm1.match(/^(CT|T)\d+$/) || norm2.match(/^(CT|T)\d+$/)) {
+    console.log(`🔍 Comparing: "${name1}" (${norm1}) vs "${name2}" (${norm2}) = ${norm1 === norm2}`);
+  }
+  
+  return norm1 === norm2;
+}
+
+function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
   const results = [];
   const usedAdminIds = new Set();
   const usedPanCafeIds = new Set();
+  const usedGuestIds = new Set();
   
   // First pass: exact matches (member + amount)
   adminEntries.forEach(admin => {
     const matchingPanCafe = panCafeEntries.find(pc => 
-      pc.member === admin.member && 
+      membersMatch(pc.member, admin.member) && 
       pc.amount === admin.amount && 
       !usedPanCafeIds.has(pc.id)
     );
@@ -1357,7 +1494,7 @@ function matchEntries(adminEntries, panCafeEntries) {
     if (usedAdminIds.has(admin.id)) return;
     
     const sameMember = panCafeEntries.find(pc => 
-      pc.member === admin.member && 
+      membersMatch(pc.member, admin.member) && 
       !usedPanCafeIds.has(pc.id)
     );
     
@@ -1378,7 +1515,53 @@ function matchEntries(adminEntries, panCafeEntries) {
     }
   });
   
-  // Third pass: admin-only entries (not found in PanCafe)
+  // Third pass: guest session matching with Firebase data
+  adminEntries.forEach(admin => {
+    if (usedAdminIds.has(admin.id)) return;
+    
+    const isGuest = isGuestTerminal(admin.member);
+    if (!isGuest) return;
+    
+    // Try to find a matching guest session from Firebase
+    const normalizedMember = normalizeTerminalName(admin.member) || admin.member;
+    const shortName = getShortTerminalName(admin.member);
+    
+    const matchingGuestSession = guestSessions.find(gs => 
+      !usedGuestIds.has(gs.id) &&
+      (gs.terminal === normalizedMember || 
+       gs.terminalShort === shortName ||
+       gs.terminal?.toUpperCase() === admin.member?.toUpperCase())
+    );
+    
+    if (matchingGuestSession) {
+      results.push({
+        status: "guest-verified",
+        member: admin.member,
+        adminAmount: admin.amount,
+        adminId: admin.id,
+        adminData: admin,
+        guestSession: matchingGuestSession,
+        sessionMinutes: matchingGuestSession.minutes,
+        sessionPrice: matchingGuestSession.price,
+        isGuest: true
+      });
+      usedAdminIds.add(admin.id);
+      usedGuestIds.add(matchingGuestSession.id);
+    } else {
+      // Guest session without Firebase verification
+      results.push({
+        status: "guest-session",
+        member: admin.member,
+        adminAmount: admin.amount,
+        adminId: admin.id,
+        adminData: admin,
+        isGuest: true
+      });
+      usedAdminIds.add(admin.id);
+    }
+  });
+  
+  // Fourth pass: admin-only entries (not found in PanCafe and not guests)
   adminEntries.forEach(admin => {
     if (usedAdminIds.has(admin.id)) return;
     
@@ -1387,11 +1570,12 @@ function matchEntries(adminEntries, panCafeEntries) {
       member: admin.member,
       adminAmount: admin.amount,
       adminId: admin.id,
-      adminData: admin
+      adminData: admin,
+      isGuest: false
     });
   });
   
-  // Fourth pass: pancafe-only entries (not found in Admin)
+  // Fifth pass: pancafe-only entries (not found in Admin)
   panCafeEntries.forEach(pc => {
     if (usedPanCafeIds.has(pc.id)) return;
     
@@ -1425,9 +1609,14 @@ function renderSyncResults() {
   const listEl = document.getElementById("syncResultsList");
   if (!listEl) return;
   
+  // Handle filter with related statuses
   const filtered = syncFilter === "all" 
     ? syncResults 
-    : syncResults.filter(r => r.status === syncFilter);
+    : syncFilter === "matched"
+      ? syncResults.filter(r => r.status === "matched" || r.status === "guest-verified")
+      : syncFilter === "admin-only"
+        ? syncResults.filter(r => r.status === "admin-only" || r.status === "guest-session")
+        : syncResults.filter(r => r.status === syncFilter);
   
   if (filtered.length === 0) {
     listEl.innerHTML = `
@@ -1442,12 +1631,14 @@ function renderSyncResults() {
   listEl.innerHTML = filtered.map(r => {
     const statusConfig = {
       "matched": { icon: "✅", label: "Matched", color: "#00ff88" },
+      "guest-verified": { icon: "🎮✓", label: "Guest (Verified)", color: "#00ff88" },
       "admin-only": { icon: "⚠️", label: "Only in Admin", color: "#ffff00" },
+      "guest-session": { icon: "🎮", label: "Guest (Unverified)", color: "#00f0ff" },
       "pancafe-only": { icon: "❌", label: "Only in PanCafe", color: "#ff0044" },
       "mismatch": { icon: "🔄", label: "Amount Mismatch", color: "#b829ff" }
     };
     
-    const config = statusConfig[r.status];
+    const config = statusConfig[r.status] || statusConfig["admin-only"];
     
     let detailsHtml = "";
     
@@ -1464,6 +1655,30 @@ function renderSyncResults() {
             <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
             ${r.panCafeData?.time ? `<div class="text-xs text-gray-500 mt-1">⏰ ${r.panCafeData.time}</div>` : ""}
           </div>
+        </div>
+      `;
+    } else if (r.status === "guest-verified") {
+      detailsHtml = `
+        <div class="mt-2 p-2 rounded text-sm" style="background: rgba(0,255,136,0.1);">
+          <div class="flex items-center justify-between">
+            <span style="color: #00ff88;">₹${r.adminAmount}</span>
+            <span class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,255,136,0.2); color: #00ff88;">✓ Verified</span>
+          </div>
+          <div class="text-xs text-gray-400 mt-1">
+            🎮 Guest session verified in Firebase 
+            ${r.sessionMinutes ? `• ${r.sessionMinutes} min` : ""}
+            ${r.sessionPrice ? `• Session: ₹${r.sessionPrice}` : ""}
+          </div>
+        </div>
+      `;
+    } else if (r.status === "guest-session") {
+      detailsHtml = `
+        <div class="mt-2 p-2 rounded text-sm" style="background: rgba(0,240,255,0.1);">
+          <div class="flex items-center justify-between">
+            <span style="color: #00f0ff;">₹${r.adminAmount}</span>
+            ${r.adminData?.note ? `<span class="text-xs text-gray-500">📝 ${r.adminData.note}</span>` : ""}
+          </div>
+          <div class="text-xs text-gray-400 mt-1">🎮 Guest session - no Firebase record found (may be offline session)</div>
         </div>
       `;
     } else if (r.status === "admin-only") {

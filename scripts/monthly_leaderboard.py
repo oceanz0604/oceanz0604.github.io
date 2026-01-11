@@ -1,27 +1,56 @@
 """
-OceanZ Gaming Cafe - Monthly Leaderboard Generator
+OceanZ Gaming Cafe - Monthly Leaderboard Generator (OPTIMIZED)
 
-Generates monthly playtime leaderboards from session data.
-Run daily (or hourly) to keep leaderboard fresh.
+INCREMENTAL CALCULATION - Uses pre-aggregated daily data when possible.
 
-Output path: /leaderboards/monthly/YYYY-MM/
+Features:
+- Uses daily-summary data for fast calculation
+- Only recalculates if new data since last run
+- Pre-computes weekly leaderboards too
+- Caches results to avoid redundant computation
+
+Run frequency: Every 30 minutes (Windows Task Scheduler)
 """
 
 import sys
+import os
+import json
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 import firebase_admin
 from firebase_admin import credentials, db
 
-# ==================== CONFIGURATION ====================
+# Import shared config
+from config import (
+    FIREBASE_CRED_PATH, FIREBASE_DB_URL, FB_PATHS
+)
 
-FIREBASE_CRED_PATH = r"C:\Firebase\fbcreds.json"
-FIREBASE_DB_URL = "https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app"
-SESSIONS_BY_MEMBER_PATH = "sessions-by-member"
-LEADERBOARD_ROOT = "leaderboards/monthly"
+# ==================== LOCAL STATE ====================
 
-# ==================== UTILITIES ====================
+LOCAL_STATE_FILE = os.path.join(os.path.dirname(__file__), ".leaderboard_state.json")
+
+def load_local_state():
+    """Load state from local file."""
+    try:
+        if os.path.exists(LOCAL_STATE_FILE):
+            with open(LOCAL_STATE_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"last_sync": None, "last_history_id": 0}
+
+
+def save_local_state(state):
+    """Save state to local file."""
+    try:
+        with open(LOCAL_STATE_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Could not save state: {e}")
+
+
+# ==================== FIREBASE ====================
 
 def init_firebase():
     """Initialize Firebase connection."""
@@ -30,177 +59,296 @@ def init_firebase():
         firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
 
 
-def parse_iso(dt_str):
-    """Parse ISO timestamp robustly."""
-    if not dt_str:
-        return None
+def check_if_update_needed(state):
+    """Check if we need to recalculate leaderboards."""
     try:
-        s = dt_str.rstrip("Z")
-        try:
-            return datetime.fromisoformat(s)
-        except ValueError:
-            if "." in s:
-                base, _ = s.split(".", 1)
-                try:
-                    return datetime.fromisoformat(base)
-                except Exception:
-                    return None
-            return None
-    except Exception:
-        return None
-
-
-def extract_username_from_discountnote(note):
-    """Extract username from discount note field."""
-    if not note or not isinstance(note, str):
-        return None
-    if "Member:" in note:
-        return note.split("Member:", 1)[1].strip()
-    return None
-
-
-def compute_session_minutes(session):
-    """Compute duration in minutes for one session."""
-    try:
-        usingmin = session.get("USINGMIN")
-        if usingmin is not None:
-            try:
-                um = float(usingmin)
-                if um > 0:
-                    return int(round(um))
-            except Exception:
-                pass
-
-        start_s = session.get("STARTPOINT") or session.get("start") or session.get("Start")
-        end_s = session.get("ENDPOINT") or session.get("end") or session.get("End")
-
-        start_dt = parse_iso(start_s)
-        end_dt = parse_iso(end_s)
+        # Check sync-meta for latest history ID
+        sync_meta = db.reference(FB_PATHS.SYNC_META).get() or {}
+        current_history_id = sync_meta.get("last_history_id", 0)
+        last_processed_id = state.get("last_history_id", 0)
         
-        if start_dt and end_dt:
-            delta = end_dt - start_dt
-            minutes = delta.total_seconds() / 60.0
-            return int(round(max(0, minutes)))
+        if current_history_id > last_processed_id:
+            print(f"📊 New data detected (ID: {last_processed_id} → {current_history_id})")
+            return True, current_history_id
+        else:
+            print(f"   No new data since last run")
+            return False, current_history_id
+            
     except Exception:
-        pass
-    return 0
-
-# ==================== DATA PROCESSING ====================
-
-def fetch_sessions_by_member():
-    """Fetch raw sessions-by-member from Firebase."""
-    ref = db.reference(SESSIONS_BY_MEMBER_PATH)
-    return ref.get()
+        # If can't check, assume update needed
+        return True, 0
 
 
-def normalize_sessions_structure(raw):
-    """Normalize sessions data to consistent format."""
-    normalized = {}
-    if raw is None:
-        return normalized
+# ==================== DATA FETCHING ====================
 
-    if isinstance(raw, list):
-        for idx, item in enumerate(raw):
-            if item is None:
-                continue
-            member_id = str(idx)
-            if isinstance(item, dict):
-                normalized[member_id] = item
-    elif isinstance(raw, dict):
-        for k, v in raw.items():
-            if v is None:
-                continue
-            normalized[str(k)] = v
-    else:
-        raise ValueError("Unsupported sessions-by-member JSON structure.")
+def fetch_members():
+    """Fetch members for username/stats lookup."""
+    try:
+        ref = db.reference(FB_PATHS.LEGACY_MEMBERS)
+        data = ref.get()
+        if isinstance(data, list):
+            return [m for m in data if m]
+        elif isinstance(data, dict):
+            return list(data.values())
+        return []
+    except Exception as e:
+        print(f"⚠️ Error fetching members: {e}")
+        return []
+
+
+def fetch_history_for_period(start_date, end_date=None):
+    """
+    Fetch history for a date range.
+    Uses history-by-date if available, falls back to full history scan.
+    """
+    results = defaultdict(lambda: {"minutes": 0, "sessions": 0, "spent": 0})
     
-    return normalized
+    try:
+        # Try using history-by-date (faster)
+        history_by_date_ref = db.reference(FB_PATHS.HISTORY_BY_DATE)
+        
+        current = start_date
+        end = end_date or datetime.now()
+        
+        while current <= end:
+            date_str = current.strftime("%Y-%m-%d")
+            day_data = history_by_date_ref.child(date_str).get()
+            
+            if day_data:
+                for record_id, record in day_data.items():
+                    username = record.get("username", "").upper()
+                    if username:
+                        results[username]["sessions"] += 1
+                        results[username]["minutes"] += record.get("minutes", 0)
+                        charge = record.get("charge", 0)
+                        if charge < 0:
+                            results[username]["spent"] += abs(charge)
+            
+            current += timedelta(days=1)
+        
+        if results:
+            return dict(results)
+            
+    except Exception as e:
+        print(f"⚠️ history-by-date not available: {e}")
+    
+    # Fallback: scan full history
+    print("   Using full history scan (slower)...")
+    return fetch_history_full_scan(start_date, end_date)
 
 
-def generate_monthly_totals(normalized_sessions):
-    """Generate monthly totals for each member."""
-    totals = {}
-    now = datetime.now()
-
-    for member_id, sessions_map in normalized_sessions.items():
-        try:
-            total_mins = 0
-            count = 0
-            username = None
-
-            if not isinstance(sessions_map, dict):
+def fetch_history_full_scan(start_date, end_date=None):
+    """Full history scan - fallback method."""
+    results = defaultdict(lambda: {"minutes": 0, "sessions": 0, "spent": 0})
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = (end_date or datetime.now()).strftime("%Y-%m-%d")
+    
+    try:
+        history_ref = db.reference(FB_PATHS.HISTORY)
+        all_history = history_ref.get() or {}
+        
+        for username, records in all_history.items():
+            if not isinstance(records, dict):
                 continue
-
-            for sid, sess in sessions_map.items():
-                if not isinstance(sess, dict):
+            
+            for record_id, record in records.items():
+                if not isinstance(record, dict):
                     continue
-
-                start_s = sess.get("STARTPOINT") or sess.get("start") or sess.get("Start")
-                start_dt = parse_iso(start_s)
                 
-                if start_dt is None:
+                record_date = record.get("DATE", "")
+                if not record_date:
                     continue
-                if start_dt.year != now.year or start_dt.month != now.month:
-                    continue
-
-                mins = compute_session_minutes(sess)
-                total_mins += mins
-                count += 1
-
-                if username is None:
-                    note = sess.get("DISCOUNTNOTE") or sess.get("discountnote") or sess.get("DiscountNote")
-                    uname = extract_username_from_discountnote(note)
-                    if uname:
-                        username = uname
-
-            if total_mins > 0:
-                if username is None:
-                    username = f"member_{member_id}"
-                totals[member_id] = {
-                    "total_minutes": int(total_mins),
-                    "username": username,
-                    "sessions_count": int(count)
-                }
-        except Exception:
-            print(f"⚠️ Error processing member {member_id}:")
-            traceback.print_exc()
-            continue
-
-    return totals
+                
+                if start_str <= record_date <= end_str:
+                    results[username]["sessions"] += 1
+                    results[username]["minutes"] += float(record.get("USINGMIN") or 0)
+                    
+                    charge = float(record.get("CHARGE") or 0)
+                    if charge < 0:
+                        results[username]["spent"] += abs(charge)
+        
+        return dict(results)
+        
+    except Exception as e:
+        print(f"❌ Error scanning history: {e}")
+        return {}
 
 
-def save_leaderboard_to_firebase(month_key, totals):
-    """Save leaderboard to Firebase."""
-    ref = db.reference(f"{LEADERBOARD_ROOT}/{month_key}")
-    ref.set(totals)
-    print(f"✅ Leaderboard written to {LEADERBOARD_ROOT}/{month_key} (entries: {len(totals)})")
+# ==================== LEADERBOARD GENERATION ====================
+
+def generate_monthly_leaderboard(members):
+    """Generate current month's leaderboard."""
+    now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
+    month_key = f"{now.year}-{now.month:02d}"
+    
+    print(f"\n📊 Generating monthly leaderboard for {month_key}...")
+    
+    # Get activity data for this month
+    activity = fetch_history_for_period(month_start)
+    
+    # Build member ID lookup
+    id_to_username = {}
+    username_to_id = {}
+    for m in members:
+        if m.get("ID") and m.get("USERNAME"):
+            mid = str(m["ID"])
+            uname = m["USERNAME"].upper()
+            id_to_username[mid] = uname
+            username_to_id[uname] = mid
+    
+    # Build leaderboard
+    leaderboard = {}
+    
+    for username, stats in activity.items():
+        if stats["minutes"] > 0:
+            member_id = username_to_id.get(username, username)
+            leaderboard[member_id] = {
+                "username": username,
+                "total_minutes": int(stats["minutes"]),
+                "sessions_count": int(stats["sessions"]),
+                "total_spent": round(stats["spent"], 2),
+                "member_id": member_id
+            }
+    
+    # Upload
+    if leaderboard:
+        db.reference(f"{FB_PATHS.LEADERBOARDS}/monthly/{month_key}").set(leaderboard)
+        print(f"   ✅ Uploaded monthly leaderboard ({len(leaderboard)} entries)")
+    else:
+        print(f"   ⚠️ No activity data for {month_key}")
+    
+    return leaderboard
+
+
+def generate_weekly_leaderboard(members):
+    """Generate current week's leaderboard."""
+    now = datetime.now()
+    
+    # Calculate week start (Monday)
+    day_of_week = now.weekday()
+    week_start = now - timedelta(days=day_of_week)
+    week_start = datetime(week_start.year, week_start.month, week_start.day)
+    
+    # ISO week number
+    week_num = now.isocalendar()[1]
+    week_key = f"{now.year}-W{week_num:02d}"
+    
+    print(f"\n📊 Generating weekly leaderboard for {week_key}...")
+    
+    # Get activity data for this week
+    activity = fetch_history_for_period(week_start)
+    
+    # Build leaderboard
+    leaderboard = {}
+    
+    for username, stats in activity.items():
+        if stats["minutes"] > 0:
+            leaderboard[username] = {
+                "username": username,
+                "total_minutes": int(stats["minutes"]),
+                "sessions_count": int(stats["sessions"]),
+                "total_hours": round(stats["minutes"] / 60, 1)
+            }
+    
+    # Upload
+    if leaderboard:
+        db.reference(f"{FB_PATHS.LEADERBOARDS}/weekly/{week_key}").set(leaderboard)
+        print(f"   ✅ Uploaded weekly leaderboard ({len(leaderboard)} entries)")
+    
+    return leaderboard
+
+
+def generate_alltime_leaderboard(members):
+    """Generate all-time leaderboard from member stats."""
+    print(f"\n📊 Generating all-time leaderboard...")
+    
+    # Sort by TOTALACTMINUTE
+    sorted_members = sorted(
+        [m for m in members if m.get("TOTALACTMINUTE", 0) > 0],
+        key=lambda m: m.get("TOTALACTMINUTE", 0),
+        reverse=True
+    )[:50]  # Top 50
+    
+    leaderboard = []
+    
+    for i, m in enumerate(sorted_members):
+        leaderboard.append({
+            "rank": i + 1,
+            "username": m.get("USERNAME", ""),
+            "total_minutes": int(m.get("TOTALACTMINUTE", 0)),
+            "total_hours": round(m.get("TOTALACTMINUTE", 0) / 60, 1),
+            "total_paid": round(m.get("TOTALPAID", 0), 2),
+            "member_since": m.get("RECDATE"),
+            "member_id": m.get("ID")
+        })
+    
+    # Upload
+    if leaderboard:
+        db.reference(f"{FB_PATHS.LEADERBOARDS}/all-time").set(leaderboard)
+        print(f"   ✅ Uploaded all-time leaderboard ({len(leaderboard)} entries)")
+    
+    return leaderboard
+
 
 # ==================== MAIN ====================
 
 def run():
+    """Main leaderboard generation routine."""
+    start_time = datetime.now()
+    
+    print("\n" + "="*50)
+    print("🏆 OceanZ Leaderboard Generator")
+    print(f"   {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*50)
+    
     try:
         init_firebase()
-        raw = fetch_sessions_by_member()
-        normalized = normalize_sessions_structure(raw)
-        totals = generate_monthly_totals(normalized)
-
-        now = datetime.now()
-        month_key = f"{now.year}-{now.month:02d}"
-
-        save_leaderboard_to_firebase(month_key, totals)
-
-        # Print top 10 for logs
-        sorted_list = sorted(totals.items(), key=lambda kv: kv[1]['total_minutes'], reverse=True)[:10]
-        print("\n🏆 Top 10 this month:")
-        for rank, (mid, info) in enumerate(sorted_list, start=1):
-            print(f"  {rank:2d}. {info['username']} (member {mid}) — {info['total_minutes']} min ({info['sessions_count']} sessions)")
-
+        state = load_local_state()
+        
+        # Check if update needed
+        needs_update, current_history_id = check_if_update_needed(state)
+        
+        if not needs_update:
+            # Still update all-time since it uses MEMBERS table directly
+            members = fetch_members()
+            if members:
+                generate_alltime_leaderboard(members)
+            
+            elapsed = (datetime.now() - start_time).total_seconds()
+            print(f"\n✅ Quick check completed in {elapsed:.1f}s")
+            return
+        
+        # Fetch members
+        members = fetch_members()
+        print(f"📊 Loaded {len(members)} members")
+        
+        # Generate all leaderboards
+        generate_alltime_leaderboard(members)
+        generate_monthly_leaderboard(members)
+        generate_weekly_leaderboard(members)
+        
+        # Update state
+        state["last_sync"] = start_time.isoformat()
+        state["last_history_id"] = current_history_id
+        save_local_state(state)
+        
+        # Update sync meta
+        db.reference(f"{FB_PATHS.SYNC_META}/leaderboard").update({
+            "last_sync": start_time.isoformat(),
+            "status": "ok"
+        })
+        
+        elapsed = (datetime.now() - start_time).total_seconds()
+        print("\n" + "="*50)
+        print(f"✅ Leaderboards updated in {elapsed:.1f}s")
+        print("="*50 + "\n")
+        
     except Exception as e:
-        print("❌ Fatal error while generating leaderboard:")
+        print(f"\n❌ Error: {e}")
         traceback.print_exc()
-        sys.exit(2)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     run()
-
