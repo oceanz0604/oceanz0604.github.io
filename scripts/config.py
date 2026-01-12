@@ -96,10 +96,11 @@ HISTORY_FIELDS = [
 ]
 
 # Fields to keep from MEMBERS
+# Note: TOTALPAID may not exist in all PanCafe versions
 MEMBER_FIELDS = [
     "ID", "USERNAME", "PASSWORD", "BALANCE", "FIRSTNAME", "LASTNAME",
     "EMAIL", "PHONE", "GROUPID", "MEMBERSTATE", "JOININGDATE", 
-    "LASTCONNECTION", "ISLOGIN", "TIMEMINS", "TOTALUSEDMIN", "TOTALPAID"
+    "LASTCONNECTION", "ISLOGIN", "TIMEMINS", "TOTALUSEDMIN", "TOTALACTMINUTE"
 ]
 
 # ==================== SETTINGS ====================

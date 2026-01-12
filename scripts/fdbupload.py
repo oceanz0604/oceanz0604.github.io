@@ -46,9 +46,9 @@ def copy_fdb_file():
     os.makedirs(os.path.dirname(WORKING_FDB_PATH), exist_ok=True)
     try:
         shutil.copy2(SOURCE_FDB_PATH, WORKING_FDB_PATH)
-        print(f"✅ Copied DB file")
+        print("[OK] Copied DB file")
     except Exception as e:
-        print(f"❌ Failed to copy FDB file: {e}")
+        print(f"[ERROR] Failed to copy FDB file: {e}")
         raise
 
 
@@ -60,9 +60,9 @@ def init_firebase():
     try:
         cred = credentials.Certificate(FIREBASE_CRED_PATH)
         firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_DB_URL})
-        print("✅ Firebase initialized")
+        print("[OK] Firebase initialized")
     except Exception as e:
-        print(f"❌ Firebase initialization failed: {e}")
+        print(f"[ERROR] Firebase initialization failed: {e}")
         raise
 
 
@@ -76,7 +76,7 @@ def connect_to_firebird():
         )
         return conn
     except Exception as e:
-        print(f"❌ Firebird connection failed: {e}")
+        print(f"[ERROR] Firebird connection failed: {e}")
         raise
 
 
@@ -99,6 +99,19 @@ def get_record_hash(record):
     return hashlib.md5(serialized.encode()).hexdigest()[:8]
 
 
+def remove_none_values(data):
+    """
+    Recursively remove None values from dict/list.
+    Firebase doesn't accept None values.
+    """
+    if isinstance(data, dict):
+        return {k: remove_none_values(v) for k, v in data.items() if v is not None}
+    elif isinstance(data, list):
+        return [remove_none_values(item) for item in data if item is not None]
+    else:
+        return data
+
+
 # ==================== SYNC STATE MANAGEMENT ====================
 
 def load_local_sync_state():
@@ -108,7 +121,7 @@ def load_local_sync_state():
             with open(LOCAL_SYNC_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
-        print(f"⚠️ Could not load local sync state: {e}")
+        print(f"[WARN] Could not load local sync state: {e}")
     
     return {
         "last_history_id": 0,
@@ -123,7 +136,7 @@ def save_local_sync_state(state):
         with open(LOCAL_SYNC_FILE, "w") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
-        print(f"⚠️ Could not save local sync state: {e}")
+        print(f"[WARN] Could not save local sync state: {e}")
 
 
 def get_firebase_sync_meta():
@@ -141,7 +154,7 @@ def update_firebase_sync_meta(updates):
         ref = db.reference(SYNC_META_PATH)
         ref.update(updates)
     except Exception as e:
-        print(f"⚠️ Could not update Firebase sync meta: {e}")
+        print(f"[WARN] Could not update Firebase sync meta: {e}")
 
 
 # ==================== INCREMENTAL HISTORY SYNC ====================
@@ -153,10 +166,10 @@ def fetch_new_history_records(cursor, last_id):
         cursor.execute(query)
         columns = [desc[0].strip() for desc in cursor.description]
         rows = cursor.fetchall()
-        print(f"📊 Found {len(rows)} NEW history records (after ID {last_id})")
+        print(f"[DATA] Found {len(rows)} NEW history records (after ID {last_id})")
         return [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
     except Exception as e:
-        print(f"❌ Failed to fetch new history: {e}")
+        print(f"[ERROR] Failed to fetch new history: {e}")
         return []
 
 
@@ -208,22 +221,25 @@ def process_and_upload_history(records, sync_state):
         if terminal:
             terminal = normalize_terminal_name(terminal) or terminal
         
-        # Build clean record
+        # Build clean record (filter out None values for Firebase)
         clean_record = {
             "ID": record_id,
             "USERNAME": username,
-            "DATE": date_str,
-            "TIME": time_str,
-            "TIMESTAMP": timestamp,
+            "DATE": date_str or "",
+            "TIME": time_str or "",
             "CHARGE": float(charge_val) if charge_val else 0,
             "BALANCE": float(balance_val) if balance_val else 0,
-            "NOTE": record.get("NOTE", ""),
-            "TERMINALNAME": terminal,
-            "TERMINAL_SHORT": get_short_terminal_name(terminal),
+            "NOTE": record.get("NOTE") or "",
+            "TERMINALNAME": terminal or "",
+            "TERMINAL_SHORT": get_short_terminal_name(terminal) or "",
             "USINGMIN": float(record.get("USINGMIN") or 0),
             "USINGSEC": float(record.get("USINGSEC") or 0),
-            "DISCOUNTNOTE": record.get("DISCOUNTNOTE", ""),
+            "DISCOUNTNOTE": record.get("DISCOUNTNOTE") or "",
         }
+        
+        # Only add TIMESTAMP if it exists
+        if timestamp:
+            clean_record["TIMESTAMP"] = timestamp
         
         by_user[username][str(record_id)] = clean_record
         
@@ -240,9 +256,9 @@ def process_and_upload_history(records, sync_state):
             ref.update(records)  # Merge, don't overwrite
             uploaded += len(records)
         except Exception as e:
-            print(f"⚠️ Failed to upload history for {username}: {e}")
+            print(f"[WARN] Failed to upload history for {username}: {e}")
     
-    print(f"   ✅ Uploaded {uploaded} history records for {len(by_user)} users")
+    print(f"   [OK] Uploaded {uploaded} history records for {len(by_user)} users")
     
     # Update daily aggregates
     if daily_aggregates:
@@ -282,9 +298,9 @@ def upload_daily_aggregates(daily_data):
             })
             
         except Exception as e:
-            print(f"⚠️ Failed to update daily aggregate for {date_str}: {e}")
+            print(f"[WARN] Failed to update daily aggregate for {date_str}: {e}")
     
-    print(f"   ✅ Updated daily aggregates for {len(daily_data)} dates")
+    print(f"   [OK] Updated daily aggregates for {len(daily_data)} dates")
 
 
 # ==================== INCREMENTAL MEMBERS SYNC ====================
@@ -297,7 +313,7 @@ def fetch_all_members(cursor):
         rows = cursor.fetchall()
         return [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
     except Exception as e:
-        print(f"❌ Failed to fetch members: {e}")
+        print(f"[ERROR] Failed to fetch members: {e}")
         return []
 
 
@@ -319,25 +335,32 @@ def process_and_upload_members(records, sync_state):
         if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
             continue
         
-        # Build clean record
+        # Build clean record (filter out None values for Firebase)
         clean_record = {
-            "ID": record.get("ID"),
             "USERNAME": username,
             "BALANCE": float(record.get("BALANCE") or 0),
-            "FIRSTNAME": record.get("FIRSTNAME", ""),
-            "LASTNAME": record.get("LASTNAME", ""),
-            "EMAIL": record.get("EMAIL", ""),
-            "PHONE": record.get("PHONE", ""),
-            "GROUPID": record.get("GROUPID"),
-            "MEMBERSTATE": record.get("MEMBERSTATE", 0),
-            "JOININGDATE": record.get("JOININGDATE"),
-            "LASTCONNECTION": record.get("LASTCONNECTION"),
-            "ISLOGIN": record.get("ISLOGIN", 0),
+            "FIRSTNAME": record.get("FIRSTNAME") or "",
+            "LASTNAME": record.get("LASTNAME") or "",
+            "EMAIL": record.get("EMAIL") or "",
+            "PHONE": record.get("PHONE") or "",
+            "MEMBERSTATE": int(record.get("MEMBERSTATE") or 0),
+            "ISLOGIN": int(record.get("ISLOGIN") or 0),
             "TIMEMINS": float(record.get("TIMEMINS") or 0),
             "TOTALUSEDMIN": float(record.get("TOTALUSEDMIN") or 0),
             "TOTALACTMINUTE": float(record.get("TOTALACTMINUTE") or 0),
-            "TOTALPAID": float(record.get("TOTALPAID") or 0),
         }
+        
+        # Only add optional fields if they have values
+        if record.get("ID") is not None:
+            clean_record["ID"] = record.get("ID")
+        if record.get("GROUPID") is not None:
+            clean_record["GROUPID"] = record.get("GROUPID")
+        if record.get("JOININGDATE"):
+            clean_record["JOININGDATE"] = record.get("JOININGDATE")
+        if record.get("LASTCONNECTION"):
+            clean_record["LASTCONNECTION"] = record.get("LASTCONNECTION")
+        if record.get("RECDATE"):
+            clean_record["RECDATE"] = record.get("RECDATE")
         
         members_array.append(clean_record)
         
@@ -350,26 +373,26 @@ def process_and_upload_members(records, sync_state):
     
     # Upload only changed members
     if members_to_update:
-        print(f"📊 Found {len(members_to_update)} CHANGED members (out of {len(records)})")
+        print(f"[DATA] Found {len(members_to_update)} CHANGED members (out of {len(records)})")
         
         for username, data in members_to_update.items():
             try:
                 db.reference(f"{FB_PATHS.MEMBERS}/{username}").set(data)
             except Exception as e:
-                print(f"⚠️ Failed to upload member {username}: {e}")
+                print(f"[WARN] Failed to upload member {username}: {e}")
         
-        print(f"   ✅ Updated {len(members_to_update)} member profiles")
+        print(f"   [OK] Updated {len(members_to_update)} member profiles")
     else:
-        print(f"   No member changes detected")
+        print("   No member changes detected")
     
     # Always update legacy array (for backward compatibility)
     # But only if there were changes
     if members_to_update:
         try:
             db.reference(FB_PATHS.LEGACY_MEMBERS).set(members_array)
-            print(f"   ✅ Updated legacy members array ({len(members_array)} members)")
+            print(f"   [OK] Updated legacy members array ({len(members_array)} members)")
         except Exception as e:
-            print(f"⚠️ Failed to update legacy members: {e}")
+            print(f"[WARN] Failed to update legacy members: {e}")
     
     return new_hashes
 
@@ -390,10 +413,10 @@ def fetch_recent_sessions(cursor, hours=2):
         cursor.execute(query)
         columns = [desc[0].strip() for desc in cursor.description]
         rows = cursor.fetchall()
-        print(f"📊 Found {len(rows)} recent sessions (last {hours} hours)")
+        print(f"[DATA] Found {len(rows)} recent sessions (last {hours} hours)")
         return [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
     except Exception as e:
-        print(f"❌ Failed to fetch sessions: {e}")
+        print(f"[ERROR] Failed to fetch sessions: {e}")
         return []
 
 
@@ -412,10 +435,13 @@ def process_and_upload_sessions(records):
             record["TERMINALNAME"] = normalize_terminal_name(terminal) or terminal
             record["TERMINAL_SHORT"] = get_short_terminal_name(terminal)
         
+        # Remove None values from record (Firebase doesn't accept None)
+        clean_record = remove_none_values(record)
+        
         if member_id == "0":
-            guest_sessions[session_id] = record
+            guest_sessions[session_id] = clean_record
         else:
-            by_member[member_id][session_id] = record
+            by_member[member_id][session_id] = clean_record
     
     # Upload using update() to merge
     for member_id, sessions in by_member.items():
@@ -423,7 +449,7 @@ def process_and_upload_sessions(records):
             ref = db.reference(f"{FB_PATHS.SESSIONS_BY_MEMBER}/{member_id}")
             ref.update(sessions)
         except Exception as e:
-            print(f"⚠️ Failed to upload sessions for member {member_id}: {e}")
+            print(f"[WARN] Failed to upload sessions for member {member_id}: {e}")
     
     if guest_sessions:
         try:
@@ -432,7 +458,7 @@ def process_and_upload_sessions(records):
             pass
     
     total = sum(len(s) for s in by_member.values()) + len(guest_sessions)
-    print(f"   ✅ Updated {total} sessions for {len(by_member)} members")
+    print(f"   [OK] Updated {total} sessions for {len(by_member)} members")
 
 
 # ==================== MESSAGES.MSG PARSING ====================
@@ -483,14 +509,14 @@ MSG_PATTERNS = {
 def parse_messages_file():
     """Parse messages.msg and extract guest sessions."""
     if not os.path.exists(MESSAGES_FILE):
-        print(f"   ⚠️ messages.msg not found at: {MESSAGES_FILE}")
+        print(f"   [WARN] messages.msg not found at: {MESSAGES_FILE}")
         return None
     
     try:
         with open(MESSAGES_FILE, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
     except Exception as e:
-        print(f"   ❌ Failed to read messages.msg: {e}")
+        print(f"   [ERROR] Failed to read messages.msg: {e}")
         return None
     
     text = clean_rtf(content)
@@ -532,20 +558,26 @@ def parse_messages_file():
             
             # Normalize terminal name
             normalized_terminal = normalize_terminal_name(terminal) or terminal
-            short_terminal = get_short_terminal_name(terminal)
+            short_terminal = get_short_terminal_name(terminal) or terminal
             
+            # Build session with no None values (Firebase doesn't accept None)
             session = {
                 'type': 'guest',
-                'date': current_date or session_data.get('date'),
-                'terminal': normalized_terminal,
-                'terminal_short': short_terminal,
-                'start_time': session_data.get('start_time'),
-                'end_time': time_str,
-                'duration_minutes': session_data.get('duration_minutes'),
+                'date': current_date or session_data.get('date') or '',
+                'terminal': normalized_terminal or '',
+                'terminal_short': short_terminal or '',
+                'end_time': time_str or '',
                 'usage': float(usage),
                 'total': float(total),
                 'prepaid': True
             }
+            
+            # Only add optional fields if they have values
+            if session_data.get('start_time'):
+                session['start_time'] = session_data.get('start_time')
+            if session_data.get('duration_minutes'):
+                session['duration_minutes'] = session_data.get('duration_minutes')
+            
             guest_sessions.append(session)
             continue
     
@@ -577,7 +609,7 @@ def upload_guest_sessions(guest_sessions):
             ref = db.reference(f"{FB_PATHS.GUEST_SESSIONS}/{date_str}")
             ref.update(keyed_sessions)
         except Exception as e:
-            print(f"   ⚠️ Failed to upload guest sessions for {date_str}: {e}")
+            print(f"   [WARN] Failed to upload guest sessions for {date_str}: {e}")
     
     # Also update daily summary with guest revenue
     for date_str, sessions in by_date.items():
@@ -594,7 +626,7 @@ def upload_guest_sessions(guest_sessions):
             pass
     
     total = sum(len(s) for s in by_date.values())
-    print(f"   ✅ Uploaded {total} guest sessions for {len(by_date)} dates")
+    print(f"   [OK] Uploaded {total} guest sessions for {len(by_date)} dates")
 
 
 # ==================== LEADERBOARD PRE-COMPUTATION ====================
@@ -602,9 +634,9 @@ def upload_guest_sessions(guest_sessions):
 def compute_and_upload_leaderboards(cursor):
     """Pre-compute leaderboards for faster JS access."""
     try:
-        # All-time leaderboard from MEMBERS table
+        # All-time leaderboard from MEMBERS table (without TOTALPAID which may not exist)
         cursor.execute("""
-            SELECT USERNAME, TOTALACTMINUTE, TOTALPAID, RECDATE
+            SELECT USERNAME, TOTALACTMINUTE, RECDATE
             FROM MEMBERS 
             WHERE TOTALACTMINUTE > 0
             ORDER BY TOTALACTMINUTE DESC
@@ -616,20 +648,26 @@ def compute_and_upload_leaderboards(cursor):
         all_time = []
         for i, row in enumerate(rows[:50]):  # Top 50
             record = dict(zip(columns, [convert_value(v) for v in row]))
-            all_time.append({
+            
+            # Build entry without None values (Firebase doesn't accept None)
+            entry = {
                 "rank": i + 1,
-                "username": record["USERNAME"],
-                "total_minutes": record["TOTALACTMINUTE"] or 0,
-                "total_hours": round((record["TOTALACTMINUTE"] or 0) / 60, 1),
-                "total_paid": record["TOTALPAID"] or 0,
-                "member_since": record["RECDATE"]
-            })
+                "username": record.get("USERNAME") or "",
+                "total_minutes": float(record.get("TOTALACTMINUTE") or 0),
+                "total_hours": round(float(record.get("TOTALACTMINUTE") or 0) / 60, 1),
+            }
+            
+            # Only add member_since if it exists
+            if record.get("RECDATE"):
+                entry["member_since"] = record.get("RECDATE")
+            
+            all_time.append(entry)
         
         db.reference(f"{FB_PATHS.LEADERBOARDS}/all-time").set(all_time)
-        print(f"   ✅ Updated all-time leaderboard ({len(all_time)} entries)")
+        print(f"   [OK] Updated all-time leaderboard ({len(all_time)} entries)")
         
     except Exception as e:
-        print(f"⚠️ Failed to compute leaderboards: {e}")
+        print(f"[WARN] Failed to compute leaderboards: {e}")
 
 
 # ==================== MAIN ====================
@@ -639,7 +677,7 @@ def main():
     start_time = datetime.now()
     
     print("\n" + "="*60)
-    print("🎮 OceanZ PanCafe INCREMENTAL Sync")
+    print("OceanZ PanCafe INCREMENTAL Sync")
     print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60 + "\n")
     
@@ -653,33 +691,33 @@ def main():
         sync_state = load_local_sync_state()
         last_sync = sync_state.get("last_sync_time")
         if last_sync:
-            print(f"📅 Last sync: {last_sync}")
+            print(f"[INFO] Last sync: {last_sync}")
         else:
-            print("📅 First sync - will upload all data")
+            print("[INFO] First sync - will upload all data")
         
         # 1. Incremental History Sync
-        print("\n📊 Processing HISTORY (incremental)...")
+        print("\n[STEP] Processing HISTORY (incremental)...")
         new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
         new_max_id = process_and_upload_history(new_records, sync_state)
         sync_state["last_history_id"] = new_max_id
         
         # 2. Members Sync (with change detection)
-        print("\n📊 Processing MEMBERS (change detection)...")
+        print("\n[STEP] Processing MEMBERS (change detection)...")
         members = fetch_all_members(cursor)
         new_hashes = process_and_upload_members(members, sync_state)
         sync_state["member_hashes"] = new_hashes
         
         # 3. Recent Sessions Sync
-        print("\n📊 Processing SESSIONS (recent only)...")
+        print("\n[STEP] Processing SESSIONS (recent only)...")
         sessions = fetch_recent_sessions(cursor, hours=2)
         process_and_upload_sessions(sessions)
         
         # 4. Pre-compute Leaderboards
-        print("\n📊 Computing LEADERBOARDS...")
+        print("\n[STEP] Computing LEADERBOARDS...")
         compute_and_upload_leaderboards(cursor)
         
         # 5. Parse and upload guest sessions from messages.msg
-        print("\n📊 Processing GUEST SESSIONS (from messages.msg)...")
+        print("\n[STEP] Processing GUEST SESSIONS (from messages.msg)...")
         guest_sessions = parse_messages_file()
         if guest_sessions:
             upload_guest_sessions(guest_sessions)
@@ -699,12 +737,12 @@ def main():
         
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*60)
-        print(f"🎉 Sync completed in {elapsed:.1f}s")
+        print(f"[DONE] Sync completed in {elapsed:.1f}s")
         print(f"   New history records: {len(new_records)}")
         print("="*60 + "\n")
         
     except Exception as e:
-        print(f"\n❌ Sync failed: {e}")
+        print(f"\n[ERROR] Sync failed: {e}")
         raise
 
 

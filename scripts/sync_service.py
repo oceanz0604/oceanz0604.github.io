@@ -111,11 +111,19 @@ class SyncService:
     def set_status(self, status, task=None):
         """Update sync status in Firebase."""
         try:
+            # Ensure status is never None (Firebase doesn't accept None)
+            if status is None:
+                status = "idle"
             self.db.reference(STATUS_PATH).set(status)
+            
             if task:
                 self.db.reference(CURRENT_TASK_PATH).set(task)
-            elif status in ["idle", "completed", "error"]:
-                self.db.reference(CURRENT_TASK_PATH).set(None)
+            elif status in ["idle", "completed", "error", "offline"]:
+                # Use delete() instead of set(None) - Firebase doesn't accept None
+                try:
+                    self.db.reference(CURRENT_TASK_PATH).delete()
+                except Exception:
+                    pass  # Ignore if path doesn't exist
         except Exception as e:
             print(f"Failed to update status: {e}")
     
@@ -140,14 +148,20 @@ class SyncService:
             next_iplogs = self.last_iplogs_sync + timedelta(minutes=IPLOGS_INTERVAL) if self.last_iplogs_sync else datetime.now()
             next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
             
-            self.db.reference(SCHEDULE_PATH).set({
+            schedule_data = {
                 "iplogs_interval_mins": IPLOGS_INTERVAL,
                 "fdb_interval_mins": FDB_INTERVAL,
                 "next_iplogs": next_iplogs.isoformat(),
                 "next_fdb": next_fdb.isoformat(),
-                "last_iplogs": self.last_iplogs_sync.isoformat() if self.last_iplogs_sync else None,
-                "last_fdb": self.last_fdb_sync.isoformat() if self.last_fdb_sync else None
-            })
+            }
+            
+            # Only add last sync times if they exist (Firebase doesn't accept None)
+            if self.last_iplogs_sync:
+                schedule_data["last_iplogs"] = self.last_iplogs_sync.isoformat()
+            if self.last_fdb_sync:
+                schedule_data["last_fdb"] = self.last_fdb_sync.isoformat()
+            
+            self.db.reference(SCHEDULE_PATH).set(schedule_data)
         except Exception as e:
             print(f"Failed to update schedule: {e}")
     
@@ -203,8 +217,8 @@ class SyncService:
             
             if not silent:
                 self.log(f"Completed: {description}", "SUCCESS")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Completed: {description}")
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Completed: {description}")
             
             return True
             
@@ -222,7 +236,7 @@ class SyncService:
         start_time = datetime.now()
         
         self.log("=" * 50)
-        self.log(f"🔄 FULL SYNC STARTED (triggered by {triggered_by})")
+        self.log(f"[SYNC] FULL SYNC STARTED (triggered by {triggered_by})")
         self.log("=" * 50)
         self.set_status("syncing", "Initializing...")
         
@@ -268,10 +282,10 @@ class SyncService:
         
         self.log("=" * 50)
         if success:
-            self.log(f"✅ SYNC COMPLETED in {duration:.1f}s")
+            self.log(f"[OK] SYNC COMPLETED in {duration:.1f}s")
             self.set_status("completed")
         else:
-            self.log(f"⚠️ SYNC COMPLETED WITH ERRORS in {duration:.1f}s")
+            self.log(f"[WARN] SYNC COMPLETED WITH ERRORS in {duration:.1f}s")
             self.set_status("error")
         self.log("=" * 50)
         
@@ -325,18 +339,18 @@ class SyncService:
     def run(self):
         """Main service loop with auto-scheduling."""
         print(f"""
-╔══════════════════════════════════════════════════════════╗
-║           OceanZ Sync Service                             ║
-║   Auto-Scheduling + Firebase Control                      ║
-╠══════════════════════════════════════════════════════════╣
-║   📊 IP Logs:    Every {IPLOGS_INTERVAL} minutes                          ║
-║   🗄️  FDB Data:   Every {FDB_INTERVAL} minutes                         ║
-║   🌐 Manual:     Via Firebase request                     ║
-╚══════════════════════════════════════════════════════════╝
+================================================================
+           OceanZ Sync Service                             
+   Auto-Scheduling + Firebase Control                      
+----------------------------------------------------------------
+   IP Logs:    Every {IPLOGS_INTERVAL} minutes                          
+   FDB Data:   Every {FDB_INTERVAL} minutes                         
+   Manual:     Via Firebase request                     
+================================================================
         """)
         
-        self.log("🚀 OceanZ Sync Service Starting...", update_firebase=True)
-        self.log(f"📅 Schedule: IP Logs every {IPLOGS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
+        self.log("[START] OceanZ Sync Service Starting...", update_firebase=True)
+        self.log(f"[SCHEDULE] IP Logs every {IPLOGS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
         self.set_status("idle")
         self.update_heartbeat()
         
@@ -351,7 +365,7 @@ class SyncService:
             while self.running:
                 # Priority 1: Check for manual sync request from web UI
                 if not self.syncing and self.check_for_request():
-                    self.log("📥 Manual sync request received!")
+                    self.log("[REQUEST] Manual sync request received!")
                     self.perform_full_sync(triggered_by="web_ui")
                 
                 # Priority 2: Check scheduled syncs (only if not currently syncing)
@@ -366,10 +380,10 @@ class SyncService:
                 time.sleep(POLL_INTERVAL)
                 
         except KeyboardInterrupt:
-            self.log("⏹️ Service stopping...")
+            self.log("[STOP] Service stopping...")
         finally:
             self.set_status("offline")
-            self.log("👋 Service stopped")
+            self.log("[EXIT] Service stopped")
     
     def stop(self):
         """Stop the service gracefully."""

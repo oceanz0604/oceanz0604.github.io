@@ -47,7 +47,7 @@ def save_local_state(state):
         with open(LOCAL_STATE_FILE, "w") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
-        print(f"⚠️ Could not save state: {e}")
+        print(f"[WARN] Could not save state: {e}")
 
 
 # ==================== FIREBASE ====================
@@ -68,10 +68,10 @@ def check_if_update_needed(state):
         last_processed_id = state.get("last_history_id", 0)
         
         if current_history_id > last_processed_id:
-            print(f"📊 New data detected (ID: {last_processed_id} → {current_history_id})")
+            print(f"[DATA] New data detected (ID: {last_processed_id} -> {current_history_id})")
             return True, current_history_id
         else:
-            print(f"   No new data since last run")
+            print("   No new data since last run")
             return False, current_history_id
             
     except Exception:
@@ -92,7 +92,7 @@ def fetch_members():
             return list(data.values())
         return []
     except Exception as e:
-        print(f"⚠️ Error fetching members: {e}")
+        print(f"[WARN] Error fetching members: {e}")
         return []
 
 
@@ -130,7 +130,7 @@ def fetch_history_for_period(start_date, end_date=None):
             return dict(results)
             
     except Exception as e:
-        print(f"⚠️ history-by-date not available: {e}")
+        print(f"[WARN] history-by-date not available: {e}")
     
     # Fallback: scan full history
     print("   Using full history scan (slower)...")
@@ -170,7 +170,7 @@ def fetch_history_full_scan(start_date, end_date=None):
         return dict(results)
         
     except Exception as e:
-        print(f"❌ Error scanning history: {e}")
+        print(f"[ERROR] Error scanning history: {e}")
         return {}
 
 
@@ -182,7 +182,7 @@ def generate_monthly_leaderboard(members):
     month_start = datetime(now.year, now.month, 1)
     month_key = f"{now.year}-{now.month:02d}"
     
-    print(f"\n📊 Generating monthly leaderboard for {month_key}...")
+    print(f"\n[STEP] Generating monthly leaderboard for {month_key}...")
     
     # Get activity data for this month
     activity = fetch_history_for_period(month_start)
@@ -214,9 +214,9 @@ def generate_monthly_leaderboard(members):
     # Upload
     if leaderboard:
         db.reference(f"{FB_PATHS.LEADERBOARDS}/monthly/{month_key}").set(leaderboard)
-        print(f"   ✅ Uploaded monthly leaderboard ({len(leaderboard)} entries)")
+        print(f"   [OK] Uploaded monthly leaderboard ({len(leaderboard)} entries)")
     else:
-        print(f"   ⚠️ No activity data for {month_key}")
+        print(f"   [WARN] No activity data for {month_key}")
     
     return leaderboard
 
@@ -234,7 +234,7 @@ def generate_weekly_leaderboard(members):
     week_num = now.isocalendar()[1]
     week_key = f"{now.year}-W{week_num:02d}"
     
-    print(f"\n📊 Generating weekly leaderboard for {week_key}...")
+    print(f"\n[STEP] Generating weekly leaderboard for {week_key}...")
     
     # Get activity data for this week
     activity = fetch_history_for_period(week_start)
@@ -254,14 +254,14 @@ def generate_weekly_leaderboard(members):
     # Upload
     if leaderboard:
         db.reference(f"{FB_PATHS.LEADERBOARDS}/weekly/{week_key}").set(leaderboard)
-        print(f"   ✅ Uploaded weekly leaderboard ({len(leaderboard)} entries)")
+        print(f"   [OK] Uploaded weekly leaderboard ({len(leaderboard)} entries)")
     
     return leaderboard
 
 
 def generate_alltime_leaderboard(members):
     """Generate all-time leaderboard from member stats."""
-    print(f"\n📊 Generating all-time leaderboard...")
+    print("\n[STEP] Generating all-time leaderboard...")
     
     # Sort by TOTALACTMINUTE
     sorted_members = sorted(
@@ -273,20 +273,26 @@ def generate_alltime_leaderboard(members):
     leaderboard = []
     
     for i, m in enumerate(sorted_members):
-        leaderboard.append({
+        # Build entry without None values (Firebase doesn't accept None)
+        entry = {
             "rank": i + 1,
-            "username": m.get("USERNAME", ""),
-            "total_minutes": int(m.get("TOTALACTMINUTE", 0)),
-            "total_hours": round(m.get("TOTALACTMINUTE", 0) / 60, 1),
-            "total_paid": round(m.get("TOTALPAID", 0), 2),
-            "member_since": m.get("RECDATE"),
-            "member_id": m.get("ID")
-        })
+            "username": m.get("USERNAME") or "",
+            "total_minutes": int(m.get("TOTALACTMINUTE") or 0),
+            "total_hours": round((m.get("TOTALACTMINUTE") or 0) / 60, 1),
+        }
+        
+        # Only add optional fields if they have values
+        if m.get("RECDATE"):
+            entry["member_since"] = m.get("RECDATE")
+        if m.get("ID") is not None:
+            entry["member_id"] = m.get("ID")
+        
+        leaderboard.append(entry)
     
     # Upload
     if leaderboard:
         db.reference(f"{FB_PATHS.LEADERBOARDS}/all-time").set(leaderboard)
-        print(f"   ✅ Uploaded all-time leaderboard ({len(leaderboard)} entries)")
+        print(f"   [OK] Uploaded all-time leaderboard ({len(leaderboard)} entries)")
     
     return leaderboard
 
@@ -298,7 +304,7 @@ def run():
     start_time = datetime.now()
     
     print("\n" + "="*50)
-    print("🏆 OceanZ Leaderboard Generator")
+    print("OceanZ Leaderboard Generator")
     print(f"   {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*50)
     
@@ -316,12 +322,12 @@ def run():
                 generate_alltime_leaderboard(members)
             
             elapsed = (datetime.now() - start_time).total_seconds()
-            print(f"\n✅ Quick check completed in {elapsed:.1f}s")
+            print(f"\n[OK] Quick check completed in {elapsed:.1f}s")
             return
         
         # Fetch members
         members = fetch_members()
-        print(f"📊 Loaded {len(members)} members")
+        print(f"[DATA] Loaded {len(members)} members")
         
         # Generate all leaderboards
         generate_alltime_leaderboard(members)
@@ -341,11 +347,11 @@ def run():
         
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*50)
-        print(f"✅ Leaderboards updated in {elapsed:.1f}s")
+        print(f"[OK] Leaderboards updated in {elapsed:.1f}s")
         print("="*50 + "\n")
         
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] Error: {e}")
         traceback.print_exc()
         sys.exit(1)
 
