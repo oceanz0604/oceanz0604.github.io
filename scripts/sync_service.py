@@ -244,18 +244,12 @@ class SyncService:
         tasks_completed = 0
         tasks_failed = 0
         
-        # Run all sync tasks
-        tasks = [
-            ("fdbupload.py", "Syncing PanCafe Database (Members, History, Sessions)"),
-            ("iplogsupload.py", "Processing IP Logs & Terminal Status"),
-        ]
-        
-        for script, description in tasks:
-            if self.run_script(script, description):
-                tasks_completed += 1
-            else:
-                tasks_failed += 1
-                success = False
+        # Run complete unified sync (includes FDB, IP Logs, and Leaderboards)
+        if self.run_script("oceanz_sync.py", "Complete Sync (FDB + IP Logs + Leaderboards)"):
+            tasks_completed = 3  # Single script handles all 3
+        else:
+            tasks_failed = 3
+            success = False
         
         # Update last sync times
         self.last_fdb_sync = datetime.now()
@@ -312,13 +306,14 @@ class SyncService:
         return success
     
     def auto_sync_fdb(self):
-        """Run FDB sync silently (scheduled)."""
-        print(f"\n[AUTO-SYNC] FDB Database - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        """Run complete sync silently (scheduled) - includes FDB, IP Logs, and Leaderboards."""
+        print(f"\n[AUTO-SYNC] Complete Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        success = self.run_script("fdbupload.py", "Auto: FDB Database", silent=True)
+        success = self.run_script("oceanz_sync.py", "Auto: Complete Sync (FDB + IP Logs + Leaderboards)", silent=True)
         
         self.last_fdb_sync = datetime.now()
+        self.last_iplogs_sync = datetime.now()  # Complete sync also handles IP logs
         self.syncing = False
         self.update_schedule_info()
         
@@ -328,13 +323,13 @@ class SyncService:
         """Check if any scheduled syncs are due."""
         now = datetime.now()
         
-        # Check IP logs (every 2 minutes)
+        # Check IP logs (every 2 minutes) - run quick IP logs only
         if self.last_iplogs_sync is None or (now - self.last_iplogs_sync).total_seconds() >= IPLOGS_INTERVAL * 60:
             self.auto_sync_iplogs()
         
-        # Check FDB (every 15 minutes)
+        # Check FDB + Leaderboards (every 15 minutes) - run complete sync
         if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
-            self.auto_sync_fdb()
+            self.auto_sync_fdb()  # This runs complete sync which includes leaderboards
     
     def run(self):
         """Main service loop with auto-scheduling."""
@@ -354,10 +349,9 @@ class SyncService:
         self.set_status("idle")
         self.update_heartbeat()
         
-        # Run initial sync
-        print("\n[STARTUP] Running initial sync...")
-        self.auto_sync_iplogs()
-        self.auto_sync_fdb()
+        # Run initial sync (unified sync handles everything)
+        print("\n[STARTUP] Running initial unified sync...")
+        self.auto_sync_fdb()  # Unified sync includes IP logs and leaderboards
         
         last_heartbeat = time.time()
         
