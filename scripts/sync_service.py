@@ -217,8 +217,8 @@ class SyncService:
             
             if not silent:
                 self.log(f"Completed: {description}", "SUCCESS")
-        else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Completed: {description}")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Completed: {description}")
             
             return True
             
