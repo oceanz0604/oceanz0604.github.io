@@ -9,7 +9,13 @@
 ::
 :: Place this in Windows Startup folder to run automatically:
 :: %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+::
+:: Scripts location: C:\oceanz0604.github.io\scripts
 :: ============================================================
+
+:: Set UTF-8 encoding for console output
+chcp 65001 >nul 2>&1
+set PYTHONIOENCODING=utf-8
 
 title OceanZ Sync Service
 
@@ -24,13 +30,35 @@ echo     - Manual:      Via Firebase request (Web UI)
 echo  ====================================================
 echo.
 
-cd /d "%~dp0"
+:: Set the scripts directory (absolute path)
+set SCRIPTS_DIR=C:\oceanz0604.github.io\scripts
+
+:: Check if scripts directory exists
+if not exist "%SCRIPTS_DIR%" (
+    echo [ERROR] Scripts directory not found: %SCRIPTS_DIR%
+    echo Please ensure the scripts are in the correct location.
+    pause
+    exit /b 1
+)
+
+:: Change to scripts directory
+cd /d "%SCRIPTS_DIR%"
+echo [INFO] Working directory: %CD%
+echo.
 
 :: Check if Python is available
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Python is not installed or not in PATH
     echo Please install Python 3.8+ and add it to PATH
+    pause
+    exit /b 1
+)
+
+:: Check if sync_service.py exists
+if not exist "sync_service.py" (
+    echo [ERROR] sync_service.py not found in %SCRIPTS_DIR%
+    echo Please ensure all scripts are in the correct location.
     pause
     exit /b 1
 )

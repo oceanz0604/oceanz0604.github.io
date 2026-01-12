@@ -57,7 +57,7 @@ def save_local_state(state):
         with open(LOCAL_STATE_FILE, "w") as f:
             json.dump(state, f, indent=2, default=str)
     except Exception as e:
-        print(f"⚠️ Could not save local state: {e}")
+        print(f"[WARN] Could not save local state: {e}")
 
 
 # ==================== FIREBASE ====================
@@ -83,7 +83,7 @@ def cleanup_old_sessions_periodic():
     if cleanup_counter % 10 != 0:
         return
     
-    print("🧹 Running periodic cleanup...")
+    print("[CLEANUP] Running periodic cleanup...")
     
     try:
         sessions_ref = db.reference(FB_PATHS.SESSIONS)
@@ -108,10 +108,10 @@ def cleanup_old_sessions_periodic():
                 pass
         
         if deleted > 0:
-            print(f"   🗑️ Deleted {deleted} old sessions")
+            print(f"   [OK] Deleted {deleted} old sessions")
             
     except Exception as e:
-        print(f"⚠️ Cleanup error: {e}")
+        print(f"[WARN] Cleanup error: {e}")
 
 
 # ==================== LOG READING ====================
@@ -142,7 +142,7 @@ def read_new_log_lines(state):
     path, fname, date_key = get_log_file_info()
     
     if not path:
-        print("⚠️ No log file found")
+        print("[WARN] No log file found")
         return [], None, 0
     
     last_file = state.get("last_file")
@@ -154,7 +154,7 @@ def read_new_log_lines(state):
         with open(path, "r", encoding="windows-1254") as f:
             all_lines = f.readlines()
     except Exception as e:
-        print(f"❌ Error reading log file: {e}")
+        print(f"[ERROR] Error reading log file: {e}")
         return [], fname, 0
     
     current_line_count = len(all_lines)
@@ -162,13 +162,13 @@ def read_new_log_lines(state):
     # Determine which lines are new
     if last_file != fname:
         # New day = new file, read all
-        print(f"📄 New log file: {fname} ({current_line_count} lines)")
+        print(f"[FILE] New log file: {fname} ({current_line_count} lines)")
         new_lines = all_lines
         # But also process any pending open sessions from yesterday
     elif current_line_count > last_line_count:
         # Same file, new lines appended
         new_lines = all_lines[last_line_count:]
-        print(f"📄 Reading {len(new_lines)} new lines (was {last_line_count}, now {current_line_count})")
+        print(f"[FILE] Reading {len(new_lines)} new lines (was {last_line_count}, now {current_line_count})")
     else:
         # No new lines
         print(f"   No new log entries")
@@ -328,14 +328,14 @@ def upload_sessions(completed_sessions):
     if not completed_sessions:
         return
     
-    print(f"   📤 Uploading {len(completed_sessions)} completed sessions")
+    print(f"   [UPLOAD] Uploading {len(completed_sessions)} completed sessions")
     
     for session in completed_sessions:
         session_id = f"{session['terminal'].replace(' ', '_')}__{session['start'].replace(':', '-').replace('.', '-')}"
         try:
             db.reference(f"{FB_PATHS.SESSIONS}/{session_id}").set(session)
         except Exception as e:
-            print(f"⚠️ Failed to upload session: {e}")
+            print(f"[WARN] Failed to upload session: {e}")
 
 
 def upload_terminal_status(terminal_status, old_cache):
@@ -356,10 +356,10 @@ def upload_terminal_status(terminal_status, old_cache):
                 db.reference(f"{FB_PATHS.LEGACY_STATUS}/{terminal}").set(data)
                 changes += 1
             except Exception as e:
-                print(f"⚠️ Failed to update {terminal}: {e}")
+                print(f"[WARN] Failed to update {terminal}: {e}")
     
     if changes > 0:
-        print(f"   📤 Updated {changes} terminal statuses")
+        print(f"   [UPLOAD] Updated {changes} terminal statuses")
     else:
         print(f"   No terminal status changes")
 
@@ -381,7 +381,7 @@ def main():
     """Main incremental sync routine."""
     start_time = datetime.now()
     
-    print(f"\n⏱️  IPLogs Sync @ {start_time.strftime('%H:%M:%S')}")
+    print(f"\n[SYNC] IPLogs Sync @ {start_time.strftime('%H:%M:%S')}")
     
     try:
         initialize_firebase()
@@ -414,7 +414,7 @@ def main():
                 
                 # Print summary
                 occupied = sum(1 for t in terminal_status.values() if t["status"] == "occupied")
-                print(f"   📊 Active: {len(active)} | Completed: {len(completed)} | Occupied: {occupied}/{len(ALL_TERMINALS)}")
+                print(f"   [DATA] Active: {len(active)} | Completed: {len(completed)} | Occupied: {occupied}/{len(ALL_TERMINALS)}")
         
         # Update file tracking
         state["last_file"] = current_file
@@ -425,10 +425,10 @@ def main():
         update_sync_meta()
         
         elapsed = (datetime.now() - start_time).total_seconds()
-        print(f"   ✅ Done in {elapsed:.2f}s\n")
+        print(f"   [OK] Done in {elapsed:.2f}s\n")
         
     except Exception as e:
-        print(f"   ❌ Error: {e}\n")
+        print(f"   [ERROR] Error: {e}\n")
 
 
 if __name__ == "__main__":
