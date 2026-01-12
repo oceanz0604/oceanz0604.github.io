@@ -1,35 +1,33 @@
 #!/usr/bin/env python3
 """
-OceanZ Sync Service - Firebase-controlled Background Service
+OceanZ Sync Service - Firebase-controlled Background Service with Auto-Scheduling
 
-This service runs on the FDB database machine and monitors Firebase for sync requests.
-When a sync is requested via the web UI, this service performs the sync and reports progress.
+This service runs on the FDB database machine and:
+1. Monitors Firebase for manual sync requests from the web UI
+2. Automatically runs scheduled syncs:
+   - IP Logs: Every 2 minutes
+   - FDB Database: Every 15 minutes
+   - Leaderboards: Every 15 minutes (with FDB)
 
 Firebase Paths Used:
 - /sync-control/request      - Trigger: set to timestamp to request sync
 - /sync-control/status       - Current status: idle, syncing, completed, error
 - /sync-control/progress     - Progress messages array
 - /sync-control/last_sync    - Last successful sync info
-- /sync-control/current_task - Current task being executed
+- /sync-control/schedule     - Next scheduled sync times
 
 Usage:
-    python sync_service.py           # Run in foreground
+    python sync_service.py           # Run with auto-scheduling (default)
+    python sync_service.py --test    # Run full sync once and exit
     python sync_service.py --daemon  # Run as background daemon (Linux)
-
-Install as Windows Service:
-    pip install pywin32
-    python sync_service.py --install
-    python sync_service.py --start
 """
 
 import os
 import sys
 import time
-import json
-import threading
 import subprocess
 import signal
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add parent directory for imports
@@ -37,12 +35,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import firebase_admin
 from firebase_admin import credentials, db
-from config import FB_PATHS, FIREBASE_CRED_PATH, FIREBASE_DB_URL, FDB_FIREBASE_DB_URL
+from config import FB_PATHS, FIREBASE_CRED_PATH, FDB_FIREBASE_DB_URL
 
 # ==================== CONFIG ====================
 
-POLL_INTERVAL = 5  # Seconds between Firebase checks
+POLL_INTERVAL = 5  # Seconds between checks
 HEARTBEAT_INTERVAL = 30  # Seconds between heartbeat updates
+
+# Auto-sync intervals (in minutes)
+IPLOGS_INTERVAL = 2      # IP logs every 2 minutes
+FDB_INTERVAL = 15        # FDB database every 15 minutes
 
 # Firebase paths for sync control
 SYNC_CONTROL_PATH = "sync-control"
@@ -52,6 +54,7 @@ PROGRESS_PATH = f"{SYNC_CONTROL_PATH}/progress"
 CURRENT_TASK_PATH = f"{SYNC_CONTROL_PATH}/current_task"
 LAST_SYNC_PATH = f"{SYNC_CONTROL_PATH}/last_sync"
 HEARTBEAT_PATH = f"{SYNC_CONTROL_PATH}/service_heartbeat"
+SCHEDULE_PATH = f"{SYNC_CONTROL_PATH}/schedule"
 
 # Script directory
 SCRIPT_DIR = Path(__file__).parent
@@ -67,7 +70,7 @@ def init_firebase():
         })
     return db
 
-# ==================== STATUS MANAGEMENT ====================
+# ==================== SYNC SERVICE ====================
 
 class SyncService:
     def __init__(self):
@@ -77,28 +80,33 @@ class SyncService:
         self.last_request_id = None
         self.progress_messages = []
         
-    def log(self, message, level="INFO"):
-        """Log message locally and to Firebase."""
+        # Track last auto-sync times
+        self.last_iplogs_sync = None
+        self.last_fdb_sync = None
+        
+    def log(self, message, level="INFO", update_firebase=True):
+        """Log message locally and optionally to Firebase."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] [{level}] {message}"
         print(log_entry)
         
-        # Add to progress messages
-        self.progress_messages.append({
-            "time": timestamp,
-            "message": message,
-            "level": level
-        })
-        
-        # Keep only last 50 messages
-        if len(self.progress_messages) > 50:
-            self.progress_messages = self.progress_messages[-50:]
-        
-        # Update Firebase progress
-        try:
-            self.db.reference(PROGRESS_PATH).set(self.progress_messages)
-        except Exception as e:
-            print(f"Failed to update Firebase progress: {e}")
+        if update_firebase:
+            # Add to progress messages
+            self.progress_messages.append({
+                "time": timestamp,
+                "message": message,
+                "level": level
+            })
+            
+            # Keep only last 50 messages
+            if len(self.progress_messages) > 50:
+                self.progress_messages = self.progress_messages[-50:]
+            
+            # Update Firebase progress
+            try:
+                self.db.reference(PROGRESS_PATH).set(self.progress_messages)
+            except Exception as e:
+                print(f"Failed to update Firebase progress: {e}")
     
     def set_status(self, status, task=None):
         """Update sync status in Firebase."""
@@ -114,21 +122,42 @@ class SyncService:
     def update_heartbeat(self):
         """Update service heartbeat to show it's alive."""
         try:
+            next_iplogs = self.last_iplogs_sync + timedelta(minutes=IPLOGS_INTERVAL) if self.last_iplogs_sync else datetime.now()
+            next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
+            
             self.db.reference(HEARTBEAT_PATH).set({
                 "timestamp": datetime.now().isoformat(),
-                "status": "syncing" if self.syncing else "idle"
+                "status": "syncing" if self.syncing else "idle",
+                "next_iplogs": next_iplogs.isoformat(),
+                "next_fdb": next_fdb.isoformat()
             })
         except Exception as e:
             print(f"Failed to update heartbeat: {e}")
     
+    def update_schedule_info(self):
+        """Update schedule info in Firebase for UI display."""
+        try:
+            next_iplogs = self.last_iplogs_sync + timedelta(minutes=IPLOGS_INTERVAL) if self.last_iplogs_sync else datetime.now()
+            next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
+            
+            self.db.reference(SCHEDULE_PATH).set({
+                "iplogs_interval_mins": IPLOGS_INTERVAL,
+                "fdb_interval_mins": FDB_INTERVAL,
+                "next_iplogs": next_iplogs.isoformat(),
+                "next_fdb": next_fdb.isoformat(),
+                "last_iplogs": self.last_iplogs_sync.isoformat() if self.last_iplogs_sync else None,
+                "last_fdb": self.last_fdb_sync.isoformat() if self.last_fdb_sync else None
+            })
+        except Exception as e:
+            print(f"Failed to update schedule: {e}")
+    
     def check_for_request(self):
-        """Check if there's a new sync request."""
+        """Check if there's a new sync request from web UI."""
         try:
             request_ref = self.db.reference(REQUEST_PATH)
             request = request_ref.get()
             
             if request and request != self.last_request_id:
-                # New request detected
                 self.last_request_id = request
                 return True
             return False
@@ -136,19 +165,21 @@ class SyncService:
             print(f"Error checking request: {e}")
             return False
     
-    def run_script(self, script_name, description):
+    def run_script(self, script_name, description, silent=False):
         """Run a Python script and capture output."""
         script_path = SCRIPT_DIR / script_name
         
         if not script_path.exists():
-            self.log(f"Script not found: {script_path}", "ERROR")
+            self.log(f"Script not found: {script_path}", "ERROR", not silent)
             return False
         
-        self.log(f"Starting: {description}")
-        self.set_status("syncing", description)
+        if not silent:
+            self.log(f"Starting: {description}")
+            self.set_status("syncing", description)
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: {description}")
         
         try:
-            # Run the script
             result = subprocess.run(
                 [sys.executable, str(script_path)],
                 capture_output=True,
@@ -158,35 +189,40 @@ class SyncService:
             )
             
             # Log output
-            if result.stdout:
+            if result.stdout and not silent:
                 for line in result.stdout.strip().split('\n'):
                     if line.strip():
                         self.log(f"  {line}")
             
             if result.returncode != 0:
-                self.log(f"Script failed with code {result.returncode}", "ERROR")
+                self.log(f"Script failed with code {result.returncode}", "ERROR", not silent)
                 if result.stderr:
-                    self.log(f"  Error: {result.stderr[:500]}", "ERROR")
+                    error_msg = result.stderr[:500]
+                    self.log(f"  Error: {error_msg}", "ERROR", not silent)
                 return False
             
-            self.log(f"Completed: {description}", "SUCCESS")
+            if not silent:
+                self.log(f"Completed: {description}", "SUCCESS")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Completed: {description}")
+            
             return True
             
         except subprocess.TimeoutExpired:
-            self.log(f"Script timed out: {script_name}", "ERROR")
+            self.log(f"Script timed out: {script_name}", "ERROR", not silent)
             return False
         except Exception as e:
-            self.log(f"Script error: {e}", "ERROR")
+            self.log(f"Script error: {e}", "ERROR", not silent)
             return False
     
-    def perform_sync(self):
-        """Execute the full sync process."""
+    def perform_full_sync(self, triggered_by="web_ui"):
+        """Execute the full sync process (triggered by web UI)."""
         self.syncing = True
         self.progress_messages = []
         start_time = datetime.now()
         
         self.log("=" * 50)
-        self.log("🔄 SYNC STARTED")
+        self.log(f"🔄 FULL SYNC STARTED (triggered by {triggered_by})")
         self.log("=" * 50)
         self.set_status("syncing", "Initializing...")
         
@@ -194,10 +230,10 @@ class SyncService:
         tasks_completed = 0
         tasks_failed = 0
         
-        # Define sync tasks
+        # Run all sync tasks
         tasks = [
             ("fdbupload.py", "Syncing PanCafe Database (Members, History, Sessions)"),
-            ("iplogsupload.py", "Processing IP Logs"),
+            ("iplogsupload.py", "Processing IP Logs & Terminal Status"),
         ]
         
         for script, description in tasks:
@@ -206,6 +242,10 @@ class SyncService:
             else:
                 tasks_failed += 1
                 success = False
+        
+        # Update last sync times
+        self.last_fdb_sync = datetime.now()
+        self.last_iplogs_sync = datetime.now()
         
         # Calculate duration
         end_time = datetime.now()
@@ -218,7 +258,7 @@ class SyncService:
             "tasks_completed": tasks_completed,
             "tasks_failed": tasks_failed,
             "success": success,
-            "triggered_by": "web_ui"
+            "triggered_by": triggered_by
         }
         
         try:
@@ -236,6 +276,7 @@ class SyncService:
         self.log("=" * 50)
         
         self.syncing = False
+        self.update_schedule_info()
         
         # Reset to idle after 10 seconds
         time.sleep(10)
@@ -243,20 +284,79 @@ class SyncService:
         
         return success
     
+    def auto_sync_iplogs(self):
+        """Run IP logs sync silently (scheduled)."""
+        print(f"\n[AUTO-SYNC] IP Logs - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.syncing = True
+        
+        success = self.run_script("iplogsupload.py", "Auto: IP Logs & Terminal Status", silent=True)
+        
+        self.last_iplogs_sync = datetime.now()
+        self.syncing = False
+        self.update_schedule_info()
+        
+        return success
+    
+    def auto_sync_fdb(self):
+        """Run FDB sync silently (scheduled)."""
+        print(f"\n[AUTO-SYNC] FDB Database - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.syncing = True
+        
+        success = self.run_script("fdbupload.py", "Auto: FDB Database", silent=True)
+        
+        self.last_fdb_sync = datetime.now()
+        self.syncing = False
+        self.update_schedule_info()
+        
+        return success
+    
+    def check_scheduled_syncs(self):
+        """Check if any scheduled syncs are due."""
+        now = datetime.now()
+        
+        # Check IP logs (every 2 minutes)
+        if self.last_iplogs_sync is None or (now - self.last_iplogs_sync).total_seconds() >= IPLOGS_INTERVAL * 60:
+            self.auto_sync_iplogs()
+        
+        # Check FDB (every 15 minutes)
+        if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
+            self.auto_sync_fdb()
+    
     def run(self):
-        """Main service loop."""
-        self.log("🚀 OceanZ Sync Service Starting...")
+        """Main service loop with auto-scheduling."""
+        print(f"""
+╔══════════════════════════════════════════════════════════╗
+║           OceanZ Sync Service                             ║
+║   Auto-Scheduling + Firebase Control                      ║
+╠══════════════════════════════════════════════════════════╣
+║   📊 IP Logs:    Every {IPLOGS_INTERVAL} minutes                          ║
+║   🗄️  FDB Data:   Every {FDB_INTERVAL} minutes                         ║
+║   🌐 Manual:     Via Firebase request                     ║
+╚══════════════════════════════════════════════════════════╝
+        """)
+        
+        self.log("🚀 OceanZ Sync Service Starting...", update_firebase=True)
+        self.log(f"📅 Schedule: IP Logs every {IPLOGS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
         self.set_status("idle")
         self.update_heartbeat()
+        
+        # Run initial sync
+        print("\n[STARTUP] Running initial sync...")
+        self.auto_sync_iplogs()
+        self.auto_sync_fdb()
         
         last_heartbeat = time.time()
         
         try:
             while self.running:
-                # Check for sync request
+                # Priority 1: Check for manual sync request from web UI
                 if not self.syncing and self.check_for_request():
-                    self.log("📥 Sync request received!")
-                    self.perform_sync()
+                    self.log("📥 Manual sync request received!")
+                    self.perform_full_sync(triggered_by="web_ui")
+                
+                # Priority 2: Check scheduled syncs (only if not currently syncing)
+                if not self.syncing:
+                    self.check_scheduled_syncs()
                 
                 # Update heartbeat periodically
                 if time.time() - last_heartbeat > HEARTBEAT_INTERVAL:
@@ -295,13 +395,6 @@ signal.signal(signal.SIGTERM, signal_handler)
 def main():
     global service
     
-    print("""
-╔══════════════════════════════════════════════════════════╗
-║           OceanZ Sync Service                             ║
-║   Firebase-controlled Database Synchronization            ║
-╚══════════════════════════════════════════════════════════╝
-    """)
-    
     # Check for command line arguments
     if len(sys.argv) > 1:
         arg = sys.argv[1].lower()
@@ -311,24 +404,20 @@ def main():
             return
         
         if arg == "--test":
-            # Test mode: run sync once and exit
-            print("Running in TEST mode - single sync")
+            print("Running in TEST mode - single full sync")
             service = SyncService()
-            service.perform_sync()
+            service.perform_full_sync(triggered_by="test")
             return
         
         if arg == "--daemon":
-            # Daemon mode (Linux)
             print("Running as daemon...")
-            # Fork to background
-            if os.fork() > 0:
+            if hasattr(os, 'fork') and os.fork() > 0:
                 sys.exit(0)
     
-    # Normal mode
+    # Normal mode with auto-scheduling
     service = SyncService()
     service.run()
 
 
 if __name__ == "__main__":
     main()
-

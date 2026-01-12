@@ -1710,7 +1710,28 @@
           <div id="syncServerDot" class="w-3 h-3 rounded-full bg-gray-600 animate-pulse"></div>
           <span id="syncServerText" class="text-sm text-gray-400">Checking sync service...</span>
         </div>
-        <p class="text-xs text-gray-600 mt-2">Service monitors Firebase and syncs when requested</p>
+        <!-- Auto-Sync Schedule -->
+        <div id="autoSyncSchedule" class="mt-3 p-2 rounded-lg hidden" style="background: rgba(0,255,136,0.05); border: 1px solid rgba(0,255,136,0.2);">
+          <div class="text-xs text-gray-500 mb-2">⏰ Auto-Sync Schedule</div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span class="text-gray-500">IP Logs:</span>
+              <span id="scheduleIplogs" class="text-cyan-400 ml-1">every 2m</span>
+            </div>
+            <div>
+              <span class="text-gray-500">FDB:</span>
+              <span id="scheduleFdb" class="text-purple-400 ml-1">every 15m</span>
+            </div>
+            <div>
+              <span class="text-gray-500">Next IP:</span>
+              <span id="nextIplogs" class="text-gray-400 ml-1">-</span>
+            </div>
+            <div>
+              <span class="text-gray-500">Next FDB:</span>
+              <span id="nextFdb" class="text-gray-400 ml-1">-</span>
+            </div>
+          </div>
+        </div>
       </div>
       
       <!-- Last Sync Status -->
@@ -2253,6 +2274,7 @@
       const text = document.getElementById('syncServerText');
       const statusDot = document.getElementById('syncStatusDot');
       const buttons = document.querySelectorAll('.sync-action-btn');
+      const scheduleDiv = document.getElementById('autoSyncSchedule');
       
       try {
         // Check service heartbeat
@@ -2262,6 +2284,10 @@
         // Check current status
         const statusRes = await fetch(SYNC_STATUS_URL);
         const currentStatus = await statusRes.json();
+        
+        // Fetch schedule info
+        const scheduleRes = await fetch(`${FDB_BASE_URL}/sync-control/schedule.json`);
+        const schedule = await scheduleRes.json();
         
         // Service is online if heartbeat is within last 2 minutes
         const heartbeatTime = heartbeat?.timestamp ? new Date(heartbeat.timestamp) : null;
@@ -2280,10 +2306,30 @@
           if (text) {
             text.textContent = isSyncing 
               ? '⚡ Sync in progress...' 
-              : '✓ Sync service online';
+              : '✓ Sync service online (auto-sync active)';
             text.style.color = isSyncing ? '#00f0ff' : '#00ff88';
           }
           if (statusDot) statusDot.className = 'ml-auto w-2 h-2 rounded-full bg-green-500';
+          
+          // Show schedule info
+          if (scheduleDiv && schedule) {
+            scheduleDiv.classList.remove('hidden');
+            
+            const scheduleIplogs = document.getElementById('scheduleIplogs');
+            const scheduleFdb = document.getElementById('scheduleFdb');
+            const nextIplogs = document.getElementById('nextIplogs');
+            const nextFdb = document.getElementById('nextFdb');
+            
+            if (scheduleIplogs) scheduleIplogs.textContent = `every ${schedule.iplogs_interval_mins || 2}m`;
+            if (scheduleFdb) scheduleFdb.textContent = `every ${schedule.fdb_interval_mins || 15}m`;
+            
+            if (nextIplogs && schedule.next_iplogs) {
+              nextIplogs.textContent = getTimeUntil(schedule.next_iplogs);
+            }
+            if (nextFdb && schedule.next_fdb) {
+              nextFdb.textContent = getTimeUntil(schedule.next_fdb);
+            }
+          }
           
           buttons.forEach(btn => btn.disabled = isSyncing);
           
@@ -2301,12 +2347,28 @@
           text.style.color = '#ffaa00';
         }
         if (statusDot) statusDot.className = 'ml-auto w-2 h-2 rounded-full bg-yellow-500';
+        if (scheduleDiv) scheduleDiv.classList.add('hidden');
         
         // Still enable buttons - service might come online
         buttons.forEach(btn => btn.disabled = false);
         
         return false;
       }
+    }
+    
+    // Get time until a future ISO timestamp
+    function getTimeUntil(isoString) {
+      const target = new Date(isoString);
+      const now = new Date();
+      const diffMs = target - now;
+      
+      if (diffMs <= 0) return 'now';
+      
+      const diffSecs = Math.floor(diffMs / 1000);
+      const diffMins = Math.floor(diffSecs / 60);
+      
+      if (diffSecs < 60) return `${diffSecs}s`;
+      return `${diffMins}m ${diffSecs % 60}s`;
     }
     
     // Open sync panel
