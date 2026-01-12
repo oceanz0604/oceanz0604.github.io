@@ -747,9 +747,16 @@
       /* Outstanding credits mobile */
       /* Removed - handled by admin.css */
       
-      /* Search input mobile */
+      /* Search inputs mobile - ensure text doesn't overlap icon */
       #rechargeSearch {
         width: 100% !important;
+        padding-left: 40px !important;
+        text-indent: 0 !important;
+      }
+      
+      #bookingSearch {
+        padding-left: 32px !important;
+        text-indent: 0 !important;
       }
       
       /* Table header with search mobile */
@@ -1173,9 +1180,9 @@
             </div>
 
             <!-- Recharge List - Table Style -->
-            <div class="neon-card rounded-xl overflow-hidden">
+            <div class="neon-card rounded-xl overflow-hidden w-full">
               <!-- Table Header with Search -->
-              <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
+              <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3 w-full">
                 <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-cyan);">
                   📋 TODAY'S TRANSACTIONS
                   <span id="rechargeCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,240,255,0.2);">0</span>
@@ -1189,8 +1196,8 @@
               </div>
               
               <!-- Table -->
-              <div class="recharge-table-wrapper">
-                <table class="w-full text-sm recharge-table">
+              <div class="recharge-table-wrapper w-full">
+                <table class="w-full text-sm recharge-table" style="width: 100% !important;">
                   <thead class="bg-gray-900/50">
                     <tr class="text-left">
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-purple);">Time</th>
