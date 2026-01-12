@@ -68,6 +68,14 @@ export const FB_PATHS = {
   // Sync metadata
   SYNC_META: "sync-meta",                     // /sync-meta/{script_name}
   
+  // Sync control (for remote sync triggering)
+  SYNC_CONTROL: "sync-control",               // /sync-control/
+  SYNC_REQUEST: "sync-control/request",       // Write timestamp to trigger sync
+  SYNC_STATUS: "sync-control/status",         // idle, syncing, completed, error
+  SYNC_PROGRESS: "sync-control/progress",     // Array of progress messages
+  SYNC_LAST: "sync-control/last_sync",        // Last sync info
+  SYNC_HEARTBEAT: "sync-control/service_heartbeat", // Service health check
+  
   // Legacy paths (for backward compatibility)
   LEGACY_MEMBERS: "fdb/MEMBERS",              // Old: /fdb/MEMBERS (array format)
   LEGACY_STATUS: "status",                    // Old: /status/{terminal}

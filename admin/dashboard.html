@@ -1704,12 +1704,13 @@
         <button onclick="closeSyncPanel()" class="text-gray-500 hover:text-white text-xl transition-colors">✕</button>
       </div>
       
-      <!-- Server Status -->
+      <!-- Service Status -->
       <div id="syncServerStatus" class="p-4 border-b border-gray-800">
         <div class="flex items-center gap-3">
           <div id="syncServerDot" class="w-3 h-3 rounded-full bg-gray-600 animate-pulse"></div>
-          <span id="syncServerText" class="text-sm text-gray-400">Checking sync server...</span>
+          <span id="syncServerText" class="text-sm text-gray-400">Checking sync service...</span>
         </div>
+        <p class="text-xs text-gray-600 mt-2">Service monitors Firebase and syncs when requested</p>
       </div>
       
       <!-- Last Sync Status -->
@@ -2150,13 +2151,20 @@
     };
   </script>
   
-  <!-- Database Sync Panel -->
+  <!-- Database Sync Panel - Firebase-based -->
   <script>
-    // Sync Server Configuration
-    const SYNC_SERVER_URL = 'http://127.0.0.1:5555';
-    const FDB_SYNC_META_URL = 'https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app/sync-meta.json';
-    let syncEventSource = null;
-    let syncServerOnline = false;
+    // Firebase URLs for sync control
+    const FDB_BASE_URL = 'https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app';
+    const SYNC_CONTROL_URL = `${FDB_BASE_URL}/sync-control.json`;
+    const SYNC_REQUEST_URL = `${FDB_BASE_URL}/sync-control/request.json`;
+    const SYNC_STATUS_URL = `${FDB_BASE_URL}/sync-control/status.json`;
+    const SYNC_PROGRESS_URL = `${FDB_BASE_URL}/sync-control/progress.json`;
+    const SYNC_HEARTBEAT_URL = `${FDB_BASE_URL}/sync-control/service_heartbeat.json`;
+    const SYNC_LAST_URL = `${FDB_BASE_URL}/sync-control/last_sync.json`;
+    const FDB_SYNC_META_URL = `${FDB_BASE_URL}/sync-meta.json`;
+    
+    let syncServiceOnline = false;
+    let progressPollInterval = null;
     
     // Fetch last sync times from Firebase
     async function fetchLastSyncTimes() {
@@ -2177,7 +2185,6 @@
         
       } catch (error) {
         console.log('Could not fetch sync metadata:', error);
-        // Show "No data" for all
         ['fdb', 'iplogs', 'leaderboard'].forEach(type => {
           const el = document.getElementById(`${type}LastSync`);
           if (el) el.textContent = 'No data';
@@ -2196,16 +2203,12 @@
         const timeAgo = getRelativeTime(lastSync);
         const isRecent = isWithinMinutes(lastSync, type === 'iplogs' ? 5 : 60);
         
-        // Update dot color
         if (dotEl) {
-          if (status === 'ok' || isRecent) {
-            dotEl.className = 'w-2 h-2 rounded-full bg-green-500';
-          } else {
-            dotEl.className = 'w-2 h-2 rounded-full bg-yellow-500';
-          }
+          dotEl.className = (status === 'ok' || isRecent) 
+            ? 'w-2 h-2 rounded-full bg-green-500' 
+            : 'w-2 h-2 rounded-full bg-yellow-500';
         }
         
-        // Update text
         let text = timeAgo;
         if (recordCount !== null && recordCount !== undefined) {
           text += ` (${recordCount} new)`;
@@ -2219,7 +2222,7 @@
       }
     }
     
-    // Get relative time string (e.g., "5 mins ago")
+    // Get relative time string
     function getRelativeTime(isoString) {
       const date = new Date(isoString);
       const now = new Date();
@@ -2241,58 +2244,66 @@
     function isWithinMinutes(isoString, minutes) {
       const date = new Date(isoString);
       const now = new Date();
-      const diffMs = now - date;
-      return diffMs < minutes * 60 * 1000;
+      return (now - date) < minutes * 60 * 1000;
     }
     
-    // Check sync server status
-    async function checkSyncServer() {
+    // Check sync service status via Firebase heartbeat
+    async function checkSyncService() {
       const dot = document.getElementById('syncServerDot');
       const text = document.getElementById('syncServerText');
       const statusDot = document.getElementById('syncStatusDot');
       const buttons = document.querySelectorAll('.sync-action-btn');
       
       try {
-        const response = await fetch(`${SYNC_SERVER_URL}/status`, { 
-          method: 'GET',
-          mode: 'cors'
-        });
+        // Check service heartbeat
+        const heartbeatRes = await fetch(SYNC_HEARTBEAT_URL);
+        const heartbeat = await heartbeatRes.json();
         
-        if (response.ok) {
-          const data = await response.json();
-          syncServerOnline = true;
+        // Check current status
+        const statusRes = await fetch(SYNC_STATUS_URL);
+        const currentStatus = await statusRes.json();
+        
+        // Service is online if heartbeat is within last 2 minutes
+        const heartbeatTime = heartbeat?.timestamp ? new Date(heartbeat.timestamp) : null;
+        const isOnline = heartbeatTime && isWithinMinutes(heartbeat.timestamp, 2);
+        
+        syncServiceOnline = isOnline;
+        
+        if (isOnline) {
+          const isSyncing = currentStatus === 'syncing';
           
           if (dot) {
-            dot.className = 'w-3 h-3 rounded-full bg-green-500';
-            dot.style.animation = 'none';
+            dot.className = isSyncing 
+              ? 'w-3 h-3 rounded-full bg-cyan-500 animate-pulse' 
+              : 'w-3 h-3 rounded-full bg-green-500';
           }
           if (text) {
-            text.textContent = data.running 
-              ? `Running: ${data.current_script}` 
-              : 'Sync server online - Ready';
-            text.style.color = '#00ff88';
+            text.textContent = isSyncing 
+              ? '⚡ Sync in progress...' 
+              : '✓ Sync service online';
+            text.style.color = isSyncing ? '#00f0ff' : '#00ff88';
           }
           if (statusDot) statusDot.className = 'ml-auto w-2 h-2 rounded-full bg-green-500';
           
-          // Enable buttons
-          buttons.forEach(btn => btn.disabled = false);
+          buttons.forEach(btn => btn.disabled = isSyncing);
           
           return true;
+        } else {
+          throw new Error('Service offline');
         }
+        
       } catch (error) {
-        syncServerOnline = false;
+        syncServiceOnline = false;
         
-        if (dot) {
-          dot.className = 'w-3 h-3 rounded-full bg-red-500 animate-pulse';
-        }
+        if (dot) dot.className = 'w-3 h-3 rounded-full bg-yellow-500 animate-pulse';
         if (text) {
-          text.textContent = 'Sync server offline - Start sync_server.py';
-          text.style.color = '#ff4444';
+          text.textContent = '⚠️ Sync service offline - Start sync_service.py';
+          text.style.color = '#ffaa00';
         }
-        if (statusDot) statusDot.className = 'ml-auto w-2 h-2 rounded-full bg-red-500';
+        if (statusDot) statusDot.className = 'ml-auto w-2 h-2 rounded-full bg-yellow-500';
         
-        // Disable buttons
-        buttons.forEach(btn => btn.disabled = true);
+        // Still enable buttons - service might come online
+        buttons.forEach(btn => btn.disabled = false);
         
         return false;
       }
@@ -2304,8 +2315,8 @@
       if (panel) {
         panel.classList.remove('hidden');
         panel.classList.add('flex');
-        checkSyncServer();
-        fetchLastSyncTimes(); // Load last sync times from Firebase
+        checkSyncService();
+        fetchLastSyncTimes();
         lucide.createIcons();
       }
     };
@@ -2318,20 +2329,14 @@
         panel.classList.remove('flex');
       }
       
-      // Disconnect SSE
-      if (syncEventSource) {
-        syncEventSource.close();
-        syncEventSource = null;
+      if (progressPollInterval) {
+        clearInterval(progressPollInterval);
+        progressPollInterval = null;
       }
     };
     
-    // Trigger sync
+    // Trigger sync via Firebase
     window.triggerSync = async function(type) {
-      if (!syncServerOnline) {
-        alert('Sync server is not running. Please start sync_server.py on the counter computer.');
-        return;
-      }
-      
       const progressArea = document.getElementById('syncProgressArea');
       const progressBar = document.getElementById('syncProgressBar');
       const progressTitle = document.getElementById('syncProgressTitle');
@@ -2340,134 +2345,130 @@
       
       // Show progress area
       progressArea.classList.remove('hidden');
-      progressBar.style.width = '0%';
-      progressTitle.textContent = `Syncing ${type}...`;
-      progressStatus.textContent = 'Starting...';
-      logOutput.innerHTML = '<div class="text-gray-500">Connecting to sync server...</div>';
+      progressBar.style.width = '5%';
+      progressBar.style.background = 'linear-gradient(90deg, #00ff88, #00f0ff)';
+      progressTitle.textContent = `Requesting ${type} sync...`;
+      progressStatus.textContent = 'Sending request...';
+      logOutput.innerHTML = '<div class="text-cyan-400">📡 Sending sync request to Firebase...</div>';
       
-      // Disable buttons during sync
+      // Disable buttons
       document.querySelectorAll('.sync-action-btn').forEach(btn => btn.disabled = true);
       
       try {
-        // Start sync via POST
-        const response = await fetch(`${SYNC_SERVER_URL}/sync/${type}`, {
-          method: 'POST',
-          mode: 'cors'
+        // Write sync request to Firebase with timestamp
+        const requestId = `${type}_${Date.now()}`;
+        const response = await fetch(SYNC_REQUEST_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestId)
         });
         
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to start sync');
+          throw new Error('Failed to send sync request');
         }
         
-        // Connect to SSE for progress
-        connectToProgress();
+        logOutput.innerHTML += '<div class="text-green-400">✓ Request sent! Waiting for service...</div>';
+        progressBar.style.width = '10%';
+        
+        // Start polling for progress
+        startProgressPolling();
         
       } catch (error) {
-        logOutput.innerHTML = `<div class="text-red-400">❌ Error: ${error.message}</div>`;
+        logOutput.innerHTML += `<div class="text-red-400">❌ Error: ${error.message}</div>`;
         progressStatus.textContent = 'Failed';
         document.querySelectorAll('.sync-action-btn').forEach(btn => btn.disabled = false);
       }
     };
     
-    // Connect to SSE progress stream
-    function connectToProgress() {
-      if (syncEventSource) {
-        syncEventSource.close();
-      }
-      
-      syncEventSource = new EventSource(`${SYNC_SERVER_URL}/sync/progress`);
-      
+    // Poll Firebase for sync progress
+    function startProgressPolling() {
       const logOutput = document.getElementById('syncLogOutput');
       const progressBar = document.getElementById('syncProgressBar');
       const progressTitle = document.getElementById('syncProgressTitle');
       const progressStatus = document.getElementById('syncProgressStatus');
       
-      let logLines = [];
+      let lastProgressLength = 0;
+      let noChangeCount = 0;
       
-      syncEventSource.onmessage = function(event) {
+      progressPollInterval = setInterval(async () => {
         try {
-          const data = JSON.parse(event.data);
+          // Fetch current status
+          const statusRes = await fetch(SYNC_STATUS_URL);
+          const status = await statusRes.json();
           
-          if (data.type === 'connected') {
-            logLines.push('<div class="text-green-400">✓ Connected to sync server</div>');
-          }
+          // Fetch progress messages
+          const progressRes = await fetch(SYNC_PROGRESS_URL);
+          const progress = await progressRes.json() || [];
           
-          else if (data.type === 'start') {
-            progressTitle.textContent = `Running ${data.script}...`;
-            progressStatus.textContent = 'In progress';
-            progressBar.style.width = '10%';
-            logLines.push(`<div class="text-cyan-400">▶ ${data.message}</div>`);
-          }
-          
-          else if (data.type === 'progress') {
-            // Update progress bar smoothly
+          // Update status display
+          if (status === 'syncing') {
+            progressTitle.textContent = 'Sync in progress...';
+            progressStatus.textContent = 'Running';
+            
+            // Animate progress bar
             const currentWidth = parseInt(progressBar.style.width) || 10;
-            if (currentWidth < 90) {
-              progressBar.style.width = `${currentWidth + 5}%`;
+            if (currentWidth < 85) {
+              progressBar.style.width = `${Math.min(currentWidth + 2, 85)}%`;
             }
-            
-            // Add log line with appropriate color
-            let color = 'text-gray-400';
-            if (data.message.includes('✅')) color = 'text-green-400';
-            else if (data.message.includes('❌')) color = 'text-red-400';
-            else if (data.message.includes('⚠️')) color = 'text-yellow-400';
-            else if (data.message.includes('📊')) color = 'text-cyan-400';
-            else if (data.message.includes('📤')) color = 'text-purple-400';
-            
-            logLines.push(`<div class="${color}">${escapeHtml(data.message)}</div>`);
           }
           
-          else if (data.type === 'complete') {
-            progressBar.style.width = '100%';
-            progressStatus.textContent = data.success ? 'Complete!' : 'Completed with errors';
-            progressTitle.textContent = data.success ? 'Sync Complete' : 'Sync Finished';
+          // Update log with new messages
+          if (progress.length > lastProgressLength) {
+            const newMessages = progress.slice(lastProgressLength);
+            newMessages.forEach(msg => {
+              let color = 'text-gray-400';
+              if (msg.level === 'SUCCESS' || msg.message?.includes('✅')) color = 'text-green-400';
+              else if (msg.level === 'ERROR' || msg.message?.includes('❌')) color = 'text-red-400';
+              else if (msg.message?.includes('⚠️')) color = 'text-yellow-400';
+              else if (msg.message?.includes('📊') || msg.message?.includes('🔄')) color = 'text-cyan-400';
+              else if (msg.message?.includes('📤')) color = 'text-purple-400';
+              
+              const time = msg.time ? `<span class="text-gray-600 text-xs">[${msg.time.split(' ')[1] || msg.time}]</span> ` : '';
+              logOutput.innerHTML += `<div class="${color}">${time}${escapeHtml(msg.message)}</div>`;
+            });
+            lastProgressLength = progress.length;
+            logOutput.scrollTop = logOutput.scrollHeight;
+            noChangeCount = 0;
+          } else {
+            noChangeCount++;
+          }
+          
+          // Check if completed
+          if (status === 'completed' || status === 'error') {
+            clearInterval(progressPollInterval);
+            progressPollInterval = null;
             
-            if (data.success) {
-              logLines.push(`<div class="text-green-400 font-bold">✅ ${data.message}</div>`);
+            progressBar.style.width = '100%';
+            
+            if (status === 'completed') {
               progressBar.style.background = 'linear-gradient(90deg, #00ff88, #00ff88)';
+              progressTitle.textContent = '✅ Sync Complete!';
+              progressStatus.textContent = 'Done';
             } else {
-              logLines.push(`<div class="text-yellow-400 font-bold">⚠️ ${data.message}</div>`);
+              progressBar.style.background = '#ff4444';
+              progressTitle.textContent = '⚠️ Sync Error';
+              progressStatus.textContent = 'Error';
             }
             
             // Re-enable buttons
             document.querySelectorAll('.sync-action-btn').forEach(btn => btn.disabled = false);
-            checkSyncServer();
             
-            // Refresh last sync times after a short delay (to allow Firebase to update)
+            // Refresh last sync times
             setTimeout(fetchLastSyncTimes, 2000);
           }
           
-          else if (data.type === 'error') {
-            progressBar.style.width = '100%';
-            progressBar.style.background = '#ff4444';
-            progressStatus.textContent = 'Error';
-            progressTitle.textContent = 'Sync Failed';
-            
-            logLines.push(`<div class="text-red-400 font-bold">❌ ${data.message}</div>`);
-            
-            // Re-enable buttons
+          // Timeout if no updates for 60 seconds
+          if (noChangeCount > 12) { // 12 * 5s = 60s
+            clearInterval(progressPollInterval);
+            progressPollInterval = null;
+            logOutput.innerHTML += '<div class="text-yellow-400">⚠️ No updates for 60s. Service may be offline.</div>';
             document.querySelectorAll('.sync-action-btn').forEach(btn => btn.disabled = false);
           }
           
-          // Update log output (keep last 50 lines)
-          if (logLines.length > 50) logLines = logLines.slice(-50);
-          logOutput.innerHTML = logLines.join('');
-          logOutput.scrollTop = logOutput.scrollHeight;
-          
-        } catch (e) {
-          console.error('Error parsing SSE data:', e);
+        } catch (error) {
+          console.error('Error polling progress:', error);
         }
-      };
-      
-      syncEventSource.onerror = function() {
-        // Don't show error for normal disconnects
-        if (syncEventSource.readyState === EventSource.CLOSED) {
-          return;
-        }
-        logLines.push('<div class="text-red-400">Connection lost. Sync may still be running.</div>');
-        logOutput.innerHTML = logLines.join('');
-      };
+      }, 5000); // Poll every 5 seconds
     }
     
     // Escape HTML for log output
@@ -2477,13 +2478,13 @@
       return div.innerHTML;
     }
     
-    // Check server status periodically when panel is open
+    // Check service status periodically when panel is open
     setInterval(() => {
       const panel = document.getElementById('dbSyncPanel');
       if (panel && !panel.classList.contains('hidden')) {
-        checkSyncServer();
+        checkSyncService();
       }
-    }, 10000); // Every 10 seconds
+    }, 15000); // Every 15 seconds
   </script>
 </body>
 </html>
