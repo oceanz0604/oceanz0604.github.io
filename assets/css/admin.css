@@ -755,23 +755,60 @@ body.admin-page::before {
   border-bottom: none;
 }
 
+/* Recharge section containers - force full width */
+#recharges-section .neon-card {
+  width: 100% !important;
+}
+
 /* Recharge table wrapper */
 .recharge-table-wrapper {
   overflow-x: auto;
+  width: 100% !important;
+  display: block !important;
 }
 
-/* Recharge table mobile - single line */
+/* Recharge table - desktop full width */
+table.recharge-table {
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: fixed !important;
+  display: table !important;
+}
+
+/* Desktop column widths - use !important to override inline styles */
+@media (min-width: 641px) {
+  table.recharge-table th:nth-child(1),
+  table.recharge-table td:nth-child(1) { width: 9% !important; } /* Time */
+  
+  table.recharge-table th:nth-child(2),
+  table.recharge-table td:nth-child(2) { width: 16% !important; } /* Member */
+  
+  table.recharge-table th:nth-child(3),
+  table.recharge-table td:nth-child(3) { width: 10% !important; } /* Amt */
+  
+  table.recharge-table th:nth-child(4),
+  table.recharge-table td:nth-child(4) { width: 22% !important; } /* Pay */
+  
+  table.recharge-table th:nth-child(5),
+  table.recharge-table td:nth-child(5) { width: 15% !important; } /* Note */
+  
+  table.recharge-table th:nth-child(6),
+  table.recharge-table td:nth-child(6) { width: 15% !important; } /* Admin */
+  
+  table.recharge-table th:nth-child(7),
+  table.recharge-table td:nth-child(7) { width: 13% !important; } /* Actions */
+}
+
+/* Recharge table mobile */
 @media (max-width: 640px) {
   .recharge-table-wrapper {
     overflow: visible !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    padding: 10px !important;
   }
   
   .recharge-table {
     display: block !important;
     width: 100% !important;
-    min-width: 0 !important;
   }
   
   .recharge-table thead {
@@ -783,89 +820,105 @@ body.admin-page::before {
     width: 100% !important;
   }
   
+  /* Card-style rows */
   #rechargeList tr {
     display: flex !important;
-    align-items: center;
-    padding: 12px 16px !important;
-    gap: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    align-items: center !important;
+    width: 100% !important;
+    padding: 12px !important;
+    margin-bottom: 8px !important;
+    gap: 10px !important;
+    background: rgba(15, 15, 25, 0.8) !important;
+    border: 1px solid rgba(0, 240, 255, 0.15) !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
   }
   
   #rechargeList td {
     padding: 0 !important;
     border: none !important;
+    background: none !important;
   }
   
-  /* Time - compact */
+  /* Time */
   #rechargeList td:nth-child(1) {
-    flex: 0 0 55px;
+    flex: 0 0 50px !important;
+    text-align: center !important;
+    background: rgba(184, 41, 255, 0.15) !important;
+    border-radius: 6px !important;
+    padding: 4px !important;
   }
   
   #rechargeList td:nth-child(1) > div:first-child {
     font-size: 10px !important;
+    font-weight: 600 !important;
+    color: #b829ff !important;
   }
   
   #rechargeList td:nth-child(1) > div:last-child {
-    display: none;
+    font-size: 8px !important;
+    color: rgba(184, 41, 255, 0.7) !important;
   }
   
-  /* Member name - flexible, takes remaining space */
+  /* Member name */
   #rechargeList td:nth-child(2) {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
   
   #rechargeList td:nth-child(2) span {
-    font-size: 11px !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #00f0ff !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
   }
   
   /* Amount */
   #rechargeList td:nth-child(3) {
-    flex: 0 0 auto;
-    text-align: right;
+    flex: 0 0 auto !important;
   }
   
   #rechargeList td:nth-child(3) span {
-    font-size: 11px !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: #00ff88 !important;
   }
   
   #rechargeList td:nth-child(3) > div {
-    display: none;
+    display: none !important;
   }
   
-  /* Hide payment, note, admin on mobile */
+  /* Hide columns 4, 5, 6 */
   #rechargeList td:nth-child(4),
   #rechargeList td:nth-child(5),
   #rechargeList td:nth-child(6) {
     display: none !important;
-    flex: 0 0 0 !important;
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: hidden !important;
   }
   
-  /* Actions - compact, no extra space */
+  /* Actions */
   #rechargeList td:nth-child(7) {
-    flex: 0 0 auto;
-    margin-left: auto;
+    flex: 0 0 auto !important;
   }
   
   #rechargeList td:nth-child(7) .flex {
-    gap: 4px;
-    justify-content: flex-end;
+    display: flex !important;
+    gap: 6px !important;
   }
   
   #rechargeList td:nth-child(7) button {
-    padding: 4px !important;
-    font-size: 12px;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    font-size: 14px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-radius: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 }
 
