@@ -2457,12 +2457,22 @@
             setTimeout(fetchLastSyncTimes, 2000);
           }
           
-          // Timeout if no updates for 60 seconds
-          if (noChangeCount > 12) { // 12 * 5s = 60s
+          // Timeout if no updates for 30 seconds - fail the sync
+          if (noChangeCount > 6) { // 6 * 5s = 30s
             clearInterval(progressPollInterval);
             progressPollInterval = null;
-            logOutput.innerHTML += '<div class="text-yellow-400">⚠️ No updates for 60s. Service may be offline.</div>';
+            
+            // Mark as failed
+            progressBar.style.width = '100%';
+            progressBar.style.background = '#ff4444';
+            progressTitle.textContent = '❌ Sync Failed';
+            progressStatus.textContent = 'Timeout';
+            
+            logOutput.innerHTML += '<div class="text-red-400 font-bold">❌ Sync service did not respond within 30 seconds.</div>';
+            logOutput.innerHTML += '<div class="text-gray-500 text-xs mt-2">Make sure sync_service.py is running on the counter machine.</div>';
+            
             document.querySelectorAll('.sync-action-btn').forEach(btn => btn.disabled = false);
+            return; // Stop polling
           }
           
         } catch (error) {
