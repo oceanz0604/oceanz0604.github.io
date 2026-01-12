@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>OceanZ - Admin Dashboard</title>
   
   <!-- PWA Meta Tags -->
@@ -965,29 +965,25 @@
 
       <!-- Nav Items (dynamically filtered by permissions) -->
       <nav id="mainNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin">
-        <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
+        <a id="nav-recharges" href="#" data-permission="recharges" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+          <span class="font-medium">Recharges</span>
+        </a>
+        <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
           <span class="font-medium">Dashboard</span>
-        </a>
-        <a id="nav-members" href="#" data-permission="members" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="users" class="w-5 h-5"></i>
-          <span class="font-medium">Members</span>
         </a>
         <a id="nav-bookings" href="#" data-permission="bookings" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="calendar-clock" class="w-5 h-5"></i>
           <span class="font-medium">Bookings</span>
         </a>
-        <a id="nav-recharges" href="#" data-permission="recharges" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="wallet" class="w-5 h-5"></i>
-          <span class="font-medium">Recharges</span>
+        <a id="nav-members" href="#" data-permission="members" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="users" class="w-5 h-5"></i>
+          <span class="font-medium">Members</span>
         </a>
         <a id="nav-analytics" href="#" data-permission="analytics" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
           <span class="font-medium">Analytics</span>
-        </a>
-        <a id="nav-staff" href="#" data-permission="staff" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="shield-check" class="w-5 h-5"></i>
-          <span class="font-medium">Staff</span>
         </a>
         <a id="nav-cash" href="#" data-permission="cash_register" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="banknote" class="w-5 h-5"></i>
@@ -996,6 +992,10 @@
         <a id="nav-leaderboard" href="#" data-permission="leaderboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="trophy" class="w-5 h-5"></i>
           <span class="font-medium">Leaderboards</span>
+        </a>
+        <a id="nav-staff" href="#" data-permission="staff" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
+          <span class="font-medium">Staff</span>
         </a>
       </nav>
 

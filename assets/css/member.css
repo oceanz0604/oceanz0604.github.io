@@ -662,21 +662,39 @@ body.member-login::before {
 
 /* ==================== MEMBER MOBILE STYLES ==================== */
 @media (max-width: 768px) {
-  html { font-size: 14px; }
+  html { 
+    font-size: 14px;
+    overflow-x: hidden !important;
+  }
   
   /* Prevent horizontal overflow */
-  body.member-page,
-  body.member-login {
+  body, body.member-page, body.member-login {
     overflow-x: hidden !important;
-    width: 100vw;
-    max-width: 100vw;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    position: relative;
+  }
+  
+  /* Force all content to stay within bounds */
+  .neon-card, .card, section, article, div:not(.member-sidebar):not(.sidebar-backdrop):not(.modal) {
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  /* Prevent text from causing overflow */
+  p, span, h1, h2, h3, h4, h5, h6, label {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
   
   /* Main content */
   .main-content {
     padding: 1rem !important;
     margin-left: 0 !important;
-    width: 100%;
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box;
     max-width: 100vw;
     overflow-x: hidden;
   }

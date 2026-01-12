@@ -1,0 +1,46 @@
+{
+  "rules": {
+    "bookings": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$bookingId": {
+        ".validate": "newData.hasChildren(['date', 'pc', 'username'])"
+      }
+    },
+    
+    "recharges": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$rechargeId": {
+        ".validate": "newData.hasChildren(['member', 'amount', 'date'])"
+      }
+    },
+    
+    "cash_register": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    "staff": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$staffId": {
+        ".validate": "newData.hasChildren(['email', 'role'])"
+      }
+    },
+    
+    "activity_log": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    "recharge_audit": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    
+    ".read": false,
+    ".write": false
+  }
+}
+

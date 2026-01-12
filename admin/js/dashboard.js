@@ -429,14 +429,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Setup logout
   setupLogout();
   
-  // Start with first available view
+  // Start with recharges view as default (if user has permission)
   const session = getStaffSession();
   if (session) {
     const role = ROLES[session.role];
-    const firstAllowedView = role?.permissions?.[0] || "dashboard";
-    switchView(firstAllowedView);
+    const permissions = role?.permissions || [];
+    // Prefer recharges as default, fallback to first available permission
+    const defaultView = permissions.includes("recharges") ? "recharges" : (permissions[0] || "dashboard");
+    switchView(defaultView);
   } else {
-    switchView("dashboard");
+    switchView("recharges");
   }
   
   startDataSync();

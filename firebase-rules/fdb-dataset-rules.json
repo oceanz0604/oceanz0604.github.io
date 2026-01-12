@@ -1,0 +1,56 @@
+{
+  "rules": {
+    "members": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "history": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "guest-sessions": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "sessions": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "sessions-by-member": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "terminal-status": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "leaderboards": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "daily-summary": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "monthly-summary": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "sync-meta": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "fdb": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "status": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    
+    ".read": false,
+    ".write": false
+  }
+}
+
