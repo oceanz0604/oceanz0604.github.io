@@ -240,6 +240,8 @@ function loadDay() {
     render();
     // After rendering, scan for credit collections that happened on selectedDate
     loadCreditCollectionsForDate(selectedDate);
+    // Load credit collections from OTHER dates that were collected on this date
+    loadOtherDayCollections(selectedDate);
     loadAudit();
     // Reload outstanding credits whenever data changes (including new credit entries)
     loadAllOutstandingCredits();
@@ -262,23 +264,33 @@ async function loadCreditCollectionsForDate(targetDate) {
     // Scan all dates for credit collections that happened on targetDate
     Object.entries(allRecharges).forEach(([transactionDate, dayData]) => {
       Object.values(dayData).forEach(r => {
-        // New format: check lastPaidAt
-        if (r.lastPaidAt) {
+        // NEW FORMAT with creditPayments history (supports partial payments across multiple days)
+        if (r.creditPayments && r.creditPayments[targetDate]) {
+          const payment = r.creditPayments[targetDate];
+          if (transactionDate === targetDate) {
+            sameDayCash += payment.cash || 0;
+            sameDayUpi += payment.upi || 0;
+          } else {
+            otherDayCash += payment.cash || 0;
+            otherDayUpi += payment.upi || 0;
+          }
+        }
+        // FALLBACK: Old format with lastPaidAt (single payment only)
+        else if (r.lastPaidAt && !r.creditPayments) {
           const paidDate = r.lastPaidAt.split("T")[0];
           if (paidDate === targetDate) {
             if (transactionDate === targetDate) {
-              // Same day: transaction created today, credit collected today
               sameDayCash += r.lastPaidCash || 0;
               sameDayUpi += r.lastPaidUpi || 0;
             } else {
-              // Other day: transaction from past, credit collected today
               otherDayCash += r.lastPaidCash || 0;
               otherDayUpi += r.lastPaidUpi || 0;
             }
           }
         }
-        // Old format: check paidAt
-        if (r.paidAt && r.mode === "credit" && r.paid) {
+        // LEGACY: Old format with paidAt (credit mode) - only if NO new format fields
+        // Skip if creditPayments exists (already handled above)
+        if (r.paidAt && r.mode === "credit" && r.paid && !r.creditPayments && !r.lastPaidCash && !r.lastPaidUpi) {
           const paidDate = r.paidAt.split("T")[0];
           if (paidDate === targetDate) {
             let cash = 0, upi = 0;
@@ -311,21 +323,23 @@ async function loadCreditCollectionsForDate(targetDate) {
       const cashEl = elements.cashEl;
       const upiEl = elements.upiEl;
       
-      // Update cash display
+      // Update cash display - add all credit collections to total
       if (cashEl) {
         const currentCash = parseInt(cashEl.textContent.replace(/[₹,]/g, "")) || 0;
         cashEl.innerHTML = `₹${currentCash + totalCollectedCash}`;
-        if (totalCollectedCash > 0) {
-          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${totalCollectedCash} credit)</span>`;
+        // Only show green indicator for OTHER-DAY credit collections (not same-day)
+        if (otherDayCash > 0) {
+          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayCash} credit)</span>`;
         }
       }
       
-      // Update UPI display
+      // Update UPI display - add all credit collections to total
       if (upiEl) {
         const currentUpi = parseInt(upiEl.textContent.replace(/[₹,]/g, "")) || 0;
         upiEl.innerHTML = `₹${currentUpi + totalCollectedUpi}`;
-        if (totalCollectedUpi > 0) {
-          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${totalCollectedUpi} credit)</span>`;
+        // Only show green indicator for OTHER-DAY credit collections (not same-day)
+        if (otherDayUpi > 0) {
+          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayUpi} credit)</span>`;
         }
       }
       
@@ -337,9 +351,149 @@ async function loadCreditCollectionsForDate(targetDate) {
       }
     }
     
-    console.log(`Credit collections for ${targetDate}: Same-day: Cash ₹${sameDayCash}, UPI ₹${sameDayUpi} | Other-day: Cash ₹${otherDayCash}, UPI ₹${otherDayUpi}`);
+    // Get current values from render() before adding credit collections
+    const renderCash = parseInt(elements.cashEl?.textContent?.replace(/[₹,]/g, "")) || 0;
+    const renderUpi = parseInt(elements.upiEl?.textContent?.replace(/[₹,]/g, "")) || 0;
+    
+    console.log(`[RECHARGES] Date: ${targetDate}`);
+    console.log(`  From render() - Direct Cash: ₹${renderCash}, Direct UPI: ₹${renderUpi}`);
+    console.log(`  Credit collections - Same-day: Cash ₹${sameDayCash}, UPI ₹${sameDayUpi}`);
+    console.log(`  Credit collections - Other-day: Cash ₹${otherDayCash}, UPI ₹${otherDayUpi}`);
+    console.log(`  Final totals: Cash ₹${renderCash + totalCollectedCash}, UPI ₹${renderUpi + totalCollectedUpi}`);
   } catch (error) {
     console.warn("Could not load credit collections:", error);
+  }
+}
+
+// Load and display credit collections from OTHER dates that were collected on the selected date
+async function loadOtherDayCollections(targetDate) {
+  const section = document.getElementById("otherDayCollectionsSection");
+  const listEl = document.getElementById("otherDayCollectionsList");
+  const countEl = document.getElementById("otherDayCollectionCount");
+  const totalEl = document.getElementById("otherDayCollectionTotal");
+  
+  if (!section || !listEl) return;
+  
+  try {
+    const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
+    const allRecharges = snap.val() || {};
+    
+    const collections = [];
+    
+    // Scan all dates for credit collections that happened on targetDate from OTHER dates
+    Object.entries(allRecharges).forEach(([transactionDate, dayData]) => {
+      // Skip same-day transactions
+      if (transactionDate === targetDate) return;
+      
+      Object.entries(dayData).forEach(([id, r]) => {
+        // NEW FORMAT with creditPayments history
+        if (r.creditPayments && r.creditPayments[targetDate]) {
+          const payment = r.creditPayments[targetDate];
+          const totalCollected = (payment.cash || 0) + (payment.upi || 0);
+          if (totalCollected > 0) {
+            collections.push({
+              id,
+              transactionDate,
+              member: r.member,
+              cash: payment.cash || 0,
+              upi: payment.upi || 0,
+              total: totalCollected,
+              collectedAt: payment.at,
+              collectedBy: payment.by
+            });
+          }
+        }
+        // FALLBACK: Old format with lastPaidAt
+        else if (r.lastPaidAt && !r.creditPayments) {
+          const paidDate = r.lastPaidAt.split("T")[0];
+          if (paidDate === targetDate) {
+            const totalCollected = (r.lastPaidCash || 0) + (r.lastPaidUpi || 0);
+            if (totalCollected > 0) {
+              collections.push({
+                id,
+                transactionDate,
+                member: r.member,
+                cash: r.lastPaidCash || 0,
+                upi: r.lastPaidUpi || 0,
+                total: totalCollected,
+                collectedAt: r.lastPaidAt,
+                collectedBy: r.lastPaidBy
+              });
+            }
+          }
+        }
+        // LEGACY: Old format with paidAt - only if NO new format fields
+        if (r.paidAt && r.mode === "credit" && r.paid && !r.creditPayments && !r.lastPaidCash && !r.lastPaidUpi) {
+          const paidDate = r.paidAt.split("T")[0];
+          if (paidDate === targetDate) {
+            let cash = 0, upi = 0;
+            if (r.paidVia === "cash") cash = r.amount;
+            else if (r.paidVia === "upi") upi = r.amount;
+            else if (r.paidVia === "cash+upi") {
+              cash = Math.floor(r.amount / 2);
+              upi = r.amount - Math.floor(r.amount / 2);
+            } else {
+              cash = r.amount;
+            }
+            
+            collections.push({
+              id,
+              transactionDate,
+              member: r.member,
+              cash,
+              upi,
+              total: cash + upi,
+              collectedAt: r.paidAt,
+              collectedBy: r.paidBy
+            });
+          }
+        }
+      });
+    });
+    
+    // Sort by transaction date (newest first)
+    collections.sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
+    
+    // Update section visibility and counts
+    if (collections.length === 0) {
+      section.classList.add("hidden");
+      return;
+    }
+    
+    section.classList.remove("hidden");
+    const grandTotal = collections.reduce((sum, c) => sum + c.total, 0);
+    
+    if (countEl) countEl.textContent = collections.length;
+    if (totalEl) totalEl.textContent = `₹${grandTotal.toLocaleString("en-IN")}`;
+    
+    // Render table rows
+    listEl.innerHTML = collections.map(c => {
+      const origDate = new Date(c.transactionDate).toLocaleDateString("en-IN", { 
+        day: "numeric", 
+        month: "short" 
+      });
+      
+      let methodBadges = "";
+      if (c.cash > 0) {
+        methodBadges += `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,240,255,0.2); color: #00f0ff;">💵 ₹${c.cash}</span> `;
+      }
+      if (c.upi > 0) {
+        methodBadges += `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(184,41,255,0.2); color: #b829ff;">📱 ₹${c.upi}</span>`;
+      }
+      
+      return `
+        <tr class="border-b border-gray-800/30 hover:bg-gray-800/20">
+          <td class="py-2 px-2 text-gray-400 text-xs">${origDate}</td>
+          <td class="py-2 px-2 font-orbitron font-bold" style="color: var(--neon-cyan);">${c.member}</td>
+          <td class="py-2 px-2 text-right font-orbitron font-bold" style="color: var(--neon-green);">₹${c.total}</td>
+          <td class="py-2 px-2">${methodBadges}</td>
+        </tr>
+      `;
+    }).join("");
+    
+  } catch (error) {
+    console.warn("Could not load other-day collections:", error);
+    section.classList.add("hidden");
   }
 }
 
@@ -672,13 +826,21 @@ function render() {
       // For creditPaid: only count in total if paid on the SAME day (selectedDate)
       // If paid on a different day, it will be counted via loadCreditCollectionsForDate
       let sameDayCreditPaid = 0;
-      if (r.creditPaid > 0 && r.lastPaidAt) {
+      
+      // NEW: Check creditPayments history for same-day payments
+      if (r.creditPayments && r.creditPayments[selectedDate]) {
+        const todayPayment = r.creditPayments[selectedDate];
+        sameDayCreditPaid = (todayPayment.cash || 0) + (todayPayment.upi || 0);
+      }
+      // FALLBACK: Old format with lastPaidAt (single payment)
+      else if (r.creditPaid > 0 && r.lastPaidAt && !r.creditPayments) {
         const paidDate = r.lastPaidAt.split("T")[0];
         if (paidDate === selectedDate) {
           sameDayCreditPaid = r.creditPaid;
         }
-      } else if (r.creditPaid > 0 && !r.lastPaidAt) {
-        // No lastPaidAt means old record - assume same day for backward compatibility
+      } 
+      // LEGACY: No payment tracking - assume same day
+      else if (r.creditPaid > 0 && !r.lastPaidAt && !r.creditPayments) {
         sameDayCreditPaid = r.creditPaid;
       }
       
@@ -772,25 +934,43 @@ function render() {
         }
         // Show how the credit was settled (via cash/UPI) with collection date if different
         if (r.creditPaid > 0) {
-          // Check if credit was collected on a different date
-          let collectionDateStr = "";
-          if (r.lastPaidAt) {
-            const collectionDate = r.lastPaidAt.split("T")[0];
-            if (collectionDate !== selectedDate) {
-              const collDate = new Date(collectionDate);
-              collectionDateStr = ` on ${collDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+          // NEW: Show payment history from creditPayments
+          if (r.creditPayments && Object.keys(r.creditPayments).length > 0) {
+            // Show each payment date's amounts
+            Object.entries(r.creditPayments).forEach(([paymentDate, payment]) => {
+              const isOtherDay = paymentDate !== selectedDate;
+              const dateStr = isOtherDay 
+                ? ` on ${new Date(paymentDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                : "";
+              
+              if (payment.cash > 0) {
+                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${dateStr}">✓ ₹${payment.cash} Cash${dateStr}</span>`);
+              }
+              if (payment.upi > 0) {
+                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${dateStr}">✓ ₹${payment.upi} UPI${dateStr}</span>`);
+              }
+            });
+          }
+          // FALLBACK: Old format with lastPaidAt (single payment)
+          else if (r.lastPaidCash || r.lastPaidUpi) {
+            let collectionDateStr = "";
+            if (r.lastPaidAt) {
+              const collectionDate = r.lastPaidAt.split("T")[0];
+              if (collectionDate !== selectedDate) {
+                const collDate = new Date(collectionDate);
+                collectionDateStr = ` on ${collDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+              }
+            }
+            
+            if (r.lastPaidCash > 0) {
+              badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${collectionDateStr}">✓ ₹${r.lastPaidCash} Cash${collectionDateStr}</span>`);
+            }
+            if (r.lastPaidUpi > 0) {
+              badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
             }
           }
-          
-          if (r.lastPaidCash > 0 && r.lastPaidUpi > 0) {
-            badges.push(`<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.lastPaidCash} Cash${collectionDateStr}</span>`);
-            badges.push(`<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
-          } else if (r.lastPaidCash > 0) {
-            badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${collectionDateStr}">✓ ₹${r.lastPaidCash} Cash${collectionDateStr}</span>`);
-          } else if (r.lastPaidUpi > 0) {
-            badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
-          } else {
-            // Fallback for old records without lastPaid info
+          // LEGACY: No payment details, just show total
+          else {
             badges.push(`<span class="payment-badge credit-paid">✓ ₹${r.creditPaid}</span>`);
           }
         }
@@ -1022,13 +1202,31 @@ window.confirmCollectCredit = () => {
   if (stillCredit > 0) paymentParts.push(`₹${stillCredit} still credit`);
   
   if (isNewFormat) {
-    // New split format - update the record
+    // New split format - update the record with payment history
     const newCreditPaid = (originalRecord.creditPaid || 0) + collected;
-    const newCreditRemaining = (originalRecord.credit || 0) - newCreditPaid;
+    const today = getISTDateString();
+    const now = new Date().toISOString();
+    
+    // Build credit payments history (supports multiple partial payments across days)
+    const existingPayments = originalRecord.creditPayments || {};
+    const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
+    
+    // Add today's payment to the history
+    const updatedPayments = {
+      ...existingPayments,
+      [today]: {
+        cash: todayPayment.cash + cash,
+        upi: todayPayment.upi + upi,
+        at: now,
+        by: getAdminName()
+      }
+    };
     
     rechargeDb.ref(`recharges/${date}/${id}`).update({
       creditPaid: newCreditPaid,
-      lastPaidAt: new Date().toISOString(),
+      creditPayments: updatedPayments,
+      // Keep lastPaid fields for backward compatibility
+      lastPaidAt: now,
       lastPaidCash: cash,
       lastPaidUpi: upi,
       lastPaidBy: getAdminName()

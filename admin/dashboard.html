@@ -1179,6 +1179,32 @@
               </div>
             </div>
 
+            <!-- Credit Collections from Other Dates (collected today) -->
+            <div id="otherDayCollectionsSection" class="hidden">
+              <div class="neon-card rounded-xl p-4 relative" style="border-color: rgba(0,255,136,0.3);">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-green);">
+                    💰 CREDIT COLLECTED TODAY (from other dates)
+                    <span id="otherDayCollectionCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,255,136,0.2);">0</span>
+                  </h3>
+                  <span id="otherDayCollectionTotal" class="font-orbitron font-bold" style="color: var(--neon-green);">₹0</span>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="text-left border-b border-gray-700">
+                        <th class="py-2 px-2 font-orbitron text-xs" style="color: #888;">Orig. Date</th>
+                        <th class="py-2 px-2 font-orbitron text-xs" style="color: var(--neon-cyan);">Member</th>
+                        <th class="py-2 px-2 font-orbitron text-xs text-right" style="color: var(--neon-green);">Collected</th>
+                        <th class="py-2 px-2 font-orbitron text-xs" style="color: #888;">Method</th>
+                      </tr>
+                    </thead>
+                    <tbody id="otherDayCollectionsList"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
             <!-- Recharge List - Table Style -->
             <div class="neon-card rounded-xl overflow-hidden w-full">
               <!-- Table Header with Search -->
@@ -1715,16 +1741,16 @@
           <div class="text-xs text-gray-500 mb-2">⏰ Auto-Sync Schedule</div>
           <div class="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span class="text-gray-500">IP Logs:</span>
-              <span id="scheduleIplogs" class="text-cyan-400 ml-1">every 2m</span>
+              <span class="text-gray-500">Terminals:</span>
+              <span id="scheduleTerminals" class="text-cyan-400 ml-1">every 2m</span>
             </div>
             <div>
               <span class="text-gray-500">FDB:</span>
               <span id="scheduleFdb" class="text-purple-400 ml-1">every 15m</span>
             </div>
             <div>
-              <span class="text-gray-500">Next IP:</span>
-              <span id="nextIplogs" class="text-gray-400 ml-1">-</span>
+              <span class="text-gray-500">Next Term:</span>
+              <span id="nextTerminals" class="text-gray-400 ml-1">-</span>
             </div>
             <div>
               <span class="text-gray-500">Next FDB:</span>
@@ -1746,13 +1772,13 @@
             </div>
             <div id="fdbLastSync" class="text-[10px] text-gray-500">Loading...</div>
           </div>
-          <!-- IPLogs Sync -->
+          <!-- Terminals Sync -->
           <div class="p-2 rounded-lg" style="background: rgba(0,240,255,0.05); border: 1px solid rgba(0,240,255,0.2);">
             <div class="flex items-center gap-2 mb-1">
-              <div id="iplogsStatusDot" class="w-2 h-2 rounded-full bg-gray-600"></div>
+              <div id="terminalsStatusDot" class="w-2 h-2 rounded-full bg-gray-600"></div>
               <span class="text-xs font-medium" style="color: #00f0ff;">Terminals</span>
             </div>
-            <div id="iplogsLastSync" class="text-[10px] text-gray-500">Loading...</div>
+            <div id="terminalsLastSync" class="text-[10px] text-gray-500">Loading...</div>
           </div>
           <!-- Leaderboard Sync -->
           <div class="p-2 rounded-lg" style="background: rgba(255,215,0,0.05); border: 1px solid rgba(255,215,0,0.2);">
@@ -1767,8 +1793,6 @@
       
       <!-- Sync Buttons -->
       <div class="p-4 space-y-3">
-        <div class="text-xs text-gray-500 mb-2 uppercase tracking-wider">Quick Sync</div>
-        
         <button onclick="triggerSync('all')" id="syncAllBtn" class="sync-action-btn w-full flex items-center gap-4 p-4 rounded-xl transition-all" disabled
           style="background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,240,255,0.1)); border: 1px solid rgba(0,255,136,0.3);">
           <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(0,255,136,0.2);">
@@ -1776,31 +1800,13 @@
           </div>
           <div class="flex-1 text-left">
             <div class="font-semibold text-white">Full Sync</div>
-            <div class="text-xs text-gray-500">FDB → Terminal Status → Leaderboards</div>
+            <div class="text-xs text-gray-500">FDB Data → Terminals → Leaderboards</div>
           </div>
           <i data-lucide="chevron-right" class="w-5 h-5 text-gray-600"></i>
         </button>
         
-        <div class="text-xs text-gray-500 mt-4 mb-2 uppercase tracking-wider">Individual Syncs</div>
-        
-        <div class="grid grid-cols-3 gap-2">
-          <button onclick="triggerSync('fdb')" class="sync-action-btn p-3 rounded-lg text-center transition-all" disabled
-            style="background: rgba(184,41,255,0.1); border: 1px solid rgba(184,41,255,0.3);">
-            <i data-lucide="database" class="w-5 h-5 mx-auto mb-1" style="color: #b829ff;"></i>
-            <div class="text-xs font-medium text-gray-300">FDB Data</div>
-          </button>
-          
-          <button onclick="triggerSync('iplogs')" class="sync-action-btn p-3 rounded-lg text-center transition-all" disabled
-            style="background: rgba(0,240,255,0.1); border: 1px solid rgba(0,240,255,0.3);">
-            <i data-lucide="monitor" class="w-5 h-5 mx-auto mb-1" style="color: #00f0ff;"></i>
-            <div class="text-xs font-medium text-gray-300">Terminals</div>
-          </button>
-          
-          <button onclick="triggerSync('leaderboard')" class="sync-action-btn p-3 rounded-lg text-center transition-all" disabled
-            style="background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.3);">
-            <i data-lucide="trophy" class="w-5 h-5 mx-auto mb-1" style="color: #ffd700;"></i>
-            <div class="text-xs font-medium text-gray-300">Leaders</div>
-          </button>
+        <div class="text-xs text-gray-500 text-center mt-2">
+          Auto-sync runs in background when service is online
         </div>
       </div>
       
@@ -2198,15 +2204,15 @@
         // Update FDB status
         updateSyncStatusUI('fdb', data?.last_fdb_sync, data?.records_synced);
         
-        // Update IPLogs status  
-        updateSyncStatusUI('iplogs', data?.iplogs?.last_sync, null, data?.iplogs?.status);
+        // Update Terminals status  
+        updateSyncStatusUI('terminals', data?.terminals?.last_sync, null, data?.terminals?.status);
         
         // Update Leaderboard status
         updateSyncStatusUI('leaderboard', data?.leaderboard?.last_sync, null, data?.leaderboard?.status);
         
       } catch (error) {
         console.log('Could not fetch sync metadata:', error);
-        ['fdb', 'iplogs', 'leaderboard'].forEach(type => {
+        ['fdb', 'terminals', 'leaderboard'].forEach(type => {
           const el = document.getElementById(`${type}LastSync`);
           if (el) el.textContent = 'No data';
         });
@@ -2222,7 +2228,7 @@
       
       if (lastSync) {
         const timeAgo = getRelativeTime(lastSync);
-        const isRecent = isWithinMinutes(lastSync, type === 'iplogs' ? 5 : 60);
+        const isRecent = isWithinMinutes(lastSync, type === 'terminals' ? 5 : 60);
         
         if (dotEl) {
           dotEl.className = (status === 'ok' || isRecent) 
@@ -2315,16 +2321,16 @@
           if (scheduleDiv && schedule) {
             scheduleDiv.classList.remove('hidden');
             
-            const scheduleIplogs = document.getElementById('scheduleIplogs');
+            const scheduleTerminals = document.getElementById('scheduleTerminals');
             const scheduleFdb = document.getElementById('scheduleFdb');
-            const nextIplogs = document.getElementById('nextIplogs');
+            const nextTerminals = document.getElementById('nextTerminals');
             const nextFdb = document.getElementById('nextFdb');
             
-            if (scheduleIplogs) scheduleIplogs.textContent = `every ${schedule.iplogs_interval_mins || 2}m`;
+            if (scheduleTerminals) scheduleTerminals.textContent = `every ${schedule.terminals_interval_mins || 2}m`;
             if (scheduleFdb) scheduleFdb.textContent = `every ${schedule.fdb_interval_mins || 15}m`;
             
-            if (nextIplogs && schedule.next_iplogs) {
-              nextIplogs.textContent = getTimeUntil(schedule.next_iplogs);
+            if (nextTerminals && schedule.next_terminals) {
+              nextTerminals.textContent = getTimeUntil(schedule.next_terminals);
             }
             if (nextFdb && schedule.next_fdb) {
               nextFdb.textContent = getTimeUntil(schedule.next_fdb);
