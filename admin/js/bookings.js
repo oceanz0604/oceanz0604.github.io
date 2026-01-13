@@ -343,6 +343,12 @@ function renderBookings(bookingsData) {
       actionBy = `<span class="text-[9px]" style="color: #ff6666;">✕ ${booking.declinedBy}</span>`;
     }
 
+    // Device type info
+    const deviceIcons = { PC: '🖥️', XBOX: '🎮', PS: '🕹️' };
+    const deviceType = booking.deviceType || 'PC';
+    const deviceIcon = deviceIcons[deviceType] || '🖥️';
+    const deviceName = booking.deviceName || (deviceType === 'PC' ? 'Gaming PC' : deviceType);
+
     card.innerHTML = `
       <div class="booking-card-clickable" onclick="openBookingModal('${key}')">
         <div class="booking-card-header">
@@ -353,9 +359,9 @@ function renderBookings(bookingsData) {
           <span class="booking-card-price export-cell">₹${booking.price}</span>
         </div>
         <div class="booking-card-details">
-          <span>${dateStr}</span>
+          <span>${deviceIcon} ${deviceType === 'PC' ? booking.pcs.join(", ") : deviceName}</span>
           <span class="booking-card-divider">•</span>
-          <span>${booking.pcs.join(", ")}</span>
+          <span>${dateStr}</span>
           <span class="booking-card-divider">•</span>
           <span>${startTimeStr} → ${endTimeStr}</span>
         </div>
@@ -467,10 +473,18 @@ function openBookingModal(bookingKey) {
   const mins = durationMins % 60;
   const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   
+  // Device type info
+  const deviceIcons = { PC: '🖥️', XBOX: '🎮', PS: '🕹️' };
+  const deviceType = booking.deviceType || 'PC';
+  const deviceIcon = deviceIcons[deviceType] || '🖥️';
+  const deviceName = booking.deviceName || (deviceType === 'PC' ? 'Gaming PC' : deviceType);
+
   // Populate modal
   document.getElementById("bookingModalName").textContent = booking.name || "Unknown";
   document.getElementById("bookingModalDate").textContent = dateStr;
-  document.getElementById("bookingModalPC").textContent = booking.pcs?.join(", ") || "-";
+  document.getElementById("bookingModalPC").textContent = deviceType === 'PC' 
+    ? `${deviceIcon} ${booking.pcs?.join(", ") || "-"}` 
+    : `${deviceIcon} ${deviceName}`;
   document.getElementById("bookingModalTime").textContent = `${startTimeStr} → ${endTimeStr}`;
   document.getElementById("bookingModalDuration").textContent = durationStr;
   document.getElementById("bookingModalPrice").textContent = `₹${booking.price || 0}`;
@@ -569,12 +583,21 @@ function buildTimetableBookings(bookingsData) {
       const startDate = new Date(b.start);
       if (startDate < today || startDate >= new Date(today.getTime() + 86400000)) return null;
 
-      let pc = b.pcs[0].toUpperCase();
-      if (/^T\d+$/.test(pc)) pc = `T-ROOM-${pc.slice(1)}`;
-      else if (/^CT\d+$/.test(pc)) pc = `CT-ROOM-${pc.slice(2)}`;
-      else if (pc === "PS") pc = "PS";
-      else if (pc.startsWith("XBOX")) pc = "XBOX ONE X";
-      else return null;
+      // Handle device type
+      const deviceType = b.deviceType || 'PC';
+      let pc;
+      
+      if (deviceType === 'XBOX') {
+        pc = "XBOX ONE X";
+      } else if (deviceType === 'PS') {
+        pc = "PS";
+      } else {
+        // PC - map to timetable PC names
+        const slot = b.pcs[0].toUpperCase();
+        if (/^T\d+$/.test(slot)) pc = `T-ROOM-${slot.slice(1)}`;
+        else if (/^CT\d+$/.test(slot)) pc = `CT-ROOM-${slot.slice(2)}`;
+        else return null;
+      }
 
       return {
         key,
@@ -584,7 +607,8 @@ function buildTimetableBookings(bookingsData) {
         end: timetableTimeIndex(b.end),
         status: b.status || "Pending",
         startTime: b.start,
-        endTime: b.end
+        endTime: b.end,
+        deviceType
       };
     })
     .filter(Boolean);

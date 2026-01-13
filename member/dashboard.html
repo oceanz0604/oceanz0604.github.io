@@ -189,6 +189,25 @@
       outline: none;
     }
 
+    /* Device Type Buttons */
+    .device-btn {
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      cursor: pointer;
+      opacity: 0.6;
+    }
+    
+    .device-btn:hover {
+      opacity: 0.9;
+      border-color: rgba(0, 240, 255, 0.5);
+    }
+    
+    .device-btn.active {
+      opacity: 1;
+      border-color: var(--neon-green);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+      background: rgba(0, 255, 136, 0.1);
+    }
+
     /* Avatar Ring */
     .avatar-ring {
       border: 3px solid var(--neon-cyan);
@@ -1006,6 +1025,29 @@
           </h2>
 
           <div id="step1" class="space-y-6">
+            <!-- Device Type Selection -->
+            <div>
+              <label class="block text-sm font-medium mb-3 text-cyan-400 uppercase tracking-wider">Select Device Type</label>
+              <div id="deviceTypeButtons" class="grid grid-cols-3 gap-3">
+                <button type="button" class="device-btn active neon-card rounded-xl p-4 text-center transition-all" data-device="PC">
+                  <span class="text-3xl mb-2 block">🖥️</span>
+                  <span class="font-orbitron text-sm block text-cyan-400">Gaming PC</span>
+                  <span class="text-xs text-yellow-400">₹40/hr</span>
+                </button>
+                <button type="button" class="device-btn neon-card rounded-xl p-4 text-center transition-all" data-device="XBOX">
+                  <span class="text-3xl mb-2 block">🎮</span>
+                  <span class="font-orbitron text-sm block text-cyan-400">Xbox</span>
+                  <span class="text-xs text-yellow-400">₹60/hr</span>
+                </button>
+                <button type="button" class="device-btn neon-card rounded-xl p-4 text-center transition-all" data-device="PS">
+                  <span class="text-3xl mb-2 block">🕹️</span>
+                  <span class="font-orbitron text-sm block text-cyan-400">PlayStation</span>
+                  <span class="text-xs text-yellow-400">₹100/hr</span>
+                </button>
+              </div>
+              <input type="hidden" id="selectedDevice" value="PC"/>
+            </div>
+            
             <div>
               <label class="block text-sm font-medium mb-3 text-cyan-400 uppercase tracking-wider">Select Date</label>
               <div id="dateButtons" class="flex gap-3 flex-wrap"></div>
@@ -1032,7 +1074,7 @@
 
           <div id="step2" style="display: none;" class="space-y-6">
             <div>
-              <label class="block text-sm font-medium mb-3 text-cyan-400 uppercase tracking-wider">Select PC</label>
+              <label class="block text-sm font-medium mb-3 text-cyan-400 uppercase tracking-wider" id="slotSelectionLabel">Select Your Slot</label>
               <div id="availablePCs" class="space-y-4"></div>
             </div>
 
