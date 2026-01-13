@@ -210,19 +210,43 @@ def main():
     print("DONE! Please share the contents of fdb_metadata.json")
     print("=" * 70)
     
-    # Also print a summary
-    print("\n\nQUICK SUMMARY:")
-    print("-" * 50)
+    # Print COMPLETE summary of ALL tables
+    print("\n\n" + "=" * 70)
+    print("COMPLETE DATABASE SCHEMA - ALL TABLES")
+    print("=" * 70)
     
-    key_tables = ["MEMBERS", "MEMBERSHISTORY", "SESSIONS", "GROUPS"]
-    for table_name in key_tables:
-        if table_name in metadata["tables"]:
-            table = metadata["tables"][table_name]
-            print(f"\n{table_name} ({table['row_count']} rows)")
-            print("  Columns:")
-            for col in table["columns"]:
-                nullable = "" if col["nullable"] else " NOT NULL"
-                print(f"    - {col['name']}: {col['type']}{nullable}")
+    # Sort tables by row count (most data first)
+    sorted_tables = sorted(
+        metadata["tables"].items(),
+        key=lambda x: x[1]["row_count"],
+        reverse=True
+    )
+    
+    for table_name, table in sorted_tables:
+        pk_str = f" (PK: {', '.join(table['primary_key'])})" if table['primary_key'] else ""
+        print(f"\n{'='*60}")
+        print(f"{table_name} - {table['row_count']:,} rows{pk_str}")
+        print(f"{'='*60}")
+        print("  COLUMNS:")
+        for col in table["columns"]:
+            nullable = "" if col["nullable"] else " NOT NULL"
+            default = f" DEFAULT {col['default']}" if col.get('default') else ""
+            print(f"    - {col['name']}: {col['type']}{nullable}{default}")
+        
+        # Show sample data if available
+        if table.get("sample_data") and len(table["sample_data"]) > 0:
+            first_sample = table["sample_data"][0]
+            if "error" not in first_sample:
+                print("\n  SAMPLE ROW:")
+                for key, value in list(first_sample.items())[:10]:  # Show first 10 fields
+                    val_str = str(value)[:50] + "..." if len(str(value)) > 50 else str(value)
+                    print(f"    {key}: {val_str}")
+                if len(first_sample) > 10:
+                    print(f"    ... and {len(first_sample) - 10} more fields")
+    
+    print("\n" + "=" * 70)
+    print(f"TOTAL: {len(metadata['tables'])} tables")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()
