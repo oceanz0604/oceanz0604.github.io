@@ -277,31 +277,34 @@ def process_and_upload_members(records, sync_state):
         if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
             continue
         
+        # Map FDB fields to our standard names
+        # FDB has: NAME, LASTNAME, BAKIYE, ACCSTATUS, LOGIN, RECDATE, LLOGDATE, TOTALBAKIYE, TOTALACTMINUTE
         clean_record = {
             "USERNAME": username,
             "PASSWORD": record.get("PASSWORD") or "",  # Required for member login
-            "BALANCE": float(record.get("BALANCE") or 0),
-            "FIRSTNAME": record.get("FIRSTNAME") or "",
+            "BALANCE": float(record.get("BAKIYE") or 0),  # FDB: BAKIYE
+            "FIRSTNAME": record.get("NAME") or "",  # FDB: NAME (not FIRSTNAME!)
             "LASTNAME": record.get("LASTNAME") or "",
             "EMAIL": record.get("EMAIL") or "",
-            "PHONE": record.get("PHONE") or "",
-            "MEMBERSTATE": int(record.get("MEMBERSTATE") or 0),
-            "ISLOGIN": int(record.get("ISLOGIN") or 0),
-            "TIMEMINS": float(record.get("TIMEMINS") or 0),
-            "TOTALUSEDMIN": float(record.get("TOTALUSEDMIN") or 0),
-            "TOTALACTMINUTE": float(record.get("TOTALACTMINUTE") or 0),
+            "PHONE": record.get("PHONE") or record.get("GSM") or "",  # FDB has both PHONE and GSM
+            "MEMBERSTATE": int(record.get("ACCSTATUS") or 0),  # FDB: ACCSTATUS
+            "ISLOGIN": int(record.get("LOGIN") or 0),  # FDB: LOGIN
+            "TOTALACTMINUTE": int(record.get("TOTALACTMINUTE") or 0),  # Total active minutes
+            "TOTALBAKIYE": float(record.get("TOTALBAKIYE") or 0),  # Total balance/paid
         }
         
         if record.get("ID") is not None:
             clean_record["ID"] = record.get("ID")
-        if record.get("GROUPID") is not None:
-            clean_record["GROUPID"] = record.get("GROUPID")
-        if record.get("JOININGDATE"):
-            clean_record["JOININGDATE"] = record.get("JOININGDATE")
-        if record.get("LASTCONNECTION"):
-            clean_record["LASTCONNECTION"] = record.get("LASTCONNECTION")
+        if record.get("PRICETYPE") is not None:
+            clean_record["PRICETYPE"] = record.get("PRICETYPE")  # Pricing group
+        if record.get("ACCTYPE") is not None:
+            clean_record["ACCTYPE"] = record.get("ACCTYPE")  # Account type
         if record.get("RECDATE"):
-            clean_record["RECDATE"] = record.get("RECDATE")
+            clean_record["RECDATE"] = record.get("RECDATE")  # Registration date
+        if record.get("LLOGDATE"):
+            clean_record["LASTLOGIN"] = record.get("LLOGDATE")  # FDB: LLOGDATE (Last Login Date)
+        if record.get("AVAILBONUS") is not None:
+            clean_record["AVAILBONUS"] = float(record.get("AVAILBONUS") or 0)  # Available bonus
         
         members_array.append(clean_record)
         record_hash = get_record_hash(clean_record)
