@@ -848,8 +848,17 @@ def calculate_leaderboards_from_firebase():
         
         # All-time leaderboard (from members TOTALACTMINUTE)
         all_time = []
+        members_with_minutes = [m for m in members if m.get("TOTALACTMINUTE", 0) > 0]
+        print(f"[DEBUG] Found {len(members_with_minutes)} members with TOTALACTMINUTE > 0")
+        
+        # Show top 5 for debugging
+        if members_with_minutes:
+            top_debug = sorted(members_with_minutes, key=lambda m: m.get("TOTALACTMINUTE", 0), reverse=True)[:5]
+            for td in top_debug:
+                print(f"   - {td.get('USERNAME')}: {td.get('TOTALACTMINUTE')} minutes")
+        
         sorted_members = sorted(
-            [m for m in members if m.get("TOTALACTMINUTE", 0) > 0],
+            members_with_minutes,
             key=lambda m: m.get("TOTALACTMINUTE", 0),
             reverse=True
         )[:50]

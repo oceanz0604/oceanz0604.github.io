@@ -5,7 +5,7 @@ OceanZ Sync Service - Firebase-controlled Background Service with Auto-Schedulin
 This service runs on the FDB database machine and:
 1. Monitors Firebase for manual sync requests from the web UI
 2. Automatically runs scheduled syncs:
-   - IP Logs: Every 2 minutes
+   - Terminals: Every 2 minutes (from FDB TERMINALS table)
    - Complete Sync (FDB + Leaderboards): Every 15 minutes
 
 Firebase Paths Used:
