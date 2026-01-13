@@ -35,7 +35,7 @@ def get_all_tables(cursor):
         SELECT RDB$RELATION_NAME 
         FROM RDB$RELATIONS 
         WHERE RDB$SYSTEM_FLAG = 0 
-          AND RDB$VIEW_BLF IS NULL
+          AND RDB$VIEW_BLR IS NULL
         ORDER BY RDB$RELATION_NAME
     """)
     return [row[0].strip() for row in cursor.fetchall()]
