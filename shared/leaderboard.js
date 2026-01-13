@@ -183,6 +183,82 @@ export async function loadMonthlyLeaderboard(containerId, highlightUsername = nu
   }
 }
 
+// ==================== WEEKLY LEADERBOARD ====================
+
+export async function loadWeeklyLeaderboard(containerId, highlightUsername = null, weekKey = null) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = `<p class="text-gray-500 text-center animate-pulse">Loading weekly leaderboard...</p>`;
+
+  try {
+    // Calculate current week key if not provided
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const weekNum = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+    const targetWeek = weekKey || `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+    
+    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/weekly/${targetWeek}`).once("value");
+
+    if (!snap.exists()) {
+      container.innerHTML = `<p class="text-gray-400 text-center">No data for week ${targetWeek}</p>`;
+      return;
+    }
+
+    const data = snap.val();
+    let list = Object.entries(data).map(([memberId, info]) => ({
+      memberId,
+      username: info.username,
+      minutes: info.total_minutes,
+      hoursLabel: minutesToReadable(info.total_minutes),
+      count: info.sessions_count
+    })).sort((a, b) => b.minutes - a.minutes);
+
+    const userEntry = highlightUsername 
+      ? list.find(x => x.username?.toLowerCase() === highlightUsername.toLowerCase().trim())
+      : null;
+    const top10 = list.slice(0, 10);
+    let html = "";
+
+    // Show user's rank if not in top 10
+    if (userEntry && !top10.includes(userEntry)) {
+      html += `
+        <div class="leaderboard-item highlight">
+          <div class="lb-left">
+            <div class="rank-badge rank-other">#${list.indexOf(userEntry) + 1}</div>
+          </div>
+          <div class="lb-content">
+            <div class="lb-name" style="color: #00ff88;">${userEntry.username} <span class="lb-you">(YOU)</span></div>
+            <div class="lb-stats">Sessions: <span class="lb-hours">${userEntry.count}</span></div>
+          </div>
+          <div class="lb-time">${userEntry.hoursLabel}</div>
+        </div>`;
+    }
+
+    top10.forEach((row, i) => {
+      const isUser = highlightUsername && row.username?.toLowerCase() === highlightUsername.toLowerCase().trim();
+      const rankBadge = i < 3 ? `<div class="rank-badge rank-${i+1}">${i+1}</div>` : 
+                                `<div class="rank-badge rank-other">${i+1}</div>`;
+      html += `
+        <div class="leaderboard-item ${isUser ? 'highlight' : ''}">
+          <div class="lb-left">
+            ${rankBadge}
+          </div>
+          <div class="lb-content">
+            <div class="lb-name" style="color: ${isUser ? '#00ff88' : '#00f0ff'};">${row.username} ${isUser ? '<span class="lb-you">(YOU)</span>' : ''}</div>
+            <div class="lb-stats">Sessions: <span class="lb-hours">${row.count}</span></div>
+          </div>
+          <div class="lb-time">${row.hoursLabel}</div>
+        </div>`;
+    });
+
+    container.innerHTML = html || `<p class="text-gray-400 text-center">No entries found</p>`;
+  } catch (error) {
+    console.error("Error loading weekly leaderboard:", error);
+    container.innerHTML = `<p class="text-red-400 text-center">Error loading leaderboard</p>`;
+  }
+}
+
 // ==================== GET AVAILABLE MONTHS ====================
 
 export async function getAvailableMonths() {
@@ -192,6 +268,19 @@ export async function getAvailableMonths() {
     return Object.keys(snap.val()).sort().reverse();
   } catch (error) {
     console.error("Error fetching available months:", error);
+    return [];
+  }
+}
+
+// ==================== GET AVAILABLE WEEKS ====================
+
+export async function getAvailableWeeks() {
+  try {
+    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/weekly`).once("value");
+    if (!snap.exists()) return [];
+    return Object.keys(snap.val()).sort().reverse();
+  } catch (error) {
+    console.error("Error fetching available weeks:", error);
     return [];
   }
 }
@@ -224,7 +313,9 @@ export async function getLeaderboardStats() {
 window.LeaderboardModule = {
   loadHallOfFame,
   loadMonthlyLeaderboard,
+  loadWeeklyLeaderboard,
   getAvailableMonths,
+  getAvailableWeeks,
   getLeaderboardStats
 };
 

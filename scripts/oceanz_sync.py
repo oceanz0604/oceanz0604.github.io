@@ -917,7 +917,12 @@ def calculate_leaderboards_from_firebase():
                     record_dt = datetime.strptime(record_date, "%Y-%m-%d")
                     if record_dt >= month_start:
                         monthly_stats[username]["sessions"] += 1
-                        monthly_stats[username]["minutes"] += float(record.get("USINGMIN") or 0)
+                        # Use USINGMIN if available, otherwise calculate from USINGSEC
+                        usingmin = float(record.get("USINGMIN") or 0)
+                        if usingmin == 0:
+                            usingsec = float(record.get("USINGSEC") or 0)
+                            usingmin = usingsec / 60
+                        monthly_stats[username]["minutes"] += usingmin
                         # CHARGE is positive for payments in history records
                         charge = float(record.get("CHARGE") or 0)
                         if charge > 0:
@@ -967,7 +972,12 @@ def calculate_leaderboards_from_firebase():
                     record_dt = datetime.strptime(record_date, "%Y-%m-%d")
                     if record_dt >= week_start:
                         weekly_stats[username]["sessions"] += 1
-                        weekly_stats[username]["minutes"] += float(record.get("USINGMIN") or 0)
+                        # Use USINGMIN if available, otherwise calculate from USINGSEC
+                        usingmin = float(record.get("USINGMIN") or 0)
+                        if usingmin == 0:
+                            usingsec = float(record.get("USINGSEC") or 0)
+                            usingmin = usingsec / 60
+                        weekly_stats[username]["minutes"] += usingmin
                 except:
                     pass
         
