@@ -95,12 +95,24 @@ HISTORY_FIELDS = [
     "NOTE", "TERMINALNAME", "USINGMIN", "USINGSEC", "DISCOUNTNOTE"
 ]
 
-# Fields to keep from MEMBERS
-# Note: TOTALPAID may not exist in all PanCafe versions
+# FDB MEMBERS table field mappings (Turkish -> Our Standard Names)
+# FDB Field       -> Our Standard Name (used in Firebase/Frontend)
+# NAME            -> FIRSTNAME (first name)
+# LASTNAME        -> LASTNAME (last name)
+# BAKIYE          -> BALANCE (current balance)
+# TOTALBAKIYE     -> TOTALBAKIYE (total amount ever loaded)
+# ACCSTATUS       -> MEMBERSTATE (account status: 0=active, 1=disabled)
+# LOGIN           -> ISLOGIN (currently logged in: 0/1)
+# RECDATE         -> RECDATE (registration date)
+# LLOGDATE        -> LASTLOGIN (last login date)
+# TOTALACTMINUTE  -> TOTALACTMINUTE (total active minutes)
+# PRICETYPE       -> PRICETYPE (pricing group)
+# ACCTYPE         -> ACCTYPE (account type)
 MEMBER_FIELDS = [
-    "ID", "USERNAME", "PASSWORD", "BALANCE", "FIRSTNAME", "LASTNAME",
-    "EMAIL", "PHONE", "GROUPID", "MEMBERSTATE", "JOININGDATE", 
-    "LASTCONNECTION", "ISLOGIN", "TIMEMINS", "TOTALUSEDMIN", "TOTALACTMINUTE"
+    "ID", "USERNAME", "PASSWORD", "BAKIYE", "NAME", "LASTNAME",
+    "EMAIL", "PHONE", "GSM", "ACCSTATUS", "ACCTYPE", "PRICETYPE",
+    "RECDATE", "LLOGDATE", "LOGIN", "TOTALACTMINUTE", "TOTALBAKIYE",
+    "AVAILBONUS", "USEDBONUS"
 ]
 
 # ==================== SETTINGS ====================
