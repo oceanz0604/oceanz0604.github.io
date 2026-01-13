@@ -238,10 +238,83 @@ function loadDay() {
       ? Object.entries(snap.val()).map(([id, r]) => ({ id, ...r }))
       : [];
     render();
+    // After rendering, scan for credit collections that happened on selectedDate
+    loadCreditCollectionsForDate(selectedDate);
     loadAudit();
     // Reload outstanding credits whenever data changes (including new credit entries)
     loadAllOutstandingCredits();
   });
+}
+
+// Scan ALL recharges to find credit collections that happened on a specific date
+// and update the displayed totals (cash/UPI from credit collections)
+async function loadCreditCollectionsForDate(targetDate) {
+  try {
+    const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
+    const allRecharges = snap.val() || {};
+    
+    let collectedCash = 0;
+    let collectedUpi = 0;
+    
+    // Scan all dates for credit collections that happened on targetDate
+    Object.entries(allRecharges).forEach(([date, dayData]) => {
+      Object.values(dayData).forEach(r => {
+        // New format: check lastPaidAt
+        if (r.lastPaidAt) {
+          const paidDate = r.lastPaidAt.split("T")[0];
+          if (paidDate === targetDate) {
+            collectedCash += r.lastPaidCash || 0;
+            collectedUpi += r.lastPaidUpi || 0;
+          }
+        }
+        // Old format: check paidAt
+        if (r.paidAt && r.mode === "credit" && r.paid) {
+          const paidDate = r.paidAt.split("T")[0];
+          if (paidDate === targetDate) {
+            if (r.paidVia === "cash") collectedCash += r.amount;
+            else if (r.paidVia === "upi") collectedUpi += r.amount;
+            else if (r.paidVia === "cash+upi") {
+              // Split assumed 50/50 if not specified
+              collectedCash += Math.floor(r.amount / 2);
+              collectedUpi += r.amount - Math.floor(r.amount / 2);
+            } else {
+              collectedCash += r.amount; // Default to cash
+            }
+          }
+        }
+      });
+    });
+    
+    // Update the displayed totals with credit collections
+    if (collectedCash > 0 || collectedUpi > 0) {
+      const cashEl = elements.cashEl;
+      const upiEl = elements.upiEl;
+      
+      // Parse current totals and add collected amounts
+      if (cashEl) {
+        const currentCash = parseInt(cashEl.textContent.replace(/[₹,]/g, "")) || 0;
+        cashEl.innerHTML = `₹${currentCash + collectedCash}`;
+        if (collectedCash > 0) {
+          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${collectedCash} credit)</span>`;
+        }
+      }
+      if (upiEl) {
+        const currentUpi = parseInt(upiEl.textContent.replace(/[₹,]/g, "")) || 0;
+        upiEl.innerHTML = `₹${currentUpi + collectedUpi}`;
+        if (collectedUpi > 0) {
+          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${collectedUpi} credit)</span>`;
+        }
+      }
+      
+      // Also update total collected
+      if (elements.totalEl) {
+        const currentTotal = parseInt(elements.totalEl.textContent.replace(/[₹,]/g, "")) || 0;
+        elements.totalEl.textContent = `₹${currentTotal + collectedCash + collectedUpi}`;
+      }
+    }
+  } catch (error) {
+    console.warn("Could not load credit collections:", error);
+  }
 }
 
 // Load all outstanding credits across all dates
@@ -561,20 +634,19 @@ function render() {
   });
 
   // Calculate totals from all state (not filtered)
-  // When credit is collected via cash/UPI, it's added to those totals
+  // IMPORTANT: Credit collections are counted on the DATE they were COLLECTED, not the original transaction date
   state.forEach(r => {
     if (r.total !== undefined) {
       // New split payment format
-      // Direct cash and UPI payments
+      // Direct cash and UPI payments (always count on original date)
       cashTotal += r.cash || 0;
       upiTotal += r.upi || 0;
       freeTotal += r.free || 0;
       
-      // Add collected credit payments to cash/UPI based on how they were paid
-      if (r.lastPaidCash) cashTotal += r.lastPaidCash;
-      if (r.lastPaidUpi) upiTotal += r.lastPaidUpi;
+      // DON'T add lastPaidCash/lastPaidUpi here - that belongs to the collection date, not this transaction's date
+      // These will be counted via the credit collection scan below
       
-      // Calculate totals
+      // Calculate totals (direct payments only - credit collections counted separately)
       const collected = (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
       totalCollected += collected;
       creditPending += (r.credit || 0) - (r.creditPaid || 0);
@@ -582,14 +654,7 @@ function render() {
       // Old single-mode format (backward compatibility)
       if (r.mode === "credit") {
         if (r.paid) {
-          // Credit was paid - add to appropriate payment method
-          if (r.paidVia === "cash" || r.paidVia === "cash+upi") {
-            cashTotal += r.amount; // Approximate: add full to cash for old records
-          } else if (r.paidVia === "upi") {
-            upiTotal += r.amount;
-          } else {
-            cashTotal += r.amount; // Default to cash for old paid credits
-          }
+          // DON'T add paid credit amounts here - the cash/UPI belongs to the collection date
           totalCollected += r.amount;
         } else {
           creditPending += r.amount;
@@ -657,15 +722,25 @@ function render() {
         if (remaining > 0) {
           badges.push(`<span class="payment-badge credit-pending">🔖 ₹${remaining}</span>`);
         }
-        // Show how the credit was settled (via cash/UPI)
+        // Show how the credit was settled (via cash/UPI) with collection date if different
         if (r.creditPaid > 0) {
+          // Check if credit was collected on a different date
+          let collectionDateStr = "";
+          if (r.lastPaidAt) {
+            const collectionDate = r.lastPaidAt.split("T")[0];
+            if (collectionDate !== selectedDate) {
+              const collDate = new Date(collectionDate);
+              collectionDateStr = ` on ${collDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+            }
+          }
+          
           if (r.lastPaidCash > 0 && r.lastPaidUpi > 0) {
-            badges.push(`<span class="payment-badge cash" title="Credit settled">✓💵 ₹${r.lastPaidCash}</span>`);
-            badges.push(`<span class="payment-badge upi" title="Credit settled">✓📱 ₹${r.lastPaidUpi}</span>`);
+            badges.push(`<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.lastPaidCash} Cash${collectionDateStr}</span>`);
+            badges.push(`<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
           } else if (r.lastPaidCash > 0) {
-            badges.push(`<span class="payment-badge cash" title="Credit settled via Cash">✓💵 ₹${r.lastPaidCash}</span>`);
+            badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${collectionDateStr}">✓ ₹${r.lastPaidCash} Cash${collectionDateStr}</span>`);
           } else if (r.lastPaidUpi > 0) {
-            badges.push(`<span class="payment-badge upi" title="Credit settled via UPI">✓📱 ₹${r.lastPaidUpi}</span>`);
+            badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
           } else {
             // Fallback for old records without lastPaid info
             badges.push(`<span class="payment-badge credit-paid">✓ ₹${r.creditPaid}</span>`);
@@ -676,14 +751,23 @@ function render() {
     } else {
       // Old single-mode format
       if (r.mode === "credit" && r.paid) {
-        // Show as settled via the payment method used
+        // Show as settled via the payment method used, with collection date if different
+        let collectionDateStr = "";
+        if (r.paidAt) {
+          const collectionDate = r.paidAt.split("T")[0];
+          if (collectionDate !== selectedDate) {
+            const collDate = new Date(collectionDate);
+            collectionDateStr = ` on ${collDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
+          }
+        }
+        
         const paidVia = r.paidVia || "cash";
         if (paidVia.includes("cash")) {
-          paymentBadges = `<span class="payment-badge cash">✓💵 ₹${r.amount}</span>`;
+          paymentBadges = `<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.amount} Cash${collectionDateStr}</span>`;
         } else if (paidVia === "upi") {
-          paymentBadges = `<span class="payment-badge upi">✓📱 ₹${r.amount}</span>`;
+          paymentBadges = `<span class="payment-badge credit-paid" title="Credit settled${collectionDateStr}">✓ ₹${r.amount} UPI${collectionDateStr}</span>`;
         } else {
-          paymentBadges = `<span class="payment-badge credit-paid">✓ ₹${r.amount}</span>`;
+          paymentBadges = `<span class="payment-badge credit-paid">✓ ₹${r.amount}${collectionDateStr}</span>`;
         }
       } else {
         const badgeClass = r.mode === "cash" ? "cash" : r.mode === "upi" ? "upi" : "credit-pending";

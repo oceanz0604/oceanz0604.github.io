@@ -4,14 +4,16 @@ OceanZ Gaming Cafe - Complete Unified Sync Script
 
 This single script handles ALL sync operations:
 1. FDB Database Sync (Members, History, Sessions, Guest Sessions)
-2. IP Logs & Terminal Status Sync
-3. Leaderboard Calculation (from Firebase data)
+2. Terminal Status Sync (from FDB TERMINALS table - real-time)
+3. Cash Register Sync (Revenue from FDB KASAHAR table)
+4. Leaderboard Calculation (from Firebase data)
 
 No dependencies on other scripts - everything is inline.
 """
 
 import os
 import re
+import sys
 import shutil
 import fdb
 import json
@@ -24,7 +26,7 @@ from firebase_admin import credentials, db
 # Import shared config
 from config import (
     SOURCE_FDB_PATH, WORKING_FDB_PATH, FIREBASE_CRED_PATH, FIREBASE_DB_URL,
-    FB_PATHS, FIREBIRD_USER, FIREBIRD_PASSWORD, IPLOG_BASE_PATH,
+    FB_PATHS, FIREBIRD_USER, FIREBIRD_PASSWORD,
     ALL_TERMINALS, SESSION_RETENTION_DAYS,
     normalize_terminal_name, get_short_terminal_name
 )
@@ -34,7 +36,6 @@ MESSAGES_FILE = os.path.join(os.path.dirname(SOURCE_FDB_PATH), "messages.msg")
 
 # Local state files
 LOCAL_SYNC_FILE = os.path.join(os.path.dirname(__file__), ".sync_state.json")
-LOCAL_IPLOGS_FILE = os.path.join(os.path.dirname(__file__), ".iplogs_state.json")
 
 # ==================== UTILITIES ====================
 
@@ -529,289 +530,290 @@ def upload_guest_sessions(guest_sessions):
     print(f"   [OK] Uploaded {total} guest sessions for {len(by_date)} dates")
 
 
-# ==================== IP LOGS SYNC ====================
+# ==================== TERMINALS TABLE SYNC (Real-time from FDB) ====================
 
-def load_iplogs_state():
-    """Load IP logs sync state."""
+# Terminal status codes from PanCafe
+TERMINAL_STATUS_CODES = {
+    0: "offline",      # PC is off
+    1: "available",    # Ready for use
+    2: "reserved",     # Reserved/Booked
+    3: "maintenance",  # Under maintenance
+    4: "occupied",     # Session in progress (timed)
+    5: "occupied",     # Session in progress (unlimited)
+    6: "closing",      # Session ending
+}
+
+
+def fetch_terminals_from_fdb(cursor):
+    """Fetch real-time terminal status directly from FDB TERMINALS table."""
     try:
-        if os.path.exists(LOCAL_IPLOGS_FILE):
-            with open(LOCAL_IPLOGS_FILE, "r") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    
-    return {
-        "last_file": None,
-        "last_line_count": 0,
-        "terminal_status_cache": {},
-        "open_sessions": {},
-        "cleanup_counter": 0
-    }
-
-
-def save_iplogs_state(state):
-    """Save IP logs sync state."""
-    try:
-        with open(LOCAL_IPLOGS_FILE, "w") as f:
-            json.dump(state, f, indent=2, default=str)
+        cursor.execute("""
+            SELECT 
+                ID, NAME, TERMINALTYPE, TERMINALSTATUS, MEMBERID,
+                STARTTIME, STARTDATE, TIMERMINUTE, MAC,
+                OPENADMINNAME, SUREPARA, SESSIONPAUSED
+            FROM TERMINALS
+            ORDER BY NAME
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        rows = cursor.fetchall()
+        return [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
     except Exception as e:
-        print(f"[WARN] Could not save IP logs state: {e}")
+        print(f"[ERROR] Failed to fetch terminals: {e}")
+        return []
 
 
-def get_log_file_info():
-    """Get current log file path and info."""
-    today = datetime.now()
-    yesterday = today - timedelta(days=1)
-    
-    candidates = [
-        (f"Log_{today.strftime('%d%m%Y')}.csv", today.strftime('%d%m%Y')),
-        (f"Log_{yesterday.strftime('%d%m%Y')}.csv", yesterday.strftime('%d%m%Y'))
-    ]
-    
-    for fname, date_key in candidates:
-        path = os.path.join(IPLOG_BASE_PATH, fname)
-        if os.path.isfile(path):
-            return path, fname, date_key
-    
-    return None, None, None
-
-
-def read_new_log_lines(state):
-    """Read only NEW log lines since last sync."""
-    path, fname, date_key = get_log_file_info()
-    
-    if not path:
-        print("[WARN] No log file found")
-        return [], None, 0
-    
-    last_file = state.get("last_file")
-    last_line_count = state.get("last_line_count", 0)
-    
-    try:
-        with open(path, "r", encoding="windows-1254") as f:
-            all_lines = f.readlines()
-    except Exception as e:
-        print(f"[ERROR] Error reading log file: {e}")
-        return [], fname, 0
-    
-    current_line_count = len(all_lines)
-    
-    if last_file != fname:
-        print(f"[FILE] New log file: {fname} ({current_line_count} lines)")
-        new_lines = all_lines
-    elif current_line_count > last_line_count:
-        new_lines = all_lines[last_line_count:]
-        print(f"[FILE] Reading {len(new_lines)} new lines (was {last_line_count}, now {current_line_count})")
-    else:
-        print("   No new log entries")
-        return [], fname, current_line_count
-    
-    return new_lines, fname, current_line_count
-
-
-def parse_log_lines(lines):
-    """Parse log lines into structured entries."""
-    entries = []
-    
-    for line in lines:
-        parts = line.strip(";\n").split(";")
-        if len(parts) != 6:
-            continue
-        
-        status, terminal, mac, ip, date_str, time_str = parts
-        
-        try:
-            dt = datetime.strptime(f"{date_str} {time_str}", "%d.%m.%Y %H:%M:%S")
-        except ValueError:
-            continue
-        
-        terminal_normalized = normalize_terminal_name(terminal) or terminal
-        
-        entries.append({
-            "status": status,
-            "terminal": terminal_normalized,
-            "mac": mac,
-            "ip": ip,
-            "datetime": dt
-        })
-    
-    entries.sort(key=lambda x: x["datetime"])
-    return entries
-
-
-def process_entries_incremental(entries, state):
-    """Process log entries incrementally."""
-    open_sessions = {}
-    for terminal, data in state.get("open_sessions", {}).items():
-        if data and "datetime" in data:
-            data["datetime"] = datetime.fromisoformat(data["datetime"])
-            open_sessions[terminal] = data
-    
-    completed_sessions = []
-    terminal_status = dict(state.get("terminal_status_cache", {}))
-    
-    for entry in entries:
-        terminal = entry["terminal"]
-        
-        if entry["status"] == "Açildi":
-            open_sessions[terminal] = entry
-            terminal_status[terminal] = {
-                "status": "occupied",
-                "mac": entry["mac"],
-                "ip": entry["ip"],
-                "session_start": entry["datetime"].isoformat(),
-                "last_updated": entry["datetime"].isoformat()
-            }
-        elif entry["status"] == "Kapandi":
-            if terminal in open_sessions:
-                start = open_sessions.pop(terminal)
-                duration = (entry["datetime"] - start["datetime"]).total_seconds() / 60
-                
-                completed_sessions.append({
-                    "terminal": terminal,
-                    "mac": start["mac"],
-                    "ip": start["ip"],
-                    "start": start["datetime"].isoformat(),
-                    "end": entry["datetime"].isoformat(),
-                    "duration_minutes": round(duration, 2),
-                    "active": False,
-                    "date": entry["datetime"].strftime("%Y-%m-%d")
-                })
-            
-            terminal_status[terminal] = {
-                "status": "available",
-                "mac": entry["mac"],
-                "ip": entry["ip"],
-                "last_updated": entry["datetime"].isoformat()
-            }
+def process_and_upload_terminal_status(terminals):
+    """Process FDB TERMINALS and upload real-time status to Firebase."""
+    if not terminals:
+        print("   No terminals to process")
+        return
     
     now = datetime.now()
-    active_sessions = []
+    terminal_status = {}
+    occupied_count = 0
     
-    for terminal, start in open_sessions.items():
-        duration = (now - start["datetime"]).total_seconds() / 60
-        active_sessions.append({
-            "terminal": terminal,
-            "mac": start["mac"],
-            "ip": start["ip"],
-            "start": start["datetime"].isoformat(),
-            "duration_minutes": round(duration, 2),
-            "active": True
-        })
+    for t in terminals:
+        name = t.get("NAME", "").strip()
+        if not name:
+            continue
         
-        terminal_status[terminal] = {
-            "status": "occupied",
-            "mac": start["mac"],
-            "ip": start["ip"],
-            "session_start": start["datetime"].isoformat(),
-            "duration_minutes": round(duration, 2),
-            "last_updated": now.isoformat()
+        # Normalize terminal name
+        name = normalize_terminal_name(name) or name
+        status_code = t.get("TERMINALSTATUS", 0)
+        status_str = TERMINAL_STATUS_CODES.get(status_code, "unknown")
+        
+        # Build terminal status object
+        status_data = {
+            "status": status_str,
+            "status_code": status_code,
+            "mac": t.get("MAC") or "",
+            "last_updated": now.isoformat(),
         }
+        
+        # If occupied, add session info
+        if status_str == "occupied":
+            occupied_count += 1
+            
+            # Calculate session start datetime
+            start_date = t.get("STARTDATE")
+            start_time = t.get("STARTTIME")
+            
+            if start_date and start_time:
+                try:
+                    if isinstance(start_date, str):
+                        session_start = datetime.fromisoformat(f"{start_date}T{start_time}")
+                    else:
+                        session_start = datetime.combine(start_date, start_time) if hasattr(start_time, 'hour') else None
+                    
+                    if session_start:
+                        status_data["session_start"] = session_start.isoformat()
+                        duration_min = (now - session_start).total_seconds() / 60
+                        status_data["duration_minutes"] = round(duration_min, 1)
+                except:
+                    pass
+            
+            # Timer/duration info
+            timer_min = t.get("TIMERMINUTE", 0)
+            if timer_min and timer_min > 0:
+                status_data["timer_minutes"] = timer_min
+                status_data["session_type"] = "timed"
+            else:
+                status_data["session_type"] = "unlimited"
+            
+            # Member ID (0 = guest)
+            member_id = t.get("MEMBERID", 0)
+            status_data["member_id"] = member_id
+            status_data["is_guest"] = (member_id == 0)
+            
+            # Session price
+            price = t.get("SUREPARA", 0)
+            if price and price > 0:
+                status_data["session_price"] = float(price)
+            
+            # Admin who started the session
+            admin = t.get("OPENADMINNAME")
+            if admin:
+                status_data["started_by"] = admin
+            
+            # Paused status
+            if t.get("SESSIONPAUSED"):
+                status_data["paused"] = True
+        
+        terminal_status[name] = status_data
     
-    serializable_open = {}
-    for terminal, data in open_sessions.items():
-        serializable_open[terminal] = {
-            "mac": data["mac"],
-            "ip": data["ip"],
-            "datetime": data["datetime"].isoformat()
-        }
-    
-    return completed_sessions, active_sessions, terminal_status, serializable_open
-
-
-def build_complete_terminal_status(session_status):
-    """Ensure all terminals have a status."""
-    status_map = dict(session_status)
-    now = datetime.now().isoformat()
-    
+    # Ensure all known terminals have a status
     for terminal in ALL_TERMINALS:
-        if terminal not in status_map:
-            status_map[terminal] = {
-                "status": "available",
+        if terminal not in terminal_status:
+            terminal_status[terminal] = {
+                "status": "offline",
+                "status_code": 0,
                 "mac": "",
-                "ip": "",
-                "last_updated": now
+                "last_updated": now.isoformat()
             }
     
-    return status_map
-
-
-def upload_sessions(completed_sessions):
-    """Upload only newly completed sessions."""
-    if not completed_sessions:
-        return
-    
-    print(f"   [UPLOAD] Uploading {len(completed_sessions)} completed sessions")
-    
-    for session in completed_sessions:
-        session_id = f"{session['terminal'].replace(' ', '_')}__{session['start'].replace(':', '-').replace('.', '-')}"
-        try:
-            db.reference(f"{FB_PATHS.SESSIONS}/{session_id}").set(session)
-        except Exception as e:
-            print(f"[WARN] Failed to upload session: {e}")
-
-
-def upload_terminal_status(terminal_status, old_cache):
-    """Upload only changed terminal statuses."""
-    changes = 0
-    
-    for terminal, data in terminal_status.items():
-        old_data = old_cache.get(terminal, {})
-        
-        if (old_data.get("status") != data.get("status") or 
-            old_data.get("session_start") != data.get("session_start")):
-            
-            safe_key = terminal.replace(" ", "_").replace("/", "_")
-            
-            try:
-                db.reference(f"{FB_PATHS.TERMINAL_STATUS}/{safe_key}").set(data)
-                db.reference(f"{FB_PATHS.LEGACY_STATUS}/{terminal}").set(data)
-                changes += 1
-            except Exception as e:
-                print(f"[WARN] Failed to update {terminal}: {e}")
-    
-    if changes > 0:
-        print(f"   [UPLOAD] Updated {changes} terminal statuses")
-    else:
-        print("   No terminal status changes")
-
-
-def cleanup_old_sessions(state):
-    """Clean up old sessions periodically."""
-    cleanup_counter = state.get("cleanup_counter", 0) + 1
-    state["cleanup_counter"] = cleanup_counter
-    
-    if cleanup_counter % 10 != 0:
-        return
-    
-    print("[CLEANUP] Running periodic cleanup...")
-    
+    # Upload to Firebase
     try:
-        sessions_ref = db.reference(FB_PATHS.SESSIONS)
-        all_sessions = sessions_ref.get()
+        # New path
+        db.reference(FB_PATHS.TERMINAL_STATUS).set(terminal_status)
         
-        if not all_sessions:
-            return
-        
-        now = datetime.now()
-        cutoff = now - timedelta(days=SESSION_RETENTION_DAYS)
-        deleted = 0
-        
-        for key, session in all_sessions.items():
+        # Legacy path (for backward compatibility)
+        for name, data in terminal_status.items():
+            safe_key = name.replace(" ", "_").replace("/", "_")
             try:
-                start_str = session.get("start")
-                if start_str:
-                    session_start = datetime.fromisoformat(start_str.replace("Z", ""))
-                    if session_start < cutoff:
-                        sessions_ref.child(key).delete()
-                        deleted += 1
-            except Exception:
+                db.reference(f"{FB_PATHS.LEGACY_STATUS}/{safe_key}").set(data)
+            except:
                 pass
         
-        if deleted > 0:
-            print(f"   [OK] Deleted {deleted} old sessions")
+        print(f"   [OK] Updated {len(terminal_status)} terminals ({occupied_count} occupied)")
     except Exception as e:
-        print(f"[WARN] Cleanup error: {e}")
+        print(f"   [ERROR] Failed to upload terminal status: {e}")
+
+
+# ==================== KASAHAR (CASH REGISTER) SYNC ====================
+
+def fetch_kasahar_records(cursor, days=7):
+    """Fetch cash register transactions from the last N days."""
+    try:
+        cursor.execute(f"""
+            SELECT ID, ADMINNAME, ISLEM, GELIRGIDER, TARIH, PRICE, NOTE, PAYMENTTYPE
+            FROM KASAHAR
+            WHERE TARIH >= CURRENT_DATE - {days}
+            ORDER BY TARIH DESC
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        rows = cursor.fetchall()
+        print(f"[DATA] Found {len(rows)} cash register records (last {days} days)")
+        return [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch cash register: {e}")
+        return []
+
+
+# KASAHAR field meanings:
+# ISLEM (Transaction Type): 1=Session, 2=Recharge, 3=Cafeteria, 4=Other
+# GELIRGIDER (Income/Expense): 0=Income, 1=Expense
+# PAYMENTTYPE: 0=Cash, 1=Card, 2=Balance, 3=Other
+
+TRANSACTION_TYPES = {
+    1: "session",      # Gaming session payment
+    2: "recharge",     # Member balance recharge
+    3: "cafeteria",    # Food/drink sale
+    4: "other",        # Other transaction
+}
+
+PAYMENT_TYPES = {
+    0: "cash",
+    1: "card",
+    2: "balance",      # Paid from member balance
+    3: "other",
+}
+
+
+def process_and_upload_kasahar(records):
+    """Process cash register records and compute daily summaries."""
+    if not records:
+        print("   No cash register records to process")
+        return
+    
+    # Group by date for daily summaries
+    daily_data = defaultdict(lambda: {
+        "total_income": 0,
+        "total_expense": 0,
+        "net_revenue": 0,
+        "transaction_count": 0,
+        "by_type": defaultdict(float),
+        "by_payment": defaultdict(float),
+        "transactions": []
+    })
+    
+    for record in records:
+        tarih = record.get("TARIH")
+        if not tarih:
+            continue
+        
+        # Parse date
+        if isinstance(tarih, str):
+            try:
+                dt = datetime.fromisoformat(tarih)
+                date_str = dt.strftime("%Y-%m-%d")
+            except:
+                continue
+        elif hasattr(tarih, 'strftime'):
+            date_str = tarih.strftime("%Y-%m-%d")
+        else:
+            continue
+        
+        price = float(record.get("PRICE") or 0)
+        is_expense = record.get("GELIRGIDER") == 1
+        trans_type = TRANSACTION_TYPES.get(record.get("ISLEM"), "other")
+        payment_type = PAYMENT_TYPES.get(record.get("PAYMENTTYPE"), "other")
+        
+        day = daily_data[date_str]
+        day["transaction_count"] += 1
+        
+        if is_expense:
+            day["total_expense"] += price
+        else:
+            day["total_income"] += price
+            day["by_type"][trans_type] += price
+            day["by_payment"][payment_type] += price
+        
+        day["net_revenue"] = day["total_income"] - day["total_expense"]
+        
+        # Store individual transaction (limit to 100 per day for Firebase)
+        if len(day["transactions"]) < 100:
+            trans = {
+                "id": record.get("ID"),
+                "time": tarih if isinstance(tarih, str) else tarih.isoformat() if hasattr(tarih, 'isoformat') else str(tarih),
+                "amount": price,
+                "type": trans_type,
+                "payment": payment_type,
+                "is_expense": is_expense,
+                "admin": record.get("ADMINNAME") or "",
+            }
+            note = record.get("NOTE")
+            if note:
+                trans["note"] = note[:100]  # Truncate long notes
+            day["transactions"].append(trans)
+    
+    # Upload daily summaries
+    for date_str, data in daily_data.items():
+        try:
+            summary = {
+                "date": date_str,
+                "total_income": round(data["total_income"], 2),
+                "total_expense": round(data["total_expense"], 2),
+                "net_revenue": round(data["net_revenue"], 2),
+                "transaction_count": data["transaction_count"],
+                "by_type": {k: round(v, 2) for k, v in data["by_type"].items()},
+                "by_payment": {k: round(v, 2) for k, v in data["by_payment"].items()},
+                "last_updated": datetime.now().isoformat(),
+            }
+            
+            # Remove None values
+            summary = remove_none_values(summary)
+            
+            db.reference(f"{FB_PATHS.DAILY_REVENUE}/{date_str}").set(summary)
+            
+            # Also upload transactions for recent days only (last 3 days)
+            recent_cutoff = datetime.now() - timedelta(days=3)
+            try:
+                trans_date = datetime.strptime(date_str, "%Y-%m-%d")
+                if trans_date >= recent_cutoff and data["transactions"]:
+                    db.reference(f"{FB_PATHS.CASH_REGISTER}/{date_str}").set(data["transactions"])
+            except:
+                pass
+            
+        except Exception as e:
+            print(f"   [WARN] Failed to upload daily revenue for {date_str}: {e}")
+    
+    # Compute totals for display
+    total_income = sum(d["total_income"] for d in daily_data.values())
+    total_transactions = sum(d["transaction_count"] for d in daily_data.values())
+    
+    print(f"   [OK] Uploaded {len(daily_data)} days of revenue data")
+    print(f"   [DATA] Total: Rs.{total_income:,.0f} from {total_transactions} transactions")
 
 
 # ==================== LEADERBOARD CALCULATION ====================
@@ -990,7 +992,7 @@ def main():
         
         # ========== 1. FDB SYNC ==========
         print("\n" + "="*60)
-        print("[STEP 1/3] FDB Database Sync")
+        print("[STEP 1/4] FDB Database Sync")
         print("="*60)
         
         copy_fdb_file()
@@ -1040,50 +1042,47 @@ def main():
         conn.close()
         print("\n[OK] FDB sync completed")
         
-        # ========== 2. IP LOGS SYNC ==========
+        # ========== 2. TERMINAL STATUS (from FDB TERMINALS table) ==========
         print("\n" + "="*60)
-        print("[STEP 2/3] IP Logs & Terminal Status Sync")
+        print("[STEP 2/4] Terminal Status Sync (from FDB)")
         print("="*60)
         
-        iplogs_state = load_iplogs_state()
-        old_cache = dict(iplogs_state.get("terminal_status_cache", {}))
+        # Re-open FDB connection for terminal status
+        copy_fdb_file()
+        conn = connect_to_firebird()
+        cursor = conn.cursor()
         
-        cleanup_old_sessions(iplogs_state)
+        terminals = fetch_terminals_from_fdb(cursor)
+        process_and_upload_terminal_status(terminals)
         
-        new_lines, current_file, line_count = read_new_log_lines(iplogs_state)
-        
-        if new_lines:
-            entries = parse_log_lines(new_lines)
-            
-            if entries:
-                completed, active, terminal_status, open_sessions = process_entries_incremental(entries, iplogs_state)
-                terminal_status = build_complete_terminal_status(terminal_status)
-                
-                upload_sessions(completed)
-                upload_terminal_status(terminal_status, old_cache)
-                
-                iplogs_state["terminal_status_cache"] = terminal_status
-                iplogs_state["open_sessions"] = open_sessions
-                
-                occupied = sum(1 for t in terminal_status.values() if t["status"] == "occupied")
-                print(f"   [DATA] Active: {len(active)} | Completed: {len(completed)} | Occupied: {occupied}/{len(ALL_TERMINALS)}")
-        
-        iplogs_state["last_file"] = current_file
-        iplogs_state["last_line_count"] = line_count
-        iplogs_state["last_sync"] = start_time.isoformat()
-        
-        save_iplogs_state(iplogs_state)
-        
-        db.reference(f"{FB_PATHS.SYNC_META}/iplogs").update({
+        db.reference(f"{FB_PATHS.SYNC_META}/terminals").update({
             "last_sync": datetime.now().isoformat(),
-            "status": "ok"
+            "status": "ok",
+            "source": "fdb_terminals_table"
         })
         
-        print("\n[OK] IP logs sync completed")
+        print("\n[OK] Terminal status sync completed")
         
-        # ========== 3. LEADERBOARDS ==========
+        # ========== 3. CASH REGISTER (from FDB KASAHAR table) ==========
         print("\n" + "="*60)
-        print("[STEP 3/3] Leaderboard Calculation")
+        print("[STEP 3/4] Cash Register Sync (Revenue)")
+        print("="*60)
+        
+        kasahar_records = fetch_kasahar_records(cursor, days=7)
+        process_and_upload_kasahar(kasahar_records)
+        
+        db.reference(f"{FB_PATHS.SYNC_META}/cash_register").update({
+            "last_sync": datetime.now().isoformat(),
+            "status": "ok",
+            "days_synced": 7
+        })
+        
+        conn.close()
+        print("\n[OK] Cash register sync completed")
+        
+        # ========== 4. LEADERBOARDS ==========
+        print("\n" + "="*60)
+        print("[STEP 4/4] Leaderboard Calculation")
         print("="*60)
         
         if calculate_leaderboards_from_firebase():
@@ -1095,8 +1094,9 @@ def main():
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*60)
         print(f"[DONE] All syncs completed in {elapsed:.1f}s")
-        print(f"   - FDB: {len(new_records)} new history records")
-        print("   - IP Logs: Terminal status updated")
+        print(f"   - FDB History: {len(new_records)} new records")
+        print(f"   - Terminals: {len(terminals)} PCs (from FDB TERMINALS table)")
+        print(f"   - Cash Register: {len(kasahar_records)} transactions (7 days)")
         print("   - Leaderboards: Calculated from Firebase")
         print("="*60 + "\n")
         

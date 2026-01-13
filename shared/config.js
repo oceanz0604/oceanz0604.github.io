@@ -95,6 +95,10 @@ export const FB_PATHS = {
   SYNC_LAST: "sync-control/last_sync",        // Last sync info
   SYNC_HEARTBEAT: "sync-control/service_heartbeat", // Service health check
   
+  // Cash Register & Revenue (from KASAHAR table)
+  CASH_REGISTER_FDB: "cash-register",         // /cash-register/{YYYY-MM-DD} - transactions
+  DAILY_REVENUE: "daily-revenue",             // /daily-revenue/{YYYY-MM-DD} - daily summaries
+  
   // Legacy paths (for backward compatibility)
   LEGACY_MEMBERS: "fdb/MEMBERS",              // Old: /fdb/MEMBERS (array format)
   LEGACY_STATUS: "status",                    // Old: /status/{terminal}

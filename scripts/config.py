@@ -56,6 +56,10 @@ class FB_PATHS:
     SYNC_LAST = "sync-control/last_sync"        # Last sync info
     SYNC_HEARTBEAT = "sync-control/service_heartbeat"  # Service health check
     
+    # Cash Register (from KASAHAR table)
+    CASH_REGISTER = "cash-register"             # /cash-register/{ID}
+    DAILY_REVENUE = "daily-revenue"             # /daily-revenue/{YYYY-MM-DD}
+    
     # Legacy paths (for backward compatibility)
     LEGACY_MEMBERS = "fdb/MEMBERS"              # Old: /fdb/MEMBERS (array)
     LEGACY_STATUS = "status"                    # Old: /status/{terminal}
