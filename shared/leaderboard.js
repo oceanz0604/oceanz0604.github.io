@@ -122,7 +122,7 @@ export async function loadMonthlyLeaderboard(containerId, highlightUsername = nu
 
   try {
     const targetMonth = monthKey || new Date().toISOString().slice(0, 7);
-    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly/${targetMonth}`).get();
+    const snap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly/${targetMonth}`).once("value");
 
     if (!snap.exists()) {
       container.innerHTML = `<p class="text-gray-400 text-center">No data for ${targetMonth}</p>`;
