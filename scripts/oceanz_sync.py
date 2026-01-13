@@ -545,15 +545,21 @@ TERMINAL_STATUS_CODES = {
 
 
 def fetch_terminals_from_fdb(cursor):
-    """Fetch real-time terminal status directly from FDB TERMINALS table."""
+    """Fetch real-time terminal status directly from FDB TERMINALS table.
+    
+    Also joins with MEMBERS table to get username for member sessions.
+    """
     try:
+        # Query with LEFT JOIN to get member username
         cursor.execute("""
             SELECT 
-                ID, NAME, TERMINALTYPE, TERMINALSTATUS, MEMBERID,
-                STARTTIME, STARTDATE, TIMERMINUTE, MAC,
-                OPENADMINNAME, SUREPARA, SESSIONPAUSED
-            FROM TERMINALS
-            ORDER BY NAME
+                T.ID, T.NAME, T.TERMINALTYPE, T.TERMINALSTATUS, T.MEMBERID,
+                T.STARTTIME, T.STARTDATE, T.TIMERMINUTE, T.MAC,
+                T.OPENADMINNAME, T.SUREPARA, T.SESSIONPAUSED,
+                M.USERNAME AS MEMBER_USERNAME, M.NAME AS MEMBER_FIRSTNAME
+            FROM TERMINALS T
+            LEFT JOIN MEMBERS M ON T.MEMBERID = M.ID
+            ORDER BY T.NAME
         """)
         columns = [desc[0].strip() for desc in cursor.description]
         rows = cursor.fetchall()
@@ -625,6 +631,15 @@ def process_and_upload_terminal_status(terminals):
             member_id = t.get("MEMBERID", 0)
             status_data["member_id"] = member_id
             status_data["is_guest"] = (member_id == 0)
+            
+            # Member username (from JOIN)
+            if member_id and member_id > 0:
+                username = t.get("MEMBER_USERNAME")
+                firstname = t.get("MEMBER_FIRSTNAME")
+                if username:
+                    status_data["member_username"] = username
+                if firstname:
+                    status_data["member_name"] = firstname
             
             # Session price
             price = t.get("SUREPARA", 0)
