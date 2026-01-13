@@ -137,8 +137,21 @@ export const CONSTANTS = {
     "PS", "XBOX ONE X"
   ],
   
-  // Pricing
-  RATE_PER_HOUR: 40,
+  // Pricing per device type
+  RATE_PER_HOUR: 40,  // Default PC rate
+  RATES: {
+    PC: 40,
+    XBOX: 60,
+    PS: 100
+  },
+  
+  // Available devices for booking
+  DEVICES: [
+    { id: 'PC', name: 'Gaming PC', rate: 40, icon: '🖥️' },
+    { id: 'XBOX', name: 'Xbox', rate: 60, icon: '🎮' },
+    { id: 'PS', name: 'PlayStation', rate: 100, icon: '🕹️' }
+  ],
+  
   MIN_BOOKING_HOURS: 1,
   
   // Operating hours

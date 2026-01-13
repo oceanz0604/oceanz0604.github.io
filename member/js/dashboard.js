@@ -111,6 +111,7 @@ const bookingDateInput = document.getElementById("bookingDate");
 // ==================== STATE ====================
 
 let selectedPCSet = new Set();
+let selectedDeviceType = 'PC';  // Default device type
 let fullDateMap = {};
 let fullSpendMap = {};
 let charts = { pc: null, session: null, spend: null };
@@ -205,61 +206,97 @@ function fetchUnavailablePCs(start, end, callback) {
   });
 }
 
-function showPCs() {
-  const pcDiv = document.getElementById("availablePCs");
-  if (!pcDiv) return;
+function showAvailableSlots() {
+  const slotsDiv = document.getElementById("availablePCs");
+  const label = document.getElementById("slotSelectionLabel");
+  if (!slotsDiv) return;
   
-  pcDiv.innerHTML = "";
+  slotsDiv.innerHTML = "";
   selectedPCSet.clear();
 
-  fetchUnavailablePCs(startSelect.value, endSelect.value, (unavailable) => {
-    const groups = {
-      "T-ROOM": CONSTANTS.ALL_PCS.filter(pc => pc.startsWith("T") && !pc.startsWith("CT")),
-      "CT-ROOM": CONSTANTS.ALL_PCS.filter(pc => pc.startsWith("CT"))
-    };
+  // Get the rate for selected device
+  const rate = CONSTANTS.RATES?.[selectedDeviceType] || CONSTANTS.RATE_PER_HOUR;
+  const deviceInfo = CONSTANTS.DEVICES?.find(d => d.id === selectedDeviceType) || { name: selectedDeviceType, icon: '🎮' };
 
-    for (const [groupName, pcs] of Object.entries(groups)) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "mb-6";
-      wrapper.innerHTML = `<h3 class="font-orbitron text-sm font-bold mb-3" style="color: #00f0ff;">🎮 ${groupName}</h3>`;
+  // Update label based on device type
+  if (label) {
+    label.textContent = selectedDeviceType === 'PC' ? 'Select PC' : `Confirm ${deviceInfo.name} Booking`;
+  }
 
-      const grid = document.createElement("div");
-      grid.className = "grid grid-cols-2 sm:grid-cols-3 gap-3";
+  if (selectedDeviceType === 'PC') {
+    // Show PC selection for Gaming PCs
+    fetchUnavailablePCs(startSelect.value, endSelect.value, (unavailable) => {
+      const groups = {
+        "T-ROOM": CONSTANTS.ALL_PCS.filter(pc => pc.startsWith("T") && !pc.startsWith("CT")),
+        "CT-ROOM": CONSTANTS.ALL_PCS.filter(pc => pc.startsWith("CT"))
+      };
 
-      pcs.forEach(pc => {
-        if (unavailable.has(pc)) return;
-        
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "pc-btn w-full px-4 py-3 rounded-lg font-orbitron text-sm transition-all";
-        btn.textContent = pc;
-        btn.dataset.pc = pc;
+      for (const [groupName, pcs] of Object.entries(groups)) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "mb-6";
+        wrapper.innerHTML = `<h3 class="font-orbitron text-sm font-bold mb-3" style="color: #00f0ff;">🎮 ${groupName}</h3>`;
 
-        btn.addEventListener("click", () => {
-          document.querySelectorAll(".pc-btn").forEach(b => {
-            b.classList.remove("selected");
+        const grid = document.createElement("div");
+        grid.className = "grid grid-cols-2 sm:grid-cols-3 gap-3";
+
+        pcs.forEach(pc => {
+          if (unavailable.has(pc)) return;
+          
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "pc-btn w-full px-4 py-3 rounded-lg font-orbitron text-sm transition-all";
+          btn.textContent = pc;
+          btn.dataset.pc = pc;
+
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".pc-btn").forEach(b => {
+              b.classList.remove("selected");
+            });
+            selectedPCSet.clear();
+            selectedPCSet.add(pc);
+            btn.classList.add("selected");
+            updatePrice();
           });
-          selectedPCSet.clear();
-          selectedPCSet.add(pc);
-          btn.classList.add("selected");
-          updatePrice();
+
+          grid.appendChild(btn);
         });
 
-        grid.appendChild(btn);
-      });
-
-      wrapper.appendChild(grid);
-      pcDiv.appendChild(wrapper);
-    }
+        wrapper.appendChild(grid);
+        slotsDiv.appendChild(wrapper);
+      }
+      updatePrice();
+    });
+  } else {
+    // For Xbox/PS - show confirmation with device info
+    selectedPCSet.add(selectedDeviceType); // Use device type as the "slot"
+    
+    slotsDiv.innerHTML = `
+      <div class="neon-card rounded-xl p-6 text-center">
+        <div class="text-5xl mb-4">${deviceInfo.icon}</div>
+        <h3 class="font-orbitron text-xl font-bold mb-2" style="color: #00f0ff;">${deviceInfo.name}</h3>
+        <p class="text-yellow-400 text-lg font-bold">₹${rate}/hour</p>
+        <p class="text-gray-400 text-sm mt-2">Your ${deviceInfo.name} session will be reserved</p>
+        <div class="mt-4 inline-block px-6 py-2 rounded-lg" style="background: rgba(0, 255, 136, 0.2); border: 1px solid rgba(0, 255, 136, 0.5);">
+          <span class="text-green-400 font-orbitron">✓ Selected</span>
+        </div>
+      </div>
+    `;
     updatePrice();
-  });
+  }
+}
+
+// Keep old function name for compatibility
+function showPCs() {
+  showAvailableSlots();
 }
 
 function updatePrice() {
   const priceEl = document.getElementById("priceInfo");
   if (!priceEl || !startSelect || !endSelect) return;
   
-  const price = calculatePrice(startSelect.value, endSelect.value, selectedPCSet.size, CONSTANTS.RATE_PER_HOUR);
+  // Get the rate for selected device
+  const rate = CONSTANTS.RATES?.[selectedDeviceType] || CONSTANTS.RATE_PER_HOUR;
+  const price = calculatePrice(startSelect.value, endSelect.value, selectedPCSet.size, rate);
   priceEl.textContent = `💰 Total Price: ₹${price}`;
 }
 
@@ -288,7 +325,7 @@ function loadProfile() {
   if (detailList) {
     detailList.innerHTML = `
       <li><strong>🆔 Member ID:</strong> ${member.ID ?? 'N/A'}</li>
-      <li><strong>💰 Balance:</strong> ₹${member.BAKIYE ?? 0}</li>
+      <li><strong>💰 Balance:</strong> ₹${member.BALANCE ?? member.BAKIYE ?? 0}</li>
       <li><strong>⏱️ Total Active Time:</strong> ${Math.round(member.TOTALACTMINUTE ?? 0)} minutes</li>
       <li><strong>📆 Created On:</strong> ${member.RECDATE ?? 'N/A'}</li>
     `;
@@ -374,18 +411,26 @@ function loadMemberBookings(memberUsername) {
         Pending: "status-pending"
       };
 
+      // Determine device type display
+      const deviceIcons = { PC: '🖥️', XBOX: '🎮', PS: '🕹️' };
+      const deviceType = booking.deviceType || 'PC';
+      const deviceIcon = deviceIcons[deviceType] || '🖥️';
+      const deviceName = booking.deviceName || (deviceType === 'PC' ? 'Gaming PC' : deviceType);
+
       const card = document.createElement("div");
       card.className = "booking-card rounded-xl p-4";
       card.innerHTML = `
         <div class="flex justify-between items-center mb-3">
-          <h3 class="font-orbitron text-sm font-bold" style="color: #00f0ff;">${booking.name}</h3>
+          <h3 class="font-orbitron text-sm font-bold" style="color: #00f0ff;">
+            ${deviceIcon} ${deviceName}
+          </h3>
           <span class="text-xs font-bold px-3 py-1 rounded-full ${statusClasses[status]}">${status}</span>
         </div>
         <div class="text-sm text-gray-400 space-y-2">
           <div><span class="text-gray-500">Start:</span> ${formatDate(booking.start)}</div>
           <div><span class="text-gray-500">End:</span> ${formatDate(booking.end)}</div>
           <div><span class="text-gray-500">Duration:</span> <span style="color: #b829ff;">${booking.duration} mins</span></div>
-          <div><span class="text-gray-500">Terminal:</span> <span style="color: #00ff88;">${booking.pcs.join(", ")}</span></div>
+          ${deviceType === 'PC' ? `<div><span class="text-gray-500">Terminal:</span> <span style="color: #00ff88;">${booking.pcs.join(", ")}</span></div>` : ''}
           <div><span class="text-gray-500">Price:</span> <span style="color: #ffff00;">₹${booking.price}</span></div>
           ${booking.note ? `<div><span class="text-gray-500">Note:</span> ${booking.note}</div>` : ""}
         </div>
@@ -603,8 +648,18 @@ function setupChartToggles() {
 
 // ==================== BOOKING FORM ====================
 
+// Device type selection
+document.querySelectorAll(".device-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".device-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    selectedDeviceType = btn.dataset.device;
+    document.getElementById("selectedDevice").value = selectedDeviceType;
+  });
+});
+
 document.getElementById("nextBtn")?.addEventListener("click", () => {
-  showPCs();
+  showAvailableSlots();
   document.getElementById("step1").style.display = "none";
   document.getElementById("step2").style.display = "block";
 });
@@ -624,14 +679,15 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
   }
 
   if (selectedPCSet.size !== 1) {
-    notifyWarning("Please select exactly one PC.");
+    const itemName = selectedDeviceType === 'PC' ? 'PC' : selectedDeviceType;
+    notifyWarning(`Please select a ${itemName} to book.`);
     return;
   }
 
   const selectedDate = bookingDateInput.value;
   const start = startSelect.value;
   const end = endSelect.value;
-  const selectedPCs = Array.from(selectedPCSet);
+  const selectedItems = Array.from(selectedPCSet);
 
   const startTime = new Date(`${selectedDate}T${start}:00+05:30`);
   const endTime = new Date(`${selectedDate}T${end}:00+05:30`);
@@ -642,22 +698,34 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
     return;
   }
 
+  // Get the rate for selected device
+  const rate = CONSTANTS.RATES?.[selectedDeviceType] || CONSTANTS.RATE_PER_HOUR;
+  const deviceInfo = CONSTANTS.DEVICES?.find(d => d.id === selectedDeviceType) || { name: selectedDeviceType };
+
   const booking = {
     name: member.USERNAME,
-    pcs: selectedPCs,
+    deviceType: selectedDeviceType,
+    deviceName: deviceInfo.name,
+    pcs: selectedItems,
     start: startTime.toISOString(),
     end: endTime.toISOString(),
     duration,
-    price: duration * selectedPCs.length * CONSTANTS.RATE_PER_HOUR / 60
+    rate,
+    price: duration * rate / 60
   };
 
   db.ref(FB_PATHS.BOOKINGS).push(booking, () => {
     const resultDiv = document.getElementById("bookingResult");
     resultDiv.classList.remove("hidden");
-    resultDiv.textContent = "✅ Booking successful!";
+    resultDiv.textContent = `✅ ${deviceInfo.name} booking successful!`;
 
     document.getElementById("bookingForm").reset();
     selectedPCSet.clear();
+    selectedDeviceType = 'PC';
+    document.querySelectorAll(".device-btn").forEach((b, i) => {
+      b.classList.toggle("active", i === 0);
+    });
+    document.getElementById("selectedDevice").value = 'PC';
     startSelect.value = "10:00";
     endSelect.value = "11:00";
     document.getElementById("availablePCs").innerHTML = "";
