@@ -1,0 +1,186 @@
+C:\Users\oceanz\AppData\Local\Programs\Python\Python314\python.exe C:\oceanz0604.github.io\scripts\inspect_fdb.py
+======================================================================
+OceanZ - Firebird Database Inspector
+======================================================================
+
+[1] Copying database from: C:\Program Files (x86)\Pan Group\PanCafe Pro Server\Data\USDB.dat
+    Copied to: C:\Program Files (x86)\Pan Group\PanCafe Pro Server\Data\USDB_copy.FDB
+
+[2] Connecting to Firebird database...
+    Connected successfully!
+
+[3] Extracting table metadata...
+    Found 27 tables
+
+    Processing: ADMINLIST
+      - 12 columns, 3 rows
+
+    Processing: APERMGROUPS
+      - 60 columns, 4 rows
+
+    Processing: BANPROGS
+      - 4 columns, 1 rows
+
+    Processing: CPFOLDERS
+      - 2 columns, 0 rows
+
+    Processing: CUSTOMTBAR
+      - 6 columns, 75 rows
+
+    Processing: EMANETLER
+      - 2 columns, 0 rows
+
+    Processing: EMANETLIST
+      - 2 columns, 0 rows
+
+    Processing: KAFETERYA
+      - 8 columns, 0 rows
+
+    Processing: KASAHAR
+      - 8 columns, 36957 rows
+
+    Processing: KILLPROGS
+      - 1 columns, 12 rows
+
+    Processing: MEMBERS
+      - 43 columns, 1475 rows
+
+    Processing: MEMBERSHISTORY
+      - 8 columns, 117872 rows
+
+    Processing: MINERCOINS
+      - 5 columns, 17 rows
+
+    Processing: MINERPROFILES
+      - 26 columns, 5 rows
+
+    Processing: MINERWALLETS
+      - 4 columns, 4 rows
+
+    Processing: MUSQUEUELIST
+      - 4 columns, 0 rows
+
+    Processing: ORDER_REQUESTS
+      - 6 columns, 0 rows
+
+    Processing: PRINTERS
+      - 5 columns, 6 rows
+
+    Processing: SESSIONS
+      - 20 columns, 57282 rows
+
+    Processing: STEAMACCS
+      - 6 columns, 6 rows
+
+    Processing: STOK
+      - 10 columns, 36 rows
+
+    Processing: STOKHAR
+      - 10 columns, 6045 rows
+
+    Processing: TERMINALS
+      - 59 columns, 16 rows
+
+    Processing: TICKETS
+      - 21 columns, 1 rows
+
+    Processing: UNFPOOL
+      - 6 columns, 0 rows
+
+    Processing: VARIABLES
+      - 3 columns, 572 rows
+
+    Processing: WORDSFILTER
+      - 1 columns, 11 rows
+
+[4] Saving metadata to: C:\oceanz0604.github.io\scripts\fdb_metadata.json
+
+======================================================================
+DONE! Please share the contents of fdb_metadata.json
+======================================================================
+
+
+QUICK SUMMARY:
+--------------------------------------------------
+
+MEMBERS (1475 rows)
+  Columns:
+    - ID: INTEGER NOT NULL
+    - USERNAME: VARCHAR(128) NOT NULL
+    - PASSWORD: VARCHAR(128) NOT NULL
+    - NAME: VARCHAR(128)
+    - LASTNAME: VARCHAR(128)
+    - RECDATE: DATE NOT NULL
+    - ENDDATE: DATE
+    - ACCSTATUS: SMALLINT NOT NULL
+    - PRICETYPE: SMALLINT NOT NULL
+    - ACCTYPE: SMALLINT NOT NULL
+    - PHONE: VARCHAR(80)
+    - GSM: VARCHAR(80)
+    - EMAIL: VARCHAR(200)
+    - ADDRESS: VARCHAR(4096)
+    - NOTE: VARCHAR(8192)
+    - BAKIYE: DOUBLE NOT NULL
+    - SABITFIYATGAME: DOUBLE NOT NULL
+    - SABITFIYATNET: DOUBLE NOT NULL
+    - DISCOUNTRATENET: SMALLINT NOT NULL
+    - DISCOUNTRATEGAME: SMALLINT NOT NULL
+    - AVANS: DOUBLE NOT NULL
+    - LOGIN: SMALLINT NOT NULL
+    - PICTURE: VARCHAR(1024)
+    - USEMINPRICE: SMALLINT NOT NULL
+    - MPRNDMODE: INTEGER NOT NULL
+    - MINPRICE: DOUBLE NOT NULL
+    - ROUND: DOUBLE NOT NULL
+    - SABITFIYATCUSTOM: DOUBLE NOT NULL
+    - SABITFIYATPS: DOUBLE NOT NULL
+    - DISCOUNTRATECUSTOM: SMALLINT NOT NULL
+    - DISCOUNTRATEPS: SMALLINT NOT NULL
+    - USEDBONUS: DOUBLE NOT NULL
+    - AVAILBONUS: DOUBLE NOT NULL
+    - BONUSACTIVE: SMALLINT NOT NULL
+    - SABITFIYATPS2: DOUBLE NOT NULL
+    - SABITFIYATPS3: DOUBLE NOT NULL
+    - DISCOUNTRATEPS2: SMALLINT NOT NULL
+    - DISCOUNTRATEPS3: SMALLINT NOT NULL
+    - SABITFIYATCUSTOM2: DOUBLE NOT NULL
+    - DISCOUNTRATECUSTOM2: SMALLINT NOT NULL
+    - LLOGDATE: DATE
+    - TOTALACTMINUTE: INTEGER NOT NULL
+    - TOTALBAKIYE: DOUBLE NOT NULL
+
+MEMBERSHISTORY (117872 rows)
+  Columns:
+    - ID: INTEGER NOT NULL
+    - MEMBERS_USERNAME: VARCHAR(128) NOT NULL
+    - TARIH: DATE NOT NULL
+    - TERMINALNAME: VARCHAR(128)
+    - MIKTAR: DOUBLE NOT NULL
+    - KALAN: DOUBLE NOT NULL
+    - NOTE: VARCHAR(1024)
+    - SAAT: TIME NOT NULL
+
+SESSIONS (57282 rows)
+  Columns:
+    - ID: BIGINT NOT NULL
+    - ADMINID: INTEGER NOT NULL
+    - ADMINNAME: VARCHAR(128) NOT NULL
+    - TERMINALTYPE: INTEGER NOT NULL
+    - TERMINALNAME: VARCHAR(128) NOT NULL
+    - TARIFEKIND: INTEGER NOT NULL
+    - TERMINALSTATUS: INTEGER NOT NULL
+    - MEMBERID: INTEGER NOT NULL
+    - PAUSEDMIN: INTEGER NOT NULL
+    - GIFTMIN: INTEGER NOT NULL
+    - USINGMIN: INTEGER NOT NULL
+    - USINGPRICE: DOUBLE NOT NULL
+    - ORDERPRICE: DOUBLE NOT NULL
+    - DISCOUNTPRICE: DOUBLE NOT NULL
+    - DISCOUNTNOTE: VARCHAR(512)
+    - TOTALPRICE: DOUBLE NOT NULL
+    - PAYMENTTYPE: INTEGER NOT NULL
+    - STARTPOINT: TIMESTAMP NOT NULL
+    - ENDPOINT: TIMESTAMP NOT NULL
+    - USBDATAPRICE: DOUBLE NOT NULL
+
+Process finished with exit code 0
