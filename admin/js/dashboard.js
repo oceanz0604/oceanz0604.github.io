@@ -220,13 +220,16 @@ function loadAllMembers() {
     }
 
     const members = Object.values(snapshot.val());
-    container.innerHTML = members.map(m => `
-      <div class="member-card p-4 rounded-xl">
-        <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${m.NAME}</h3>
-        <p class="text-sm text-gray-400">@${m.USERNAME}</p>
-        <p class="text-xs text-gray-600 mt-2">Joined: <span style="color: #b829ff;">${m.RECDATE || "-"}</span></p>
-      </div>
-    `).join("");
+    container.innerHTML = members.map(m => {
+      const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.USERNAME;
+      return `
+        <div class="member-card p-4 rounded-xl">
+          <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${displayName}</h3>
+          <p class="text-sm text-gray-400">@${m.USERNAME}</p>
+          <p class="text-xs text-gray-600 mt-2">Joined: <span style="color: #b829ff;">${m.RECDATE || "-"}</span></p>
+        </div>
+      `;
+    }).join("");
   });
 }
 
