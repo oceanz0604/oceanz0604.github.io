@@ -269,6 +269,46 @@ function renderTerminals(data) {
     list.sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
       const session = activeSessions[t.name];
       const occupied = t.status === "occupied";
+      
+      // Build session info for occupied terminals
+      let sessionInfo = "";
+      if (occupied) {
+        // User info - member or guest
+        if (t.is_guest || t.member_id === 0) {
+          sessionInfo += `<div class="text-sm mt-2"><span class="px-2 py-0.5 rounded text-xs" style="background: rgba(255,107,0,0.2); color: #ff6b00;">🎮 Guest</span></div>`;
+        } else if (t.member_username) {
+          sessionInfo += `<div class="text-sm mt-2"><span class="px-2 py-0.5 rounded text-xs" style="background: rgba(0,240,255,0.2); color: #00f0ff;">👤 ${t.member_username}</span></div>`;
+        }
+        
+        // Duration
+        const duration = t.duration_minutes || (session?.duration_minutes);
+        if (duration) {
+          const hours = Math.floor(duration / 60);
+          const mins = Math.round(duration % 60);
+          const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+          sessionInfo += `<p class="text-xs text-gray-400 mt-1">⏱️ Running: ${durationStr}</p>`;
+        }
+        
+        // Timer info for timed sessions
+        if (t.timer_minutes && t.timer_minutes > 0) {
+          const remaining = t.timer_minutes - (t.duration_minutes || 0);
+          if (remaining > 0) {
+            const remHours = Math.floor(remaining / 60);
+            const remMins = Math.round(remaining % 60);
+            const remStr = remHours > 0 ? `${remHours}h ${remMins}m` : `${remMins}m`;
+            sessionInfo += `<p class="text-xs mt-1" style="color: #ffff00;">⏳ Remaining: ${remStr}</p>`;
+          } else {
+            sessionInfo += `<p class="text-xs mt-1" style="color: #ff0044;">⚠️ Time exceeded</p>`;
+          }
+        } else if (t.session_type === "unlimited") {
+          sessionInfo += `<p class="text-xs text-gray-500 mt-1">∞ Unlimited</p>`;
+        }
+        
+        // Price if available
+        if (t.session_price && t.session_price > 0) {
+          sessionInfo += `<p class="text-xs mt-1" style="color: #00ff88;">₹${t.session_price}</p>`;
+        }
+      }
 
       grid.innerHTML += `
         <div class="terminal-card ${occupied ? 'occupied' : 'available'} p-4 rounded-xl">
@@ -276,8 +316,8 @@ function renderTerminals(data) {
             <h3 class="font-orbitron text-lg font-bold" style="color: ${occupied ? '#ff0044' : '#00ff88'};">${t.name}</h3>
             <span class="w-3 h-3 rounded-full ${occupied ? 'bg-red-500 alert-pulse' : 'bg-green-500'}"></span>
           </div>
-          <p class="text-sm text-gray-400">Status: <span style="color: ${occupied ? '#ff0044' : '#00ff88'};">${t.status.toUpperCase()}</span></p>
-          ${session ? `<p class="text-sm mt-1" style="color: #b829ff;">🕒 ${Math.round(session.duration_minutes)} min</p>` : ""}
+          <p class="text-sm text-gray-400">Status: <span style="color: ${occupied ? '#ff0044' : '#00ff88'};">${(t.status || 'unknown').toUpperCase()}</span></p>
+          ${sessionInfo}
         </div>
       `;
     });
