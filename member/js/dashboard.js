@@ -266,7 +266,9 @@ function updatePrice() {
 // ==================== PROFILE ====================
 
 function loadProfile() {
-  document.getElementById("memberName").textContent = `${member.NAME} ${member.LASTNAME || ''}`.trim();
+  // Use FIRSTNAME + LASTNAME, fallback to USERNAME if both are empty
+  const displayName = [member.FIRSTNAME, member.LASTNAME].filter(Boolean).join(' ').trim() || member.USERNAME;
+  document.getElementById("memberName").textContent = displayName;
   document.getElementById("memberUsername").textContent = `👤 Username: ${member.USERNAME}`;
   document.getElementById("avatar").src = getAvatarUrl(member.USERNAME);
   
