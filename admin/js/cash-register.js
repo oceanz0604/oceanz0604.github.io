@@ -230,25 +230,8 @@ window.loadCashRegister = function() {
           </div>
         </div>
 
-        <!-- History Table -->
-        <div class="cash-table-wrapper">
-          <table class="w-full text-sm cash-history-table">
-            <thead>
-              <tr class="text-left" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
-                <th class="py-3 px-2 font-orbitron text-xs" style="color: #00f0ff;">Date</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #00ff88;">Open</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #00ff88;">Close</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right" style="color: #b829ff;">Sale</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right cash-col-extra" style="color: #ff6b00;">W/D</th>
-                <th class="py-3 px-2 font-orbitron text-xs text-right cash-col-extra" style="color: #ff0044;">Exp</th>
-                <th class="py-3 px-2 font-orbitron text-xs cash-col-extra" style="color: #666;">Denom</th>
-                <th class="py-3 px-2 font-orbitron text-xs cash-col-extra" style="color: #666;">Note</th>
-                <th class="py-3 px-2"></th>
-              </tr>
-            </thead>
-            <tbody id="cashHistoryTable"></tbody>
-          </table>
-        </div>
+        <!-- History List -->
+        <div id="cashHistoryTable" class="max-h-[400px] overflow-y-auto pr-1"></div>
       </div>
     </div>
   `;
@@ -680,10 +663,10 @@ window.refreshSaleFromRecharges = async function() {
 };
 
 async function loadCashHistory() {
-  const tableBody = document.getElementById("cashHistoryTable");
-  if (!tableBody) return;
+  const listEl = document.getElementById("cashHistoryTable");
+  if (!listEl) return;
   
-  tableBody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-gray-500">Loading...</td></tr>`;
+  listEl.innerHTML = `<div class="py-4 text-center text-gray-500">Loading...</div>`;
   
   try {
     const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().once("value");
@@ -696,47 +679,57 @@ async function loadCashHistory() {
       .sort((a, b) => a.date.localeCompare(b.date));
     
     if (cashData.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-gray-500">No entries for this month</td></tr>`;
+      listEl.innerHTML = `<div class="py-4 text-center text-gray-500">No entries for this month</div>`;
       updateMonthlyStats([]);
       return;
     }
     
-    // Render table
-    tableBody.innerHTML = cashData.map(entry => {
-      // Build denomination string including coins
-      let denomStr = "-";
+    // Render as list items
+    listEl.innerHTML = cashData.map(entry => {
+      // Build denomination badges (compact)
+      let denomBadges = "";
       if (entry.denominations) {
-        const parts = [];
-        if (entry.denominations.d500) parts.push(`5H:${entry.denominations.d500}`);
-        if (entry.denominations.d200) parts.push(`2H:${entry.denominations.d200}`);
-        if (entry.denominations.d100) parts.push(`1H:${entry.denominations.d100}`);
-        if (entry.denominations.d50) parts.push(`50:${entry.denominations.d50}`);
-        if (entry.denominations.d20) parts.push(`20:${entry.denominations.d20}`);
-        if (entry.denominations.d10) parts.push(`10:${entry.denominations.d10}`);
-        if (entry.denominations.coins) parts.push(`C:₹${entry.denominations.coins}`);
-        denomStr = parts.length > 0 ? parts.join(" ") : "-";
+        const badges = [];
+        if (entry.denominations.d500) badges.push(`<span style="color: #00ff88;">5H:${entry.denominations.d500}</span>`);
+        if (entry.denominations.d200) badges.push(`<span style="color: #00f0ff;">2H:${entry.denominations.d200}</span>`);
+        if (entry.denominations.d100) badges.push(`<span style="color: #b829ff;">1H:${entry.denominations.d100}</span>`);
+        if (entry.denominations.d50) badges.push(`<span style="color: #ff6b00;">50:${entry.denominations.d50}</span>`);
+        if (entry.denominations.d20) badges.push(`<span style="color: #ffff00;">20:${entry.denominations.d20}</span>`);
+        if (entry.denominations.d10) badges.push(`<span style="color: #ff0044;">10:${entry.denominations.d10}</span>`);
+        if (entry.denominations.coins) badges.push(`<span style="color: #888;">🪙${entry.denominations.coins}</span>`);
+        denomBadges = badges.length > 0 ? badges.join(" ") : "";
       }
       
       const diffColor = entry.difference > 0 ? "#00ff88" : entry.difference < 0 ? "#ff0044" : "#888";
-      const diffText = entry.difference !== 0 ? `(${entry.difference > 0 ? '+' : ''}${entry.difference})` : "";
+      const diffBadge = entry.difference !== 0 
+        ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: ${entry.difference > 0 ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,68,0.2)'}; color: ${diffColor};">${entry.difference > 0 ? '+' : ''}${entry.difference}</span>` 
+        : "";
       
       return `
-        <tr class="border-b border-gray-800 hover:bg-gray-800/30 transition-colors cash-row">
-          <td class="py-3 px-2 font-orbitron text-xs">${formatDateShort(entry.date)}</td>
-          <td class="py-3 px-2 text-right" style="color: #00ff88;">₹${(entry.opening || 0).toLocaleString("en-IN")}</td>
-          <td class="py-3 px-2 text-right">
-            <span style="color: #00ff88;">₹${(entry.actualClosing || entry.closing || 0).toLocaleString("en-IN")}</span>
-            ${diffText ? `<span class="text-xs ml-1" style="color: ${diffColor};">${diffText}</span>` : ""}
-          </td>
-          <td class="py-3 px-2 text-right font-bold" style="color: #b829ff;">₹${(entry.sale || 0).toLocaleString("en-IN")}</td>
-          <td class="py-3 px-2 text-right cash-col-extra" style="color: #ff6b00;">${entry.withdrawal ? `₹${entry.withdrawal.toLocaleString("en-IN")}` : "-"}</td>
-          <td class="py-3 px-2 text-right cash-col-extra" style="color: #ff0044;">${entry.expenses ? `₹${entry.expenses.toLocaleString("en-IN")}` : "-"}</td>
-          <td class="py-3 px-2 text-xs text-gray-500 max-w-[150px] truncate cash-col-extra" title="${denomStr}">${denomStr}</td>
-          <td class="py-3 px-2 text-xs text-gray-400 max-w-[100px] truncate cash-col-extra">${entry.comments || "-"}</td>
-          <td class="py-3 px-2">
-            <button onclick="editCashEntry('${entry.date}')" class="text-cyan-400 hover:text-cyan-300 text-xs">✏️</button>
-          </td>
-        </tr>
+        <div class="rounded-lg border border-gray-800/50 mb-2 overflow-hidden" style="background: rgba(0,0,0,0.2);">
+          <div class="flex items-center justify-between py-2 px-3 flex-wrap gap-2">
+            <div class="flex items-center gap-3 flex-wrap">
+              <span class="font-orbitron text-xs font-bold" style="color: #00f0ff;">${formatDateShort(entry.date)}</span>
+              <span class="text-[10px] text-gray-500">Open: <span style="color: #00ff88;">₹${(entry.opening || 0).toLocaleString("en-IN")}</span></span>
+              <span class="text-[10px] text-gray-500">Close: <span style="color: #00ff88;">₹${(entry.actualClosing || entry.closing || 0).toLocaleString("en-IN")}</span></span>
+              ${diffBadge}
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-orbitron text-sm font-bold" style="color: #b829ff;">₹${(entry.sale || 0).toLocaleString("en-IN")}</span>
+              ${entry.withdrawal ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(255,107,0,0.2); color: #ff6b00;">W/D ₹${entry.withdrawal}</span>` : ""}
+              ${entry.expenses ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(255,0,68,0.2); color: #ff0044;">Exp ₹${entry.expenses}</span>` : ""}
+              <button onclick="editCashEntry('${entry.date}')" class="text-cyan-400 hover:text-cyan-300 text-xs p-1">✏️</button>
+            </div>
+          </div>
+          ${denomBadges || entry.comments ? `
+          <div class="px-3 pb-2 text-[10px] border-t border-gray-800/30" style="background: rgba(0,0,0,0.1);">
+            <div class="flex items-center gap-2 flex-wrap pt-1.5">
+              ${denomBadges ? `<span class="text-gray-500">${denomBadges}</span>` : ""}
+              ${entry.comments ? `<span class="text-gray-400 truncate" style="max-width: 200px;">📝 ${entry.comments}</span>` : ""}
+            </div>
+          </div>
+          ` : ""}
+        </div>
       `;
     }).join("");
     
@@ -744,7 +737,7 @@ async function loadCashHistory() {
     
   } catch (error) {
     console.error("Error loading cash history:", error);
-    tableBody.innerHTML = `<tr><td colspan="9" class="py-4 text-center text-red-400">Error loading data</td></tr>`;
+    listEl.innerHTML = `<div class="py-4 text-center text-red-400">Error loading data</div>`;
   }
 }
 

@@ -79,8 +79,31 @@ const elements = {
   outstandingList: $("outstandingCreditsList"),
   outstandingCount: $("outstandingCount"),
   outstandingTotal: $("outstandingTotal"),
-  datePicker: $("datePicker")
+  datePicker: $("datePicker"),
+  creditsRowContainer: $("creditsRowContainer"),
+  otherDaySection: $("otherDayCollectionsSection")
 };
+
+// Helper to update credits row grid layout based on visible sections
+function updateCreditsRowLayout() {
+  const container = elements.creditsRowContainer;
+  if (!container) return;
+  
+  const outstandingVisible = elements.outstandingSection && !elements.outstandingSection.classList.contains("hidden");
+  const collectedVisible = elements.otherDaySection && !elements.otherDaySection.classList.contains("hidden");
+  
+  // If only one section visible, make it full width
+  if (outstandingVisible && !collectedVisible) {
+    container.classList.remove("lg:grid-cols-2");
+    container.classList.add("lg:grid-cols-1");
+  } else if (!outstandingVisible && collectedVisible) {
+    container.classList.remove("lg:grid-cols-2");
+    container.classList.add("lg:grid-cols-1");
+  } else {
+    container.classList.remove("lg:grid-cols-1");
+    container.classList.add("lg:grid-cols-2");
+  }
+}
 
 // ==================== SPLIT PAYMENT HELPERS ====================
 
@@ -457,16 +480,18 @@ async function loadOtherDayCollections(targetDate) {
     // Update section visibility and counts
     if (collections.length === 0) {
       section.classList.add("hidden");
+      updateCreditsRowLayout();
       return;
     }
     
     section.classList.remove("hidden");
+    updateCreditsRowLayout();
     const grandTotal = collections.reduce((sum, c) => sum + c.total, 0);
     
     if (countEl) countEl.textContent = collections.length;
     if (totalEl) totalEl.textContent = `₹${grandTotal.toLocaleString("en-IN")}`;
     
-    // Render table rows
+    // Render as simple list items
     listEl.innerHTML = collections.map(c => {
       const origDate = new Date(c.transactionDate).toLocaleDateString("en-IN", { 
         day: "numeric", 
@@ -475,25 +500,30 @@ async function loadOtherDayCollections(targetDate) {
       
       let methodBadges = "";
       if (c.cash > 0) {
-        methodBadges += `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,240,255,0.2); color: #00f0ff;">💵 ₹${c.cash}</span> `;
+        methodBadges += `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(0,240,255,0.2); color: #00f0ff;">💵${c.cash}</span> `;
       }
       if (c.upi > 0) {
-        methodBadges += `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(184,41,255,0.2); color: #b829ff;">📱 ₹${c.upi}</span>`;
+        methodBadges += `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(184,41,255,0.2); color: #b829ff;">📱${c.upi}</span>`;
       }
       
       return `
-        <tr class="border-b border-gray-800/30 hover:bg-gray-800/20">
-          <td class="py-2 px-2 text-gray-400 text-xs">${origDate}</td>
-          <td class="py-2 px-2 font-orbitron font-bold" style="color: var(--neon-cyan);">${c.member}</td>
-          <td class="py-2 px-2 text-right font-orbitron font-bold" style="color: var(--neon-green);">₹${c.total}</td>
-          <td class="py-2 px-2">${methodBadges}</td>
-        </tr>
+        <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-800/30 border-b border-gray-800/20">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-gray-500">${origDate}</span>
+            <span class="font-orbitron text-xs font-bold" style="color: var(--neon-cyan);">${c.member}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            ${methodBadges}
+            <span class="font-orbitron text-xs font-bold" style="color: var(--neon-green);">₹${c.total}</span>
+          </div>
+        </div>
       `;
     }).join("");
     
   } catch (error) {
     console.warn("Could not load other-day collections:", error);
     section.classList.add("hidden");
+    updateCreditsRowLayout();
   }
 }
 
@@ -548,6 +578,7 @@ function renderAllOutstandingCredits(credits) {
 
   if (credits.length === 0) {
     elements.outstandingSection.classList.add("hidden");
+    updateCreditsRowLayout();
     return;
   }
 
@@ -605,6 +636,8 @@ function renderAllOutstandingCredits(credits) {
       `;
     }).join("");
   }
+  
+  updateCreditsRowLayout();
 }
 
 // Global credit collection function - opens the modal

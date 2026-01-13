@@ -4,11 +4,11 @@
 :: ============================================================
 :: This script starts the Firebase-based sync service with
 :: automatic scheduled syncs:
-::   - IP Logs: Every 2 minutes
-::   - FDB Database: Every 15 minutes
+::   - Terminal Status: Every 2 minutes (from FDB)
+::   - FDB + Leaderboards: Every 15 minutes
 ::
-:: Place this in Windows Startup folder to run automatically:
-:: %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+:: To auto-start on boot, run setup_sync_service.bat once
+:: (with Administrator privileges)
 ::
 :: Scripts location: C:\oceanz0604.github.io\scripts
 :: ============================================================
@@ -24,8 +24,9 @@ echo  ====================================================
 echo   OceanZ Sync Service
 echo  ====================================================
 echo   Auto-Sync Schedule:
-echo     - IP Logs:     Every 2 minutes
+echo     - Terminals:   Every 2 minutes (from FDB)
 echo     - FDB Data:    Every 15 minutes
+echo     - Leaderboards: Every 15 minutes
 echo     - Manual:      Via Firebase request (Web UI)
 echo  ====================================================
 echo.

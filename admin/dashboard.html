@@ -1165,42 +1165,33 @@
               </div>
             </div>
 
-            <!-- Outstanding Credits Section -->
-            <div id="outstandingCreditsSection" class="hidden">
-              <div class="neon-card rounded-xl p-4 relative" style="border-color: rgba(255,107,0,0.3);">
-                <div class="flex items-center justify-between mb-4">
-                  <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-orange);">
-                    🔖 OUTSTANDING CREDITS
-                    <span id="outstandingCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2);">0</span>
-                  </h3>
-                  <span id="outstandingTotal" class="font-orbitron font-bold" style="color: var(--neon-orange);">₹0</span>
+            <!-- Credits Row - Outstanding & Collected Side by Side on Desktop -->
+            <div id="creditsRowContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <!-- Outstanding Credits Section -->
+              <div id="outstandingCreditsSection" class="hidden">
+                <div class="neon-card rounded-xl p-4 relative h-full" style="border-color: rgba(255,107,0,0.3);">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-orbitron text-xs font-bold flex items-center gap-2" style="color: var(--neon-orange);">
+                      🔖 OUTSTANDING CREDITS
+                      <span id="outstandingCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2);">0</span>
+                    </h3>
+                    <span id="outstandingTotal" class="font-orbitron text-sm font-bold" style="color: var(--neon-orange);">₹0</span>
+                  </div>
+                  <div id="outstandingCreditsList" class="space-y-2 max-h-48 overflow-y-auto"></div>
                 </div>
-                <div id="outstandingCreditsList" class="space-y-2"></div>
               </div>
-            </div>
 
-            <!-- Credit Collections from Other Dates (collected today) -->
-            <div id="otherDayCollectionsSection" class="hidden">
-              <div class="neon-card rounded-xl p-4 relative" style="border-color: rgba(0,255,136,0.3);">
-                <div class="flex items-center justify-between mb-4">
-                  <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-green);">
-                    💰 CREDIT COLLECTED TODAY (from other dates)
-                    <span id="otherDayCollectionCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,255,136,0.2);">0</span>
-                  </h3>
-                  <span id="otherDayCollectionTotal" class="font-orbitron font-bold" style="color: var(--neon-green);">₹0</span>
-                </div>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm">
-                    <thead>
-                      <tr class="text-left border-b border-gray-700">
-                        <th class="py-2 px-2 font-orbitron text-xs" style="color: #888;">Orig. Date</th>
-                        <th class="py-2 px-2 font-orbitron text-xs" style="color: var(--neon-cyan);">Member</th>
-                        <th class="py-2 px-2 font-orbitron text-xs text-right" style="color: var(--neon-green);">Collected</th>
-                        <th class="py-2 px-2 font-orbitron text-xs" style="color: #888;">Method</th>
-                      </tr>
-                    </thead>
-                    <tbody id="otherDayCollectionsList"></tbody>
-                  </table>
+              <!-- Credit Collections from Other Dates (collected today) -->
+              <div id="otherDayCollectionsSection" class="hidden">
+                <div class="neon-card rounded-xl p-4 relative h-full" style="border-color: rgba(0,255,136,0.3);">
+                  <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-orbitron text-xs font-bold flex items-center gap-2" style="color: var(--neon-green);">
+                      💰 COLLECTED TODAY
+                      <span id="otherDayCollectionCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,255,136,0.2);">0</span>
+                    </h3>
+                    <span id="otherDayCollectionTotal" class="font-orbitron text-sm font-bold" style="color: var(--neon-green);">₹0</span>
+                  </div>
+                  <div id="otherDayCollectionsList" class="space-y-1 max-h-48 overflow-y-auto"></div>
                 </div>
               </div>
             </div>

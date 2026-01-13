@@ -664,6 +664,17 @@ body.admin-page::before {
   overflow-x: auto;
 }
 
+/* Denomination badges */
+.denom-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: 'Orbitron', sans-serif;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .cash-table-wrapper {
     overflow: visible !important;
