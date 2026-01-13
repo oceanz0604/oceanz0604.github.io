@@ -705,32 +705,19 @@ async function loadWeeklyLeaderboard(loggedUserName) {
     const weekNum = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
     const weekKey = `${now.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
 
-    const historyRef = secondDb.ref(FB_PATHS.HISTORY);
-    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const membersData = membersSnap.val();
-    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
+    // Use pre-computed weekly leaderboard from Firebase
+    const weeklySnap = await secondDb.ref(`${FB_PATHS.LEADERBOARDS}/weekly/${weekKey}`).once("value");
+    
+    if (!weeklySnap.exists()) {
+      container.innerHTML = `<p class="text-gray-500 text-center">No activity this week yet!</p>`;
+      return;
+    }
 
-    // Get start of week (Monday)
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - mondayOffset);
-    startOfWeek.setHours(0, 0, 0, 0);
-    const weekStartStr = startOfWeek.toISOString().split("T")[0];
-
-    // Calculate weekly stats for each member
-    const weeklyStats = await Promise.all(
-      members.map(async m => {
-        const snap = await historyRef.child(m.USERNAME).once("value");
-        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= weekStartStr);
-        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
-        const sessions = entries.length;
-        return { username: m.USERNAME, minutes, sessions };
-      })
-    );
-
-    // Sort by minutes
-    const sorted = weeklyStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 10);
+    const weeklyData = weeklySnap.val();
+    const sorted = Object.values(weeklyData)
+      .filter(s => s.sessions_count > 0)
+      .sort((a, b) => b.total_minutes - a.total_minutes)
+      .slice(0, 10);
 
     if (sorted.length === 0) {
       container.innerHTML = `<p class="text-gray-500 text-center">No activity this week yet!</p>`;
@@ -739,8 +726,8 @@ async function loadWeeklyLeaderboard(loggedUserName) {
 
     container.innerHTML = sorted.map((row, i) => {
       const isUser = row.username?.toLowerCase() === loggedUserName?.toLowerCase();
-      const hours = Math.floor(row.minutes / 60);
-      const mins = row.minutes % 60;
+      const hours = Math.floor(row.total_minutes / 60);
+      const mins = Math.round(row.total_minutes % 60);
       const timeLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 
       const badgeColors = ["#ffd700", "#c0c0c0", "#cd7f32"];
@@ -756,7 +743,7 @@ async function loadWeeklyLeaderboard(loggedUserName) {
             <div class="font-orbitron font-bold" style="color: ${isUser ? '#00ff88' : '#ff6b00'};">
               ${row.username} ${isUser ? '<span class="text-xs">(YOU)</span>' : ''}
             </div>
-            <div class="text-gray-500 text-sm">Sessions: ${row.sessions}</div>
+            <div class="text-gray-500 text-sm">Sessions: ${row.sessions_count}</div>
           </div>
           <div class="text-right">
             <div class="font-orbitron font-bold" style="color: #b829ff;">${timeLabel}</div>
@@ -778,30 +765,21 @@ async function loadSeasonLeaderboard(loggedUserName) {
   container.innerHTML = `<p class="text-gray-500 text-center">Loading...</p>`;
 
   try {
-    // Season runs from start of current month (for demo purposes)
+    // Season = current month, use pre-computed monthly leaderboard
     const now = new Date();
-    const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const seasonStartStr = seasonStart.toISOString().split("T")[0];
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    const historyRef = secondDb.ref(FB_PATHS.HISTORY);
-    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const membersData = membersSnap.val();
-    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
+    const monthlySnap = await secondDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly/${monthKey}`).once("value");
+    
+    if (!monthlySnap.exists()) {
+      container.innerHTML = `<p class="text-gray-500 text-center">No activity this season yet!</p>`;
+      return;
+    }
 
-    // Calculate season stats for each member
-    const seasonStats = await Promise.all(
-      members.map(async m => {
-        const snap = await historyRef.child(m.USERNAME).once("value");
-        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= seasonStartStr);
-        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
-        const sessions = entries.length;
-        const spent = entries.reduce((sum, e) => sum + (e.CHARGE < 0 ? -e.CHARGE : 0), 0);
-        return { username: m.USERNAME, minutes, sessions, spent };
-      })
-    );
-
-    // Sort by minutes
-    const sorted = seasonStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes);
+    const monthlyData = monthlySnap.val();
+    const sorted = Object.values(monthlyData)
+      .filter(s => s.sessions_count > 0)
+      .sort((a, b) => b.total_minutes - a.total_minutes);
 
     if (sorted.length === 0) {
       container.innerHTML = `<p class="text-gray-500 text-center">No activity this season yet!</p>`;
@@ -813,8 +791,8 @@ async function loadSeasonLeaderboard(loggedUserName) {
 
     container.innerHTML = top10.map((row, i) => {
       const isUser = row.username?.toLowerCase() === loggedUserName?.toLowerCase();
-      const hours = Math.floor(row.minutes / 60);
-      const mins = row.minutes % 60;
+      const hours = Math.floor(row.total_minutes / 60);
+      const mins = Math.round(row.total_minutes % 60);
       const timeLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 
       const badgeColors = ["#ffd700", "#c0c0c0", "#cd7f32"];
@@ -830,7 +808,7 @@ async function loadSeasonLeaderboard(loggedUserName) {
             <div class="font-orbitron font-bold" style="color: ${isUser ? '#00ff88' : '#b829ff'};">
               ${row.username} ${isUser ? '<span class="text-xs">(YOU)</span>' : ''}
             </div>
-            <div class="text-gray-500 text-sm">${row.sessions} sessions • ₹${row.spent} spent</div>
+            <div class="text-gray-500 text-sm">${row.sessions_count} sessions • ₹${row.total_spent || 0} spent</div>
           </div>
           <div class="text-right">
             <div class="font-orbitron font-bold" style="color: #00f0ff;">${timeLabel}</div>

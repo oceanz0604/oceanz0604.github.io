@@ -1335,6 +1335,9 @@
               <button id="lb-tab-alltime" class="lb-tab-btn active px-4 py-2 rounded-lg font-orbitron text-sm" onclick="switchLeaderboardTab('alltime')">
                 🏆 Hall of Fame
               </button>
+              <button id="lb-tab-weekly" class="lb-tab-btn px-4 py-2 rounded-lg font-orbitron text-sm" onclick="switchLeaderboardTab('weekly')">
+                📆 Weekly
+              </button>
               <button id="lb-tab-monthly" class="lb-tab-btn px-4 py-2 rounded-lg font-orbitron text-sm" onclick="switchLeaderboardTab('monthly')">
                 📅 Monthly
               </button>
@@ -1350,6 +1353,22 @@
               <div class="cyber-line my-4"></div>
               <div id="adminLeaderboardList" class="space-y-3">
                 <p class="text-gray-500 text-center">Loading leaderboard...</p>
+              </div>
+            </div>
+
+            <!-- Weekly Leaderboard -->
+            <div id="lb-weekly-content" class="hidden neon-card rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 class="font-orbitron text-lg font-bold flex items-center gap-3" style="color: var(--neon-green);">
+                  📆 THIS WEEK'S TOP PLAYERS
+                </h3>
+                <select id="weekSelector" onchange="onWeekChange()" class="bg-black/50 border border-gray-700 rounded px-3 py-1 text-sm">
+                  <option value="">Loading weeks...</option>
+                </select>
+              </div>
+              <div class="cyber-line my-4"></div>
+              <div id="adminWeeklyLeaderboard" class="space-y-3">
+                <p class="text-gray-500 text-center">Select a week to view leaderboard...</p>
               </div>
             </div>
 
@@ -2091,7 +2110,7 @@
   
   <!-- Leaderboard handlers -->
   <script type="module">
-    import { loadHallOfFame, loadMonthlyLeaderboard, getAvailableMonths, getLeaderboardStats } from '../shared/leaderboard.js';
+    import { loadHallOfFame, loadMonthlyLeaderboard, loadWeeklyLeaderboard, getAvailableMonths, getAvailableWeeks, getLeaderboardStats } from '../shared/leaderboard.js';
     
     let leaderboardLoaded = false;
     let currentLbTab = 'alltime';
@@ -2118,10 +2137,16 @@
       
       // Show/hide content
       document.getElementById('lb-alltime-content').classList.toggle('hidden', tab !== 'alltime');
+      document.getElementById('lb-weekly-content').classList.toggle('hidden', tab !== 'weekly');
       document.getElementById('lb-monthly-content').classList.toggle('hidden', tab !== 'monthly');
       
-      // Load monthly data if switching to monthly tab
-      if (tab === 'monthly') {
+      // Load data for selected tab
+      if (tab === 'weekly') {
+        const selector = document.getElementById('weekSelector');
+        if (selector && selector.value) {
+          loadWeeklyLeaderboard('adminWeeklyLeaderboard', null, selector.value);
+        }
+      } else if (tab === 'monthly') {
         const selector = document.getElementById('monthSelector');
         if (selector && selector.value) {
           loadMonthlyLeaderboard('adminMonthlyLeaderboard', null, selector.value);
@@ -2134,6 +2159,14 @@
       const selector = document.getElementById('monthSelector');
       if (selector && selector.value) {
         loadMonthlyLeaderboard('adminMonthlyLeaderboard', null, selector.value);
+      }
+    };
+    
+    // Load selected week
+    window.onWeekChange = function() {
+      const selector = document.getElementById('weekSelector');
+      if (selector && selector.value) {
+        loadWeeklyLeaderboard('adminWeeklyLeaderboard', null, selector.value);
       }
     };
     
@@ -2151,6 +2184,21 @@
       
       // Load hall of fame
       await loadHallOfFame('adminLeaderboardList');
+      
+      // Load available weeks for selector
+      const weeks = await getAvailableWeeks();
+      const weekSelector = document.getElementById('weekSelector');
+      if (weekSelector && weeks.length > 0) {
+        weekSelector.innerHTML = weeks.map((w, i) => {
+          const [year, weekNum] = w.split('-W');
+          return `<option value="${w}" ${i === 0 ? 'selected' : ''}>Week ${weekNum}, ${year}</option>`;
+        }).join('');
+        
+        // Auto-load current week
+        loadWeeklyLeaderboard('adminWeeklyLeaderboard', null, weeks[0]);
+      } else if (weekSelector) {
+        weekSelector.innerHTML = '<option value="">No data available</option>';
+      }
       
       // Load available months for selector
       const months = await getAvailableMonths();
