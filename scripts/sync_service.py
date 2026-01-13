@@ -45,10 +45,8 @@ from oceanz_sync import (
     fetch_all_members, process_and_upload_members,
     fetch_recent_sessions, process_and_upload_sessions,
     parse_messages_file, upload_guest_sessions,
-    load_iplogs_state, save_iplogs_state,
-    read_new_log_lines, parse_log_lines,
-    process_entries_incremental, build_complete_terminal_status,
-    upload_sessions, upload_terminal_status, cleanup_old_sessions,
+    fetch_terminals_from_fdb, process_and_upload_terminal_status,
+    fetch_kasahar_records, process_and_upload_kasahar,
     calculate_leaderboards_from_firebase
 )
 
@@ -58,7 +56,7 @@ POLL_INTERVAL = 5  # Seconds between checks
 HEARTBEAT_INTERVAL = 30  # Seconds between heartbeat updates
 
 # Auto-sync intervals (in minutes)
-IPLOGS_INTERVAL = 2      # IP logs every 2 minutes
+TERMINALS_INTERVAL = 2   # Terminal status every 2 minutes (from FDB TERMINALS table)
 FDB_INTERVAL = 15        # FDB database every 15 minutes
 
 # Firebase paths for sync control
@@ -93,7 +91,7 @@ class SyncService:
         self.progress_messages = []
         
         # Track last auto-sync times
-        self.last_iplogs_sync = None
+        self.last_terminals_sync = None
         self.last_fdb_sync = None
         
     def log(self, message, level="INFO", update_firebase=True):
@@ -142,13 +140,13 @@ class SyncService:
     def update_heartbeat(self):
         """Update service heartbeat to show it's alive."""
         try:
-            next_iplogs = self.last_iplogs_sync + timedelta(minutes=IPLOGS_INTERVAL) if self.last_iplogs_sync else datetime.now()
+            next_terminals = self.last_terminals_sync + timedelta(minutes=TERMINALS_INTERVAL) if self.last_terminals_sync else datetime.now()
             next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
             
             self.db.reference(HEARTBEAT_PATH).set({
                 "timestamp": datetime.now().isoformat(),
                 "status": "syncing" if self.syncing else "idle",
-                "next_iplogs": next_iplogs.isoformat(),
+                "next_terminals": next_terminals.isoformat(),
                 "next_fdb": next_fdb.isoformat()
             })
         except Exception as e:
@@ -157,19 +155,19 @@ class SyncService:
     def update_schedule_info(self):
         """Update schedule info in Firebase for UI display."""
         try:
-            next_iplogs = self.last_iplogs_sync + timedelta(minutes=IPLOGS_INTERVAL) if self.last_iplogs_sync else datetime.now()
+            next_terminals = self.last_terminals_sync + timedelta(minutes=TERMINALS_INTERVAL) if self.last_terminals_sync else datetime.now()
             next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
             
             schedule_data = {
-                "iplogs_interval_mins": IPLOGS_INTERVAL,
+                "terminals_interval_mins": TERMINALS_INTERVAL,
                 "fdb_interval_mins": FDB_INTERVAL,
-                "next_iplogs": next_iplogs.isoformat(),
+                "next_terminals": next_terminals.isoformat(),
                 "next_fdb": next_fdb.isoformat(),
             }
             
             # Only add last sync times if they exist (Firebase doesn't accept None)
-            if self.last_iplogs_sync:
-                schedule_data["last_iplogs"] = self.last_iplogs_sync.isoformat()
+            if self.last_terminals_sync:
+                schedule_data["last_terminals"] = self.last_terminals_sync.isoformat()
             if self.last_fdb_sync:
                 schedule_data["last_fdb"] = self.last_fdb_sync.isoformat()
             
@@ -191,61 +189,44 @@ class SyncService:
             print(f"Error checking request: {e}")
             return False
     
-    def run_iplogs_sync(self, silent=False):
-        """Run IP logs sync directly (no subprocess)."""
+    def run_terminals_sync(self, silent=False):
+        """Run terminal status sync from FDB TERMINALS table."""
         if not silent:
-            self.log("Starting: IP Logs & Terminal Status")
-            self.set_status("syncing", "IP Logs & Terminal Status")
+            self.log("Starting: Terminal Status (from FDB)")
+            self.set_status("syncing", "Terminal Status")
         else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: IP Logs sync")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: Terminals sync")
         
         try:
-            iplogs_state = load_iplogs_state()
-            old_cache = dict(iplogs_state.get("terminal_status_cache", {}))
+            # Copy FDB and connect
+            copy_fdb_file()
+            conn = connect_to_firebird()
+            cursor = conn.cursor()
             
-            cleanup_old_sessions(iplogs_state)
+            # Fetch terminal status from FDB TERMINALS table
+            terminals = fetch_terminals_from_fdb(cursor)
+            process_and_upload_terminal_status(terminals)
             
-            new_lines, current_file, line_count = read_new_log_lines(iplogs_state)
+            conn.close()
             
-            if new_lines:
-                entries = parse_log_lines(new_lines)
-                
-                if entries:
-                    completed, active, terminal_status, open_sessions = process_entries_incremental(entries, iplogs_state)
-                    terminal_status = build_complete_terminal_status(terminal_status)
-                    
-                    upload_sessions(completed)
-                    upload_terminal_status(terminal_status, old_cache)
-                    
-                    iplogs_state["terminal_status_cache"] = terminal_status
-                    iplogs_state["open_sessions"] = open_sessions
-                    
-                    if not silent:
-                        self.log(f"  Active: {len(active)} | Completed: {len(completed)}")
-            
-            iplogs_state["last_file"] = current_file
-            iplogs_state["last_line_count"] = line_count
-            iplogs_state["last_sync"] = datetime.now().isoformat()
-            
-            save_iplogs_state(iplogs_state)
-            
-            db.reference(f"{FB_PATHS.SYNC_META}/iplogs").update({
+            db.reference(f"{FB_PATHS.SYNC_META}/terminals").update({
                 "last_sync": datetime.now().isoformat(),
-                "status": "ok"
+                "status": "ok",
+                "terminal_count": len(terminals)
             })
             
             if not silent:
-                self.log("Completed: IP Logs & Terminal Status", "SUCCESS")
+                self.log(f"Completed: {len(terminals)} terminals synced", "SUCCESS")
             else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] IP Logs sync completed")
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Terminals sync: {len(terminals)} PCs")
             
             return True
             
         except Exception as e:
             if not silent:
-                self.log(f"IP Logs sync error: {e}", "ERROR")
+                self.log(f"Terminals sync error: {e}", "ERROR")
             else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] IP Logs: {e}")
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] Terminals: {e}")
             return False
     
     def run_fdb_sync(self, silent=False):
@@ -354,8 +335,8 @@ class SyncService:
         else:
             tasks_failed += 1
         
-        # 2. IP Logs Sync
-        if self.run_iplogs_sync(silent=False):
+        # 2. Terminal Status Sync (from FDB TERMINALS table)
+        if self.run_terminals_sync(silent=False):
             tasks_completed += 1
         else:
             tasks_failed += 1
@@ -370,7 +351,7 @@ class SyncService:
         
         # Update last sync times
         self.last_fdb_sync = datetime.now()
-        self.last_iplogs_sync = datetime.now()
+        self.last_terminals_sync = datetime.now()
         
         # Calculate duration
         end_time = datetime.now()
@@ -409,43 +390,43 @@ class SyncService:
         
         return success
     
-    def auto_sync_iplogs(self):
-        """Run IP logs sync silently (scheduled)."""
-        print(f"\n[AUTO-SYNC] IP Logs - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    def auto_sync_terminals(self):
+        """Run terminal status sync silently (scheduled)."""
+        print(f"\n[AUTO-SYNC] Terminals - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        success = self.run_iplogs_sync(silent=True)
+        success = self.run_terminals_sync(silent=True)
         
-        self.last_iplogs_sync = datetime.now()
+        self.last_terminals_sync = datetime.now()
         self.syncing = False
         self.update_schedule_info()
         
         return success
     
     def auto_sync_fdb(self):
-        """Run complete sync silently (scheduled) - includes FDB, IP Logs, and Leaderboards."""
+        """Run complete sync silently (scheduled) - includes FDB, Terminals, and Leaderboards."""
         print(f"\n[AUTO-SYNC] Complete Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
         # Run all three syncs
         fdb_ok = self.run_fdb_sync(silent=True)
-        iplogs_ok = self.run_iplogs_sync(silent=True)
+        terminals_ok = self.run_terminals_sync(silent=True)
         leaders_ok = self.run_leaderboard_sync(silent=True)
         
         self.last_fdb_sync = datetime.now()
-        self.last_iplogs_sync = datetime.now()
+        self.last_terminals_sync = datetime.now()
         self.syncing = False
         self.update_schedule_info()
         
-        return fdb_ok and iplogs_ok and leaders_ok
+        return fdb_ok and terminals_ok and leaders_ok
     
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""
         now = datetime.now()
         
-        # Check IP logs (every 2 minutes) - run quick IP logs only
-        if self.last_iplogs_sync is None or (now - self.last_iplogs_sync).total_seconds() >= IPLOGS_INTERVAL * 60:
-            self.auto_sync_iplogs()
+        # Check terminals (every 2 minutes) - quick terminal status only
+        if self.last_terminals_sync is None or (now - self.last_terminals_sync).total_seconds() >= TERMINALS_INTERVAL * 60:
+            self.auto_sync_terminals()
         
         # Check FDB + Leaderboards (every 15 minutes) - run complete sync
         if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
@@ -458,20 +439,20 @@ class SyncService:
            OceanZ Sync Service                             
    Auto-Scheduling + Firebase Control                      
 ----------------------------------------------------------------
-   IP Logs:    Every {IPLOGS_INTERVAL} minutes                          
+   Terminals:  Every {TERMINALS_INTERVAL} minutes (from FDB TERMINALS table)
    FDB Data:   Every {FDB_INTERVAL} minutes                         
    Manual:     Via Firebase request                     
 ================================================================
         """)
         
         self.log("[START] OceanZ Sync Service Starting...", update_firebase=True)
-        self.log(f"[SCHEDULE] IP Logs every {IPLOGS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
+        self.log(f"[SCHEDULE] Terminals every {TERMINALS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
         self.set_status("idle")
         self.update_heartbeat()
         
         # Run initial sync (unified sync handles everything)
         print("\n[STARTUP] Running initial unified sync...")
-        self.auto_sync_fdb()  # Unified sync includes IP logs and leaderboards
+        self.auto_sync_fdb()  # Unified sync includes terminals and leaderboards
         
         last_heartbeat = time.time()
         
