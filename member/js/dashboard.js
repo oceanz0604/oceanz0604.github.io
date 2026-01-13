@@ -714,9 +714,11 @@ async function loadWeeklyLeaderboard(loggedUserName) {
     }
 
     const weeklyData = weeklySnap.val();
-    const sorted = Object.values(weeklyData)
-      .filter(s => s.sessions_count > 0)
-      .sort((a, b) => b.total_minutes - a.total_minutes)
+    // Handle both array format (new) and object format (legacy)
+    const dataArray = Array.isArray(weeklyData) ? weeklyData.filter(x => x) : Object.values(weeklyData);
+    const sorted = dataArray
+      .filter(s => s && s.sessions_count > 0)
+      .sort((a, b) => (b.total_minutes || 0) - (a.total_minutes || 0))
       .slice(0, 10);
 
     if (sorted.length === 0) {
@@ -777,9 +779,11 @@ async function loadSeasonLeaderboard(loggedUserName) {
     }
 
     const monthlyData = monthlySnap.val();
-    const sorted = Object.values(monthlyData)
-      .filter(s => s.sessions_count > 0)
-      .sort((a, b) => b.total_minutes - a.total_minutes);
+    // Handle both array format (new) and object format (legacy)
+    const dataArray = Array.isArray(monthlyData) ? monthlyData.filter(x => x) : Object.values(monthlyData);
+    const sorted = dataArray
+      .filter(s => s && s.sessions_count > 0)
+      .sort((a, b) => (b.total_minutes || 0) - (a.total_minutes || 0));
 
     if (sorted.length === 0) {
       container.innerHTML = `<p class="text-gray-500 text-center">No activity this season yet!</p>`;
