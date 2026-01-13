@@ -918,15 +918,17 @@ def calculate_leaderboards_from_firebase():
                     if record_dt >= month_start:
                         monthly_stats[username]["sessions"] += 1
                         monthly_stats[username]["minutes"] += float(record.get("USINGMIN") or 0)
+                        # CHARGE is positive for payments in history records
                         charge = float(record.get("CHARGE") or 0)
-                        if charge < 0:
-                            monthly_stats[username]["spent"] += abs(charge)
+                        if charge > 0:
+                            monthly_stats[username]["spent"] += charge
                 except:
                     pass
         
         monthly_leaderboard = {}
         for username, stats in monthly_stats.items():
-            if stats["minutes"] > 0:
+            # Include users with any activity (sessions or minutes)
+            if stats["sessions"] > 0:
                 monthly_leaderboard[username] = {
                     "username": username,
                     "total_minutes": int(stats["minutes"]),
@@ -971,7 +973,8 @@ def calculate_leaderboards_from_firebase():
         
         weekly_leaderboard = {}
         for username, stats in weekly_stats.items():
-            if stats["minutes"] > 0:
+            # Include users with any activity (sessions or minutes)
+            if stats["sessions"] > 0:
                 weekly_leaderboard[username] = {
                     "username": username,
                     "total_minutes": int(stats["minutes"]),
