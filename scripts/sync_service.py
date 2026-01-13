@@ -6,8 +6,7 @@ This service runs on the FDB database machine and:
 1. Monitors Firebase for manual sync requests from the web UI
 2. Automatically runs scheduled syncs:
    - IP Logs: Every 2 minutes
-   - FDB Database: Every 15 minutes
-   - Leaderboards: Every 15 minutes (with FDB)
+   - Complete Sync (FDB + Leaderboards): Every 15 minutes
 
 Firebase Paths Used:
 - /sync-control/request      - Trigger: set to timestamp to request sync
@@ -25,7 +24,6 @@ Usage:
 import os
 import sys
 import time
-import subprocess
 import signal
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -36,6 +34,23 @@ sys.path.insert(0, str(Path(__file__).parent))
 import firebase_admin
 from firebase_admin import credentials, db
 from config import FB_PATHS, FIREBASE_CRED_PATH, FDB_FIREBASE_DB_URL
+
+# Import functions from the unified sync script
+from oceanz_sync import (
+    init_firebase as init_sync_firebase,
+    copy_fdb_file,
+    connect_to_firebird,
+    load_local_sync_state, save_local_sync_state,
+    fetch_new_history_records, process_and_upload_history,
+    fetch_all_members, process_and_upload_members,
+    fetch_recent_sessions, process_and_upload_sessions,
+    parse_messages_file, upload_guest_sessions,
+    load_iplogs_state, save_iplogs_state,
+    read_new_log_lines, parse_log_lines,
+    process_entries_incremental, build_complete_terminal_status,
+    upload_sessions, upload_terminal_status, cleanup_old_sessions,
+    calculate_leaderboards_from_firebase
+)
 
 # ==================== CONFIG ====================
 
@@ -55,9 +70,6 @@ CURRENT_TASK_PATH = f"{SYNC_CONTROL_PATH}/current_task"
 LAST_SYNC_PATH = f"{SYNC_CONTROL_PATH}/last_sync"
 HEARTBEAT_PATH = f"{SYNC_CONTROL_PATH}/service_heartbeat"
 SCHEDULE_PATH = f"{SYNC_CONTROL_PATH}/schedule"
-
-# Script directory
-SCRIPT_DIR = Path(__file__).parent
 
 # ==================== FIREBASE INIT ====================
 
@@ -179,54 +191,147 @@ class SyncService:
             print(f"Error checking request: {e}")
             return False
     
-    def run_script(self, script_name, description, silent=False):
-        """Run a Python script and capture output."""
-        script_path = SCRIPT_DIR / script_name
-        
-        if not script_path.exists():
-            self.log(f"Script not found: {script_path}", "ERROR", not silent)
-            return False
-        
+    def run_iplogs_sync(self, silent=False):
+        """Run IP logs sync directly (no subprocess)."""
         if not silent:
-            self.log(f"Starting: {description}")
-            self.set_status("syncing", description)
+            self.log("Starting: IP Logs & Terminal Status")
+            self.set_status("syncing", "IP Logs & Terminal Status")
         else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: {description}")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: IP Logs sync")
         
         try:
-            result = subprocess.run(
-                [sys.executable, str(script_path)],
-                capture_output=True,
-                text=True,
-                cwd=str(SCRIPT_DIR),
-                timeout=600  # 10 minute timeout
-            )
+            iplogs_state = load_iplogs_state()
+            old_cache = dict(iplogs_state.get("terminal_status_cache", {}))
             
-            # Log output
-            if result.stdout and not silent:
-                for line in result.stdout.strip().split('\n'):
-                    if line.strip():
-                        self.log(f"  {line}")
+            cleanup_old_sessions(iplogs_state)
             
-            if result.returncode != 0:
-                self.log(f"Script failed with code {result.returncode}", "ERROR", not silent)
-                if result.stderr:
-                    error_msg = result.stderr[:500]
-                    self.log(f"  Error: {error_msg}", "ERROR", not silent)
-                return False
+            new_lines, current_file, line_count = read_new_log_lines(iplogs_state)
+            
+            if new_lines:
+                entries = parse_log_lines(new_lines)
+                
+                if entries:
+                    completed, active, terminal_status, open_sessions = process_entries_incremental(entries, iplogs_state)
+                    terminal_status = build_complete_terminal_status(terminal_status)
+                    
+                    upload_sessions(completed)
+                    upload_terminal_status(terminal_status, old_cache)
+                    
+                    iplogs_state["terminal_status_cache"] = terminal_status
+                    iplogs_state["open_sessions"] = open_sessions
+                    
+                    if not silent:
+                        self.log(f"  Active: {len(active)} | Completed: {len(completed)}")
+            
+            iplogs_state["last_file"] = current_file
+            iplogs_state["last_line_count"] = line_count
+            iplogs_state["last_sync"] = datetime.now().isoformat()
+            
+            save_iplogs_state(iplogs_state)
+            
+            db.reference(f"{FB_PATHS.SYNC_META}/iplogs").update({
+                "last_sync": datetime.now().isoformat(),
+                "status": "ok"
+            })
             
             if not silent:
-                self.log(f"Completed: {description}", "SUCCESS")
+                self.log("Completed: IP Logs & Terminal Status", "SUCCESS")
             else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Completed: {description}")
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] IP Logs sync completed")
             
             return True
             
-        except subprocess.TimeoutExpired:
-            self.log(f"Script timed out: {script_name}", "ERROR", not silent)
-            return False
         except Exception as e:
-            self.log(f"Script error: {e}", "ERROR", not silent)
+            if not silent:
+                self.log(f"IP Logs sync error: {e}", "ERROR")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] IP Logs: {e}")
+            return False
+    
+    def run_fdb_sync(self, silent=False):
+        """Run FDB database sync directly (no subprocess)."""
+        if not silent:
+            self.log("Starting: FDB Database Sync")
+            self.set_status("syncing", "FDB Database Sync")
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: FDB sync")
+        
+        try:
+            copy_fdb_file()
+            conn = connect_to_firebird()
+            cursor = conn.cursor()
+            
+            sync_state = load_local_sync_state()
+            
+            # History
+            new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
+            new_max_id = process_and_upload_history(new_records, sync_state)
+            sync_state["last_history_id"] = new_max_id
+            
+            # Members
+            members = fetch_all_members(cursor)
+            new_hashes = process_and_upload_members(members, sync_state)
+            sync_state["member_hashes"] = new_hashes
+            
+            # Sessions
+            sessions = fetch_recent_sessions(cursor, hours=2)
+            process_and_upload_sessions(sessions)
+            
+            # Guest sessions
+            guest_sessions = parse_messages_file()
+            if guest_sessions:
+                upload_guest_sessions(guest_sessions)
+            
+            sync_state["last_sync_time"] = datetime.now().isoformat()
+            save_local_sync_state(sync_state)
+            
+            # Update Firebase sync meta
+            db.reference("sync-meta").update({
+                "last_fdb_sync": datetime.now().isoformat(),
+                "last_history_id": new_max_id,
+                "records_synced": len(new_records)
+            })
+            
+            conn.close()
+            
+            if not silent:
+                self.log(f"  FDB: {len(new_records)} new history records", "SUCCESS")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] FDB sync: {len(new_records)} records")
+            
+            return True
+            
+        except Exception as e:
+            if not silent:
+                self.log(f"FDB sync error: {e}", "ERROR")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] FDB: {e}")
+            return False
+    
+    def run_leaderboard_sync(self, silent=False):
+        """Run leaderboard calculation directly (no subprocess)."""
+        if not silent:
+            self.log("Starting: Leaderboard Calculation")
+            self.set_status("syncing", "Leaderboard Calculation")
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: Leaderboard calculation")
+        
+        try:
+            success = calculate_leaderboards_from_firebase()
+            
+            if success:
+                if not silent:
+                    self.log("Completed: Leaderboard Calculation", "SUCCESS")
+                else:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Leaderboards updated")
+            
+            return success
+            
+        except Exception as e:
+            if not silent:
+                self.log(f"Leaderboard sync error: {e}", "ERROR")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] Leaderboards: {e}")
             return False
     
     def perform_full_sync(self, triggered_by="web_ui"):
@@ -240,16 +345,28 @@ class SyncService:
         self.log("=" * 50)
         self.set_status("syncing", "Initializing...")
         
-        success = True
         tasks_completed = 0
         tasks_failed = 0
         
-        # Run complete unified sync (includes FDB, IP Logs, and Leaderboards)
-        if self.run_script("oceanz_sync.py", "Complete Sync (FDB + IP Logs + Leaderboards)"):
-            tasks_completed = 3  # Single script handles all 3
+        # 1. FDB Sync
+        if self.run_fdb_sync(silent=False):
+            tasks_completed += 1
         else:
-            tasks_failed = 3
-            success = False
+            tasks_failed += 1
+        
+        # 2. IP Logs Sync
+        if self.run_iplogs_sync(silent=False):
+            tasks_completed += 1
+        else:
+            tasks_failed += 1
+        
+        # 3. Leaderboard Calculation
+        if self.run_leaderboard_sync(silent=False):
+            tasks_completed += 1
+        else:
+            tasks_failed += 1
+        
+        success = tasks_failed == 0
         
         # Update last sync times
         self.last_fdb_sync = datetime.now()
@@ -297,7 +414,7 @@ class SyncService:
         print(f"\n[AUTO-SYNC] IP Logs - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        success = self.run_script("iplogsupload.py", "Auto: IP Logs & Terminal Status", silent=True)
+        success = self.run_iplogs_sync(silent=True)
         
         self.last_iplogs_sync = datetime.now()
         self.syncing = False
@@ -310,14 +427,17 @@ class SyncService:
         print(f"\n[AUTO-SYNC] Complete Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        success = self.run_script("oceanz_sync.py", "Auto: Complete Sync (FDB + IP Logs + Leaderboards)", silent=True)
+        # Run all three syncs
+        fdb_ok = self.run_fdb_sync(silent=True)
+        iplogs_ok = self.run_iplogs_sync(silent=True)
+        leaders_ok = self.run_leaderboard_sync(silent=True)
         
         self.last_fdb_sync = datetime.now()
-        self.last_iplogs_sync = datetime.now()  # Complete sync also handles IP logs
+        self.last_iplogs_sync = datetime.now()
         self.syncing = False
         self.update_schedule_info()
         
-        return success
+        return fdb_ok and iplogs_ok and leaders_ok
     
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""

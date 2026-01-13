@@ -279,6 +279,7 @@ def process_and_upload_members(records, sync_state):
         
         clean_record = {
             "USERNAME": username,
+            "PASSWORD": record.get("PASSWORD") or "",  # Required for member login
             "BALANCE": float(record.get("BALANCE") or 0),
             "FIRSTNAME": record.get("FIRSTNAME") or "",
             "LASTNAME": record.get("LASTNAME") or "",
@@ -311,21 +312,15 @@ def process_and_upload_members(records, sync_state):
     
     if members_to_update:
         print(f"[DATA] Found {len(members_to_update)} CHANGED members (out of {len(records)})")
-        for username, data in members_to_update.items():
-            try:
-                db.reference(f"{FB_PATHS.MEMBERS}/{username}").set(data)
-            except Exception as e:
-                print(f"[WARN] Failed to upload member {username}: {e}")
-        print(f"   [OK] Updated {len(members_to_update)} member profiles")
-    else:
-        print("   No member changes detected")
-    
-    if members_to_update:
+        
+        # Update legacy members array (used by frontend for search, analytics, etc.)
         try:
             db.reference(FB_PATHS.LEGACY_MEMBERS).set(members_array)
-            print(f"   [OK] Updated legacy members array ({len(members_array)} members)")
+            print(f"   [OK] Updated members array ({len(members_array)} members)")
         except Exception as e:
-            print(f"[WARN] Failed to update legacy members: {e}")
+            print(f"[WARN] Failed to update members: {e}")
+    else:
+        print("   No member changes detected")
     
     return new_hashes
 

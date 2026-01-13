@@ -22,51 +22,51 @@ export async function loadHallOfFame(containerId, highlightUsername = null) {
   container.innerHTML = `<p class="text-gray-500 text-center animate-pulse">Loading leaderboard...</p>`;
 
   try {
-    const membersSnap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const historyRef = fdbDb.ref(FB_PATHS.HISTORY);
-    const membersData = membersSnap.val();
-    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
-    const now = new Date();
-
-    const leaderboard = members
-      .filter(m => m.TOTALACTMINUTE)
-      .sort((a, b) => b.TOTALACTMINUTE - a.TOTALACTMINUTE)
-      .slice(0, 10);
-
-    if (leaderboard.length === 0) {
+    // Use pre-computed all-time leaderboard from sync script
+    const leaderboardSnap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/all-time`).once("value");
+    const leaderboardData = leaderboardSnap.val();
+    
+    if (!leaderboardData || leaderboardData.length === 0) {
       container.innerHTML = `<p class="text-gray-400 text-center">No leaderboard data available.</p>`;
       return;
     }
 
+    const historyRef = fdbDb.ref(FB_PATHS.HISTORY);
+    const now = new Date();
+    
+    // Get top 10 from pre-computed leaderboard
+    const leaderboard = leaderboardData.slice(0, 10);
+
+    // Fetch additional history data for badges/streaks
     const historyData = await Promise.all(
       leaderboard.map(async m => {
-        const snapshot = await historyRef.child(m.USERNAME).once("value");
+        const snapshot = await historyRef.child(m.username).once("value");
         const entries = Object.values(snapshot.val() || {});
         const spent = entries.reduce((sum, h) => sum + (h.CHARGE < 0 ? -h.CHARGE : 0), 0);
         const lastDate = entries
           .map(h => new Date(`${h.DATE}T${h.TIME?.split('.')[0] || '00:00:00'}`))
           .sort((a, b) => b - a)[0];
-        return { username: m.USERNAME, spent, lastDate, streak: calculateStreak(entries) };
+        return { username: m.username, spent, lastDate, streak: calculateStreak(entries) };
       })
     );
 
     const maxSpent = Math.max(...historyData.map(h => h.spent));
-    const maxMinutes = leaderboard[0]?.TOTALACTMINUTE ?? 0;
+    const maxMinutes = leaderboard[0]?.total_minutes ?? 0;
 
     container.innerHTML = "";
 
     leaderboard.forEach((m, i) => {
-      const avatar = getAvatarUrl(m.USERNAME);
-      const timeInHours = Math.round(m.TOTALACTMINUTE / 60);
-      const since = m.RECDATE ? new Date(m.RECDATE).toLocaleDateString("en-IN", { year: 'numeric', month: 'short' }) : "N/A";
-      const { spent, lastDate, streak } = historyData.find(h => h.username === m.USERNAME) || {};
-      const isHighlighted = highlightUsername && m.USERNAME?.toLowerCase() === highlightUsername.toLowerCase().trim();
+      const avatar = getAvatarUrl(m.username);
+      const timeInHours = Math.round(m.total_minutes / 60);
+      const since = m.member_since ? new Date(m.member_since).toLocaleDateString("en-IN", { year: 'numeric', month: 'short' }) : "N/A";
+      const { spent, lastDate, streak } = historyData.find(h => h.username === m.username) || {};
+      const isHighlighted = highlightUsername && m.username?.toLowerCase() === highlightUsername.toLowerCase().trim();
 
       const badges = [];
       if (i === 0) badges.push("🥇 Champion");
       else if (i === 1) badges.push("🥈 Runner Up");
       else if (i === 2) badges.push("🥉 Third Place");
-      if (m.TOTALACTMINUTE === maxMinutes && i > 0) badges.push("👑 Grinder");
+      if (m.total_minutes === maxMinutes && i > 0) badges.push("👑 Grinder");
       if (spent === maxSpent) badges.push("🏅 Big Spender");
       if (lastDate) {
         const inactiveDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
@@ -91,11 +91,11 @@ export async function loadHallOfFame(containerId, highlightUsername = null) {
       row.innerHTML = `
         <div class="lb-left">
           ${rankBadge}
-          <img src="${avatar}" class="lb-avatar" style="${ringStyle}" alt="${m.USERNAME}" />
+          <img src="${avatar}" class="lb-avatar" style="${ringStyle}" alt="${m.username}" />
         </div>
         <div class="lb-content">
           <div class="lb-name" style="color: ${isHighlighted ? '#00ff88' : '#00f0ff'};">
-            ${m.USERNAME} ${isHighlighted ? '<span class="lb-you">(YOU)</span>' : ''} ${streakBadge}
+            ${m.username} ${isHighlighted ? '<span class="lb-you">(YOU)</span>' : ''} ${streakBadge}
           </div>
           <div class="lb-stats">⏱️ <span class="lb-hours">${timeInHours} hrs</span> • Since: ${since}</div>
           <div class="lb-last">Last: ${lastDate?.toLocaleDateString("en-IN") || "N/A"}</div>
@@ -200,19 +200,19 @@ export async function getAvailableMonths() {
 
 export async function getLeaderboardStats() {
   try {
-    const membersSnap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const membersData = membersSnap.val();
-    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
+    // Use pre-computed all-time leaderboard
+    const leaderboardSnap = await fdbDb.ref(`${FB_PATHS.LEADERBOARDS}/all-time`).once("value");
+    const leaderboard = leaderboardSnap.val() || [];
     
-    const activePlayers = members.filter(m => m.TOTALACTMINUTE > 0).length;
-    const totalHours = Math.round(members.reduce((sum, m) => sum + (m.TOTALACTMINUTE || 0), 0) / 60);
-    const topPlayer = members.sort((a, b) => (b.TOTALACTMINUTE || 0) - (a.TOTALACTMINUTE || 0))[0];
+    const activePlayers = leaderboard.length;
+    const totalHours = Math.round(leaderboard.reduce((sum, m) => sum + (m.total_minutes || 0), 0) / 60);
+    const topPlayer = leaderboard[0]; // Already sorted by total_minutes
     
     return {
       activePlayers,
       totalHours,
-      topPlayer: topPlayer?.USERNAME || "N/A",
-      topPlayerHours: topPlayer ? Math.round(topPlayer.TOTALACTMINUTE / 60) : 0
+      topPlayer: topPlayer?.username || "N/A",
+      topPlayerHours: topPlayer ? Math.round(topPlayer.total_minutes / 60) : 0
     };
   } catch (error) {
     console.error("Error fetching leaderboard stats:", error);
