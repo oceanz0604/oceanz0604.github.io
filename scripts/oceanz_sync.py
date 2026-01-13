@@ -894,45 +894,116 @@ def calculate_leaderboards_from_firebase():
         db.reference(f"{FB_PATHS.LEADERBOARDS}/all-time").set(all_time)
         print(f"[OK] Updated all-time leaderboard ({len(all_time)} entries)")
         
-        # Monthly leaderboard
+        # Build member ID to username lookup
+        member_id_to_username = {}
+        for m in members:
+            member_id = m.get("ID")
+            username = m.get("USERNAME", "")
+            if member_id and username:
+                member_id_to_username[member_id] = username.upper()
+        
+        # Fetch sessions from FDB for monthly/weekly calculation
+        # SESSIONS table has accurate USINGMIN per session with timestamps
         now = datetime.now()
         month_start = datetime(now.year, now.month, 1)
         month_key = f"{now.year}-{now.month:02d}"
         
+        day_of_week = now.weekday()
+        week_start = now - timedelta(days=day_of_week)
+        week_start = datetime(week_start.year, week_start.month, week_start.day)
+        week_num = now.isocalendar()[1]
+        week_key = f"{now.year}-W{week_num:02d}"
+        
+        # Try to fetch from FDB SESSIONS table
         monthly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0, "spent": 0})
+        weekly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0})
         
-        for username, records in all_history.items():
-            if not isinstance(records, dict):
-                continue
+        try:
+            import fdb
+            con = fdb.connect(
+                dsn=FDB_PATH,
+                user=FDB_USER,
+                password=FDB_PASSWORD,
+                charset='UTF8'
+            )
+            cursor = con.cursor()
             
-            for record_id, record in records.items():
-                if not isinstance(record, dict):
+            # Fetch sessions from current month
+            month_start_str = month_start.strftime("%Y-%m-%d")
+            week_start_str = week_start.strftime("%Y-%m-%d")
+            
+            # Query for member sessions (MEMBERID > 0 means member session, not guest)
+            query = f"""
+                SELECT MEMBERID, USINGMIN, TOTALPRICE, STARTPOINT 
+                FROM SESSIONS 
+                WHERE MEMBERID > 0 AND STARTPOINT >= '{month_start_str}'
+            """
+            cursor.execute(query)
+            
+            for row in cursor.fetchall():
+                member_id = row[0]
+                usingmin = int(row[1] or 0)
+                totalprice = float(row[2] or 0)
+                startpoint = row[3]
+                
+                username = member_id_to_username.get(member_id)
+                if not username:
                     continue
                 
-                record_date = record.get("DATE", "")
-                if not record_date:
+                # Add to monthly stats
+                monthly_stats[username]["sessions"] += 1
+                monthly_stats[username]["minutes"] += usingmin
+                monthly_stats[username]["spent"] += totalprice
+                
+                # Check if also in current week
+                if isinstance(startpoint, str):
+                    try:
+                        session_dt = datetime.fromisoformat(startpoint)
+                    except:
+                        continue
+                elif hasattr(startpoint, 'year'):
+                    session_dt = startpoint
+                else:
                     continue
                 
-                try:
-                    record_dt = datetime.strptime(record_date, "%Y-%m-%d")
-                    if record_dt >= month_start:
-                        monthly_stats[username]["sessions"] += 1
-                        # Use USINGMIN if available, otherwise calculate from USINGSEC
-                        usingmin = float(record.get("USINGMIN") or 0)
-                        if usingmin == 0:
-                            usingsec = float(record.get("USINGSEC") or 0)
-                            usingmin = usingsec / 60
-                        monthly_stats[username]["minutes"] += usingmin
-                        # CHARGE is positive for payments in history records
-                        charge = float(record.get("CHARGE") or 0)
-                        if charge > 0:
-                            monthly_stats[username]["spent"] += charge
-                except:
-                    pass
+                if session_dt >= week_start:
+                    weekly_stats[username]["sessions"] += 1
+                    weekly_stats[username]["minutes"] += usingmin
+            
+            con.close()
+            print(f"[OK] Fetched session data from FDB SESSIONS table")
+            
+        except Exception as e:
+            print(f"[WARN] Could not fetch from FDB SESSIONS, falling back to Firebase history: {e}")
+            # Fallback to Firebase history if FDB not available
+            for username, records in all_history.items():
+                if not isinstance(records, dict):
+                    continue
+                for record_id, record in records.items():
+                    if not isinstance(record, dict):
+                        continue
+                    record_date = record.get("DATE", "")
+                    if not record_date:
+                        continue
+                    try:
+                        record_dt = datetime.strptime(record_date, "%Y-%m-%d")
+                        if record_dt >= month_start:
+                            monthly_stats[username]["sessions"] += 1
+                            usingmin = float(record.get("USINGMIN") or 0)
+                            monthly_stats[username]["minutes"] += usingmin
+                            charge = float(record.get("CHARGE") or 0)
+                            if charge > 0:
+                                monthly_stats[username]["spent"] += charge
+                        if record_dt >= week_start:
+                            weekly_stats[username]["sessions"] += 1
+                            usingmin = float(record.get("USINGMIN") or 0)
+                            weekly_stats[username]["minutes"] += usingmin
+                    except:
+                        pass
         
+        # Build monthly leaderboard
         monthly_leaderboard = {}
         for username, stats in monthly_stats.items():
-            # Include users with any activity (sessions or minutes)
             if stats["sessions"] > 0:
                 monthly_leaderboard[username] = {
                     "username": username,
@@ -947,43 +1018,9 @@ def calculate_leaderboards_from_firebase():
         else:
             print(f"[WARN] No activity data for {month_key}")
         
-        # Weekly leaderboard
-        day_of_week = now.weekday()
-        week_start = now - timedelta(days=day_of_week)
-        week_start = datetime(week_start.year, week_start.month, week_start.day)
-        week_num = now.isocalendar()[1]
-        week_key = f"{now.year}-W{week_num:02d}"
-        
-        weekly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0})
-        
-        for username, records in all_history.items():
-            if not isinstance(records, dict):
-                continue
-            
-            for record_id, record in records.items():
-                if not isinstance(record, dict):
-                    continue
-                
-                record_date = record.get("DATE", "")
-                if not record_date:
-                    continue
-                
-                try:
-                    record_dt = datetime.strptime(record_date, "%Y-%m-%d")
-                    if record_dt >= week_start:
-                        weekly_stats[username]["sessions"] += 1
-                        # Use USINGMIN if available, otherwise calculate from USINGSEC
-                        usingmin = float(record.get("USINGMIN") or 0)
-                        if usingmin == 0:
-                            usingsec = float(record.get("USINGSEC") or 0)
-                            usingmin = usingsec / 60
-                        weekly_stats[username]["minutes"] += usingmin
-                except:
-                    pass
-        
+        # Build weekly leaderboard
         weekly_leaderboard = {}
         for username, stats in weekly_stats.items():
-            # Include users with any activity (sessions or minutes)
             if stats["sessions"] > 0:
                 weekly_leaderboard[username] = {
                     "username": username,
