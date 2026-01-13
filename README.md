@@ -1,4 +1,4 @@
-# 🎮 OceanZ Gaming Cafe
+# 🎮 OceanZ Gaming Cafe 
 
 A modern, full-featured management system for gaming cafes built with vanilla JavaScript, Firebase, and Python. Features real-time terminal monitoring, member management, booking system, financial tracking, and leaderboards.
 
