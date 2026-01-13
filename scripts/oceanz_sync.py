@@ -274,7 +274,8 @@ def process_and_upload_members(records, sync_state):
         if not username or not isinstance(username, str):
             continue
         
-        username = username.strip().upper()
+        original_username = username.strip()  # Preserve original case for display
+        username = original_username.upper()  # Uppercase for Firebase key
         if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
             continue
         
@@ -282,6 +283,7 @@ def process_and_upload_members(records, sync_state):
         # FDB has: NAME, LASTNAME, BAKIYE, ACCSTATUS, LOGIN, RECDATE, LLOGDATE, TOTALBAKIYE, TOTALACTMINUTE
         clean_record = {
             "USERNAME": username,
+            "DISPLAY_NAME": original_username,  # Original case for display
             "PASSWORD": record.get("PASSWORD") or "",  # Required for member login
             "BALANCE": float(record.get("BAKIYE") or 0),  # FDB: BAKIYE
             "FIRSTNAME": record.get("NAME") or "",  # FDB: NAME (not FIRSTNAME!)
@@ -876,12 +878,14 @@ def calculate_leaderboards_from_firebase():
             members_with_minutes,
             key=lambda m: m.get("TOTALACTMINUTE", 0),
             reverse=True
-        )[:50]
+        )  # All members with activity
         
         for i, m in enumerate(sorted_members):
+            # Use DISPLAY_NAME for original case, fallback to USERNAME
+            display_name = m.get("DISPLAY_NAME") or m.get("USERNAME") or ""
             entry = {
                 "rank": i + 1,
-                "username": m.get("USERNAME") or "",
+                "username": display_name,
                 "total_minutes": int(m.get("TOTALACTMINUTE") or 0),
                 "total_hours": round((m.get("TOTALACTMINUTE") or 0) / 60, 1),
             }
@@ -894,13 +898,13 @@ def calculate_leaderboards_from_firebase():
         db.reference(f"{FB_PATHS.LEADERBOARDS}/all-time").set(all_time)
         print(f"[OK] Updated all-time leaderboard ({len(all_time)} entries)")
         
-        # Build member ID to username lookup
-        member_id_to_username = {}
+        # Build member ID to display name lookup (preserve original case)
+        member_id_to_display_name = {}
         for m in members:
             member_id = m.get("ID")
-            username = m.get("USERNAME", "")
-            if member_id and username:
-                member_id_to_username[member_id] = username.upper()
+            display_name = m.get("DISPLAY_NAME") or m.get("USERNAME") or ""
+            if member_id and display_name:
+                member_id_to_display_name[member_id] = display_name
         
         # Fetch sessions from FDB for monthly/weekly calculation
         # SESSIONS table has accurate USINGMIN per session with timestamps
@@ -919,11 +923,10 @@ def calculate_leaderboards_from_firebase():
         weekly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0})
         
         try:
-            import fdb
             con = fdb.connect(
-                dsn=FDB_PATH,
-                user=FDB_USER,
-                password=FDB_PASSWORD,
+                dsn=WORKING_FDB_PATH,
+                user=FIREBIRD_USER,
+                password=FIREBIRD_PASSWORD,
                 charset='UTF8'
             )
             cursor = con.cursor()
@@ -946,7 +949,7 @@ def calculate_leaderboards_from_firebase():
                 totalprice = float(row[2] or 0)
                 startpoint = row[3]
                 
-                username = member_id_to_username.get(member_id)
+                username = member_id_to_display_name.get(member_id)
                 if not username:
                     continue
                 
@@ -1001,37 +1004,48 @@ def calculate_leaderboards_from_firebase():
                     except:
                         pass
         
-        # Build monthly leaderboard
-        monthly_leaderboard = {}
+        # Build monthly leaderboard - sorted array by minutes (highest first)
+        monthly_list = []
         for username, stats in monthly_stats.items():
             if stats["sessions"] > 0:
-                monthly_leaderboard[username] = {
+                monthly_list.append({
                     "username": username,
                     "total_minutes": int(stats["minutes"]),
                     "sessions_count": int(stats["sessions"]),
                     "total_spent": round(stats["spent"], 2),
-                }
+                    "total_hours": round(stats["minutes"] / 60, 1)
+                })
         
-        if monthly_leaderboard:
-            db.reference(f"{FB_PATHS.LEADERBOARDS}/monthly/{month_key}").set(monthly_leaderboard)
-            print(f"[OK] Updated monthly leaderboard ({len(monthly_leaderboard)} entries)")
+        # Sort by minutes descending and add rank
+        monthly_list.sort(key=lambda x: x["total_minutes"], reverse=True)
+        for i, entry in enumerate(monthly_list):
+            entry["rank"] = i + 1
+        
+        if monthly_list:
+            db.reference(f"{FB_PATHS.LEADERBOARDS}/monthly/{month_key}").set(monthly_list)
+            print(f"[OK] Updated monthly leaderboard ({len(monthly_list)} entries)")
         else:
             print(f"[WARN] No activity data for {month_key}")
         
-        # Build weekly leaderboard
-        weekly_leaderboard = {}
+        # Build weekly leaderboard - sorted array by minutes (highest first)
+        weekly_list = []
         for username, stats in weekly_stats.items():
             if stats["sessions"] > 0:
-                weekly_leaderboard[username] = {
+                weekly_list.append({
                     "username": username,
                     "total_minutes": int(stats["minutes"]),
                     "sessions_count": int(stats["sessions"]),
                     "total_hours": round(stats["minutes"] / 60, 1)
-                }
+                })
         
-        if weekly_leaderboard:
-            db.reference(f"{FB_PATHS.LEADERBOARDS}/weekly/{week_key}").set(weekly_leaderboard)
-            print(f"[OK] Updated weekly leaderboard ({len(weekly_leaderboard)} entries)")
+        # Sort by minutes descending and add rank
+        weekly_list.sort(key=lambda x: x["total_minutes"], reverse=True)
+        for i, entry in enumerate(weekly_list):
+            entry["rank"] = i + 1
+        
+        if weekly_list:
+            db.reference(f"{FB_PATHS.LEADERBOARDS}/weekly/{week_key}").set(weekly_list)
+            print(f"[OK] Updated weekly leaderboard ({len(weekly_list)} entries)")
         
         # Update sync metadata
         db.reference(f"{FB_PATHS.SYNC_META}/leaderboard").update({

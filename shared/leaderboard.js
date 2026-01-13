@@ -130,13 +130,21 @@ export async function loadMonthlyLeaderboard(containerId, highlightUsername = nu
     }
 
     const data = snap.val();
-    let list = Object.entries(data).map(([memberId, info]) => ({
-      memberId,
-      username: info.username,
-      minutes: info.total_minutes,
-      hoursLabel: minutesToReadable(info.total_minutes),
-      count: info.sessions_count
-    })).sort((a, b) => b.minutes - a.minutes);
+    // Handle both array format (new) and object format (legacy)
+    let list = Array.isArray(data) 
+      ? data.filter(x => x).map(info => ({
+          username: info.username,
+          minutes: info.total_minutes || 0,
+          hoursLabel: minutesToReadable(info.total_minutes || 0),
+          count: info.sessions_count || 0
+        }))
+      : Object.entries(data).map(([memberId, info]) => ({
+          memberId,
+          username: info.username,
+          minutes: info.total_minutes || 0,
+          hoursLabel: minutesToReadable(info.total_minutes || 0),
+          count: info.sessions_count || 0
+        })).sort((a, b) => b.minutes - a.minutes);
 
     const userEntry = highlightUsername 
       ? list.find(x => x.username?.toLowerCase() === highlightUsername.toLowerCase().trim())
@@ -206,13 +214,21 @@ export async function loadWeeklyLeaderboard(containerId, highlightUsername = nul
     }
 
     const data = snap.val();
-    let list = Object.entries(data).map(([memberId, info]) => ({
-      memberId,
-      username: info.username,
-      minutes: info.total_minutes,
-      hoursLabel: minutesToReadable(info.total_minutes),
-      count: info.sessions_count
-    })).sort((a, b) => b.minutes - a.minutes);
+    // Handle both array format (new) and object format (legacy)
+    let list = Array.isArray(data) 
+      ? data.filter(x => x).map(info => ({
+          username: info.username,
+          minutes: info.total_minutes || 0,
+          hoursLabel: minutesToReadable(info.total_minutes || 0),
+          count: info.sessions_count || 0
+        }))
+      : Object.entries(data).map(([memberId, info]) => ({
+          memberId,
+          username: info.username,
+          minutes: info.total_minutes || 0,
+          hoursLabel: minutesToReadable(info.total_minutes || 0),
+          count: info.sessions_count || 0
+        })).sort((a, b) => b.minutes - a.minutes);
 
     const userEntry = highlightUsername 
       ? list.find(x => x.username?.toLowerCase() === highlightUsername.toLowerCase().trim())
