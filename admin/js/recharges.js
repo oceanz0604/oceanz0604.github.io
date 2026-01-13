@@ -253,65 +253,91 @@ async function loadCreditCollectionsForDate(targetDate) {
     const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
     const allRecharges = snap.val() || {};
     
-    let collectedCash = 0;
-    let collectedUpi = 0;
+    // Track collections separately:
+    // - sameDayCash/UPI: credit collected same day as transaction (total already counted in render)
+    // - otherDayCash/UPI: credit collected today for transactions from other dates (add to total)
+    let sameDayCash = 0, sameDayUpi = 0;
+    let otherDayCash = 0, otherDayUpi = 0;
     
     // Scan all dates for credit collections that happened on targetDate
-    Object.entries(allRecharges).forEach(([date, dayData]) => {
+    Object.entries(allRecharges).forEach(([transactionDate, dayData]) => {
       Object.values(dayData).forEach(r => {
         // New format: check lastPaidAt
         if (r.lastPaidAt) {
           const paidDate = r.lastPaidAt.split("T")[0];
           if (paidDate === targetDate) {
-            collectedCash += r.lastPaidCash || 0;
-            collectedUpi += r.lastPaidUpi || 0;
+            if (transactionDate === targetDate) {
+              // Same day: transaction created today, credit collected today
+              sameDayCash += r.lastPaidCash || 0;
+              sameDayUpi += r.lastPaidUpi || 0;
+            } else {
+              // Other day: transaction from past, credit collected today
+              otherDayCash += r.lastPaidCash || 0;
+              otherDayUpi += r.lastPaidUpi || 0;
+            }
           }
         }
         // Old format: check paidAt
         if (r.paidAt && r.mode === "credit" && r.paid) {
           const paidDate = r.paidAt.split("T")[0];
           if (paidDate === targetDate) {
-            if (r.paidVia === "cash") collectedCash += r.amount;
-            else if (r.paidVia === "upi") collectedUpi += r.amount;
+            let cash = 0, upi = 0;
+            if (r.paidVia === "cash") cash = r.amount;
+            else if (r.paidVia === "upi") upi = r.amount;
             else if (r.paidVia === "cash+upi") {
-              // Split assumed 50/50 if not specified
-              collectedCash += Math.floor(r.amount / 2);
-              collectedUpi += r.amount - Math.floor(r.amount / 2);
+              cash = Math.floor(r.amount / 2);
+              upi = r.amount - Math.floor(r.amount / 2);
             } else {
-              collectedCash += r.amount; // Default to cash
+              cash = r.amount; // Default to cash
+            }
+            
+            if (transactionDate === targetDate) {
+              sameDayCash += cash;
+              sameDayUpi += upi;
+            } else {
+              otherDayCash += cash;
+              otherDayUpi += upi;
             }
           }
         }
       });
     });
     
+    const totalCollectedCash = sameDayCash + otherDayCash;
+    const totalCollectedUpi = sameDayUpi + otherDayUpi;
+    
     // Update the displayed totals with credit collections
-    if (collectedCash > 0 || collectedUpi > 0) {
+    if (totalCollectedCash > 0 || totalCollectedUpi > 0) {
       const cashEl = elements.cashEl;
       const upiEl = elements.upiEl;
       
-      // Parse current totals and add collected amounts
+      // Update cash display
       if (cashEl) {
         const currentCash = parseInt(cashEl.textContent.replace(/[₹,]/g, "")) || 0;
-        cashEl.innerHTML = `₹${currentCash + collectedCash}`;
-        if (collectedCash > 0) {
-          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${collectedCash} credit)</span>`;
-        }
-      }
-      if (upiEl) {
-        const currentUpi = parseInt(upiEl.textContent.replace(/[₹,]/g, "")) || 0;
-        upiEl.innerHTML = `₹${currentUpi + collectedUpi}`;
-        if (collectedUpi > 0) {
-          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${collectedUpi} credit)</span>`;
+        cashEl.innerHTML = `₹${currentCash + totalCollectedCash}`;
+        if (totalCollectedCash > 0) {
+          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${totalCollectedCash} credit)</span>`;
         }
       }
       
-      // Also update total collected
-      if (elements.totalEl) {
+      // Update UPI display
+      if (upiEl) {
+        const currentUpi = parseInt(upiEl.textContent.replace(/[₹,]/g, "")) || 0;
+        upiEl.innerHTML = `₹${currentUpi + totalCollectedUpi}`;
+        if (totalCollectedUpi > 0) {
+          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${totalCollectedUpi} credit)</span>`;
+        }
+      }
+      
+      // ONLY add to total for credit collections from OTHER dates
+      // (same-day collections are already counted in render via creditPaid)
+      if (elements.totalEl && (otherDayCash > 0 || otherDayUpi > 0)) {
         const currentTotal = parseInt(elements.totalEl.textContent.replace(/[₹,]/g, "")) || 0;
-        elements.totalEl.textContent = `₹${currentTotal + collectedCash + collectedUpi}`;
+        elements.totalEl.textContent = `₹${currentTotal + otherDayCash + otherDayUpi}`;
       }
     }
+    
+    console.log(`Credit collections for ${targetDate}: Same-day: Cash ₹${sameDayCash}, UPI ₹${sameDayUpi} | Other-day: Cash ₹${otherDayCash}, UPI ₹${otherDayUpi}`);
   } catch (error) {
     console.warn("Could not load credit collections:", error);
   }
@@ -643,19 +669,41 @@ function render() {
       upiTotal += r.upi || 0;
       freeTotal += r.free || 0;
       
-      // DON'T add lastPaidCash/lastPaidUpi here - that belongs to the collection date, not this transaction's date
-      // These will be counted via the credit collection scan below
+      // For creditPaid: only count in total if paid on the SAME day (selectedDate)
+      // If paid on a different day, it will be counted via loadCreditCollectionsForDate
+      let sameDayCreditPaid = 0;
+      if (r.creditPaid > 0 && r.lastPaidAt) {
+        const paidDate = r.lastPaidAt.split("T")[0];
+        if (paidDate === selectedDate) {
+          sameDayCreditPaid = r.creditPaid;
+        }
+      } else if (r.creditPaid > 0 && !r.lastPaidAt) {
+        // No lastPaidAt means old record - assume same day for backward compatibility
+        sameDayCreditPaid = r.creditPaid;
+      }
       
-      // Calculate totals (direct payments only - credit collections counted separately)
-      const collected = (r.cash || 0) + (r.upi || 0) + (r.creditPaid || 0);
+      // Calculate totals: direct payments + same-day credit payments only
+      const collected = (r.cash || 0) + (r.upi || 0) + sameDayCreditPaid;
       totalCollected += collected;
       creditPending += (r.credit || 0) - (r.creditPaid || 0);
     } else if (r.amount !== undefined) {
       // Old single-mode format (backward compatibility)
       if (r.mode === "credit") {
         if (r.paid) {
-          // DON'T add paid credit amounts here - the cash/UPI belongs to the collection date
-          totalCollected += r.amount;
+          // Check if paid on the same day
+          let sameDayPaid = false;
+          if (r.paidAt) {
+            const paidDate = r.paidAt.split("T")[0];
+            sameDayPaid = (paidDate === selectedDate);
+          } else {
+            // No paidAt means assume same day
+            sameDayPaid = true;
+          }
+          
+          if (sameDayPaid) {
+            totalCollected += r.amount;
+          }
+          // If paid on different day, will be counted via loadCreditCollectionsForDate
         } else {
           creditPending += r.amount;
         }
