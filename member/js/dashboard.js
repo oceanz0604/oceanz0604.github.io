@@ -475,7 +475,9 @@ function loadMemberHistory(username) {
   
   list.innerHTML = `<p class="text-gray-400">⏳ Loading your history...</p>`;
 
-  secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).once("value").then(snapshot => {
+  // OPTIMIZATION: Limit to last 100 history entries for display
+  // Users rarely scroll through 100s of entries
+  secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).limitToLast(100).once("value").then(snapshot => {
     const history = snapshot.val();
     if (!history || Object.keys(history).length === 0) {
       list.innerHTML = `<p class="text-gray-500">No history available.</p>`;
@@ -510,7 +512,9 @@ function loadMemberHistory(username) {
 // ==================== ANALYTICS ====================
 
 async function loadAnalytics(memberId) {
-  const snapshot = await secondDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/${memberId}`).once("value");
+  // OPTIMIZATION: Limit to last 500 sessions for analytics
+  // Most users don't need full history for charts
+  const snapshot = await secondDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/${memberId}`).limitToLast(500).once("value");
   if (!snapshot.exists()) return;
 
   const sessions = Object.values(snapshot.val());
@@ -925,31 +929,34 @@ async function loadUserSeasonStats(username) {
     const seasonStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const seasonStartStr = seasonStart.toISOString().split("T")[0];
 
+    // OPTIMIZATION: Use pre-computed monthly leaderboard for rank instead of
+    // downloading ALL members' history! This was a major bandwidth killer.
+    // Old code downloaded history for EVERY member to calculate rank.
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthlySnap = await secondDb.ref(`${FB_PATHS.LEADERBOARDS}/monthly/${monthKey}`).once("value");
+    const monthlyData = monthlySnap.val();
+    
+    let userRank = "-";
+    let totalMinutes = 0;
+    let totalSessions = 0;
+    
+    if (monthlyData) {
+      // Handle both array and object formats
+      const dataArray = Array.isArray(monthlyData) ? monthlyData.filter(x => x) : Object.values(monthlyData);
+      const sorted = dataArray.sort((a, b) => (b.total_minutes || 0) - (a.total_minutes || 0));
+      const userIndex = sorted.findIndex(s => s.username?.toLowerCase() === username?.toLowerCase());
+      
+      if (userIndex >= 0) {
+        userRank = userIndex + 1;
+        totalMinutes = sorted[userIndex].total_minutes || 0;
+        totalSessions = sorted[userIndex].sessions_count || 0;
+      }
+    }
+
+    // Get ONLY user's recent history for streak (limit to 50 entries to save bandwidth)
     const historyRef = secondDb.ref(FB_PATHS.HISTORY);
-    const membersSnap = await secondDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const membersData = membersSnap.val();
-    const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
-
-    // Get all member stats
-    const allStats = await Promise.all(
-      members.map(async m => {
-        const snap = await historyRef.child(m.USERNAME).once("value");
-        const entries = Object.values(snap.val() || {}).filter(e => e.DATE >= seasonStartStr);
-        const minutes = entries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
-        return { username: m.USERNAME, minutes };
-      })
-    );
-
-    // Sort and find user rank
-    const sorted = allStats.filter(s => s.minutes > 0).sort((a, b) => b.minutes - a.minutes);
-    const userIndex = sorted.findIndex(s => s.username?.toLowerCase() === username?.toLowerCase());
-    const userRank = userIndex >= 0 ? userIndex + 1 : "-";
-
-    // Get user's detailed stats
-    const userSnap = await historyRef.child(username).once("value");
+    const userSnap = await historyRef.child(username).limitToLast(50).once("value");
     const userEntries = Object.values(userSnap.val() || {}).filter(e => e.DATE >= seasonStartStr);
-    const totalMinutes = userEntries.reduce((sum, e) => sum + (e.USINGMIN || 0), 0);
-    const totalSessions = userEntries.length;
     const streak = calculateStreak(userEntries);
 
     // Update UI

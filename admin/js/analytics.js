@@ -53,13 +53,16 @@ export async function loadAnalytics() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
     ]);
     
+    // OPTIMIZATION: Add query limits to reduce data transfer
+    // Sessions can grow very large - limit to last 1000 for analytics
+    // Guest sessions - limit to last 500
     const results = await Promise.allSettled([
       timeout(bookingDb.ref(FB_PATHS.RECHARGES).once('value'), 10000),
       timeout(bookingDb.ref(FB_PATHS.BOOKINGS).once('value'), 10000),
       timeout(fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once('value'), 10000),
-      timeout(fdbDb.ref(FB_PATHS.SESSIONS).once('value'), 10000),
-      timeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once('value'), 10000),
-      timeout(fdbDb.ref(FB_PATHS.GUEST_SESSIONS).once('value'), 10000) // New messages.msg data
+      timeout(fdbDb.ref(FB_PATHS.SESSIONS).limitToLast(1000).once('value'), 10000),
+      timeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).limitToLast(500).once('value'), 10000),
+      timeout(fdbDb.ref(FB_PATHS.GUEST_SESSIONS).limitToLast(500).once('value'), 10000) // New messages.msg data
     ]);
 
     // Process results safely

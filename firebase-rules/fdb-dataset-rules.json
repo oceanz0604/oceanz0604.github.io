@@ -6,6 +6,13 @@
     },
     "history": {
       ".read": "auth != null",
+      ".write": false,
+      "$username": {
+        ".indexOn": ["ID", "DATE"]
+      }
+    },
+    "history-by-date": {
+      ".read": "auth != null",
       ".write": false
     },
     "guest-sessions": {
@@ -14,7 +21,8 @@
     },
     "sessions": {
       ".read": "auth != null",
-      ".write": false
+      ".write": false,
+      ".indexOn": ["ENDPOINT", "MEMBERID"]
     },
     "sessions-by-member": {
       ".read": "auth != null",
