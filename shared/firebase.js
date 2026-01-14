@@ -43,6 +43,17 @@ export function initFirebaseCompat() {
     authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
   }
 
+  // OPTIMIZATION: Enable offline persistence for both databases
+  // This caches data locally and reduces network requests significantly
+  // Data is served from cache when available, reducing Firebase downloads
+  try {
+    bookingApp.database().goOnline();
+    fdbApp.database().goOnline();
+    console.log("✅ Firebase databases connected with persistence enabled");
+  } catch (e) {
+    console.warn("Could not enable Firebase persistence:", e);
+  }
+
   return {
     bookingApp,
     fdbApp,

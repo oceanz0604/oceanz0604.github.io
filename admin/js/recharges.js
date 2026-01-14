@@ -49,6 +49,28 @@ let auditData = [];
 let auditLimit = 20;
 let auditFilter = "all";
 
+// OPTIMIZATION: Cache for recharges data to avoid repeated full downloads
+// This cache is invalidated when data changes
+let rechargesCache = null;
+let rechargesCacheTime = 0;
+const CACHE_TTL = 60000; // 1 minute cache
+
+async function getCachedRecharges() {
+  const now = Date.now();
+  if (rechargesCache && (now - rechargesCacheTime) < CACHE_TTL) {
+    return rechargesCache;
+  }
+  const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
+  rechargesCache = snap.val() || {};
+  rechargesCacheTime = now;
+  return rechargesCache;
+}
+
+function invalidateRechargesCache() {
+  rechargesCache = null;
+  rechargesCacheTime = 0;
+}
+
 // Get admin name from staff session
 function getAdminName() {
   const session = getStaffSession();
@@ -275,8 +297,8 @@ function loadDay() {
 // and update the displayed totals (cash/UPI from credit collections)
 async function loadCreditCollectionsForDate(targetDate) {
   try {
-    const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
-    const allRecharges = snap.val() || {};
+    // OPTIMIZATION: Use cached recharges data instead of downloading every time
+    const allRecharges = await getCachedRecharges();
     
     // Track collections separately:
     // - sameDayCash/UPI: credit collected same day as transaction (total already counted in render)
@@ -398,8 +420,8 @@ async function loadOtherDayCollections(targetDate) {
   if (!section || !listEl) return;
   
   try {
-    const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
-    const allRecharges = snap.val() || {};
+    // OPTIMIZATION: Use cached recharges data
+    const allRecharges = await getCachedRecharges();
     
     const collections = [];
     
@@ -529,7 +551,9 @@ async function loadOtherDayCollections(targetDate) {
 
 // Load all outstanding credits across all dates
 function loadAllOutstandingCredits() {
-  rechargeDb.ref(FB_PATHS.RECHARGES).once("value").then(snap => {
+  // OPTIMIZATION: Use cached recharges data
+  getCachedRecharges().then(allData => {
+    const snap = { val: () => allData };
     const allCredits = [];
     
     Object.entries(snap.val() || {}).forEach(([date, dayData]) => {
@@ -667,6 +691,7 @@ window.deleteCreditGlobal = async (date, id) => {
   
   if (confirmed) {
     rechargeDb.ref(`recharges/${date}/${id}`).remove();
+    invalidateRechargesCache(); // Clear cache after deletion
     logAudit("DELETE", `Entry from ${date}`);
     notifySuccess("Credit entry deleted");
     loadAllOutstandingCredits();
@@ -805,6 +830,9 @@ window.addRecharge = () => {
     logAudit("ADD", member, total + free);
   }
 
+  // Invalidate cache since data changed
+  invalidateRechargesCache();
+  
   // Close modal and clear form
   closeAddRechargeModal();
 };
@@ -1292,6 +1320,7 @@ window.confirmCollectCredit = () => {
   
   logAudit("CREDIT_PAID", `${member}: ${paymentParts.join(", ")}`, collected);
   
+  invalidateRechargesCache(); // Clear cache after credit collection
   closeCollectModal();
   loadAllOutstandingCredits();
   
@@ -1375,6 +1404,7 @@ window.deleteRecharge = async id => {
   
   if (confirmed) {
     rechargeDb.ref(`recharges/${selectedDate}/${id}`).remove();
+    invalidateRechargesCache(); // Clear cache after deletion
     logAudit("DELETE", id);
     notifySuccess("Entry deleted");
   }
@@ -1777,7 +1807,41 @@ async function fetchGuestSessionsForDate(date) {
 }
 
 async function fetchPanCafeEntriesForDate(date) {
-  // Fetch all history data from fdb-dataset
+  // OPTIMIZATION: Use history-by-date index instead of scanning ALL history
+  // This is MUCH more efficient - downloads only entries for the specific date
+  // Instead of downloading entire history for ALL users
+  
+  try {
+    // Try using pre-indexed history-by-date path first
+    const byDateSnap = await fdbDb.ref(`${FB_PATHS.HISTORY_BY_DATE}/${date}`).once("value");
+    const byDateData = byDateSnap.val();
+    
+    if (byDateData) {
+      const entries = [];
+      Object.entries(byDateData).forEach(([recordId, record]) => {
+        const charge = Number(record.CHARGE) || 0;
+        if (charge > 0) {
+          entries.push({
+            id: recordId,
+            member: (record.USERNAME || record.username || "").toUpperCase().trim(),
+            amount: charge,
+            balance: record.BALANCE,
+            time: record.TIME,
+            date: record.DATE,
+            raw: record
+          });
+        }
+      });
+      console.log(`✅ Loaded ${entries.length} PanCafe entries from history-by-date index`);
+      return entries;
+    }
+  } catch (e) {
+    console.log("history-by-date index not available, falling back to full scan");
+  }
+  
+  // Fallback: Scan history (but this is expensive - ideally should not be needed)
+  // Consider adding history-by-date index in sync script if this fallback is used often
+  console.warn("⚠️ Using expensive full history scan - consider adding history-by-date index");
   const historySnap = await fdbDb.ref(FB_PATHS.HISTORY).once("value");
   const historyData = historySnap.val() || {};
   

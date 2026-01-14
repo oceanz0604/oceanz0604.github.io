@@ -58,6 +58,8 @@ const elements = {
 
 let activeSessions = {};
 let autoRefreshInterval = null;
+let terminalsListener = null;
+let sessionsListener = null;
 
 // ==================== PERMISSIONS SETUP ====================
 
@@ -330,13 +332,26 @@ function renderTerminals(data) {
 // ==================== DATA SYNC ====================
 
 function startDataSync() {
-  fetchData();
-  autoRefreshInterval = setInterval(fetchData, 30000);
-}
-
-function fetchData() {
-  onValue(terminalsRef, snap => renderTerminals(snap.val() || {}), { onlyOnce: false });
-  onValue(sessionsRef, parseActiveSessions, { onlyOnce: false });
+  // CRITICAL FIX: Only set up listeners ONCE, not repeatedly
+  // Previous code was creating new listeners every 30 seconds, causing
+  // massive data downloads (each listener downloads full data independently)
+  
+  // Clean up any existing listeners first
+  if (terminalsListener) {
+    terminalsListener();
+    terminalsListener = null;
+  }
+  if (sessionsListener) {
+    sessionsListener();
+    sessionsListener = null;
+  }
+  
+  // Set up real-time listeners (Firebase handles updates automatically)
+  terminalsListener = onValue(terminalsRef, snap => renderTerminals(snap.val() || {}));
+  sessionsListener = onValue(sessionsRef, parseActiveSessions);
+  
+  // Note: No need for setInterval - Firebase real-time listeners push updates automatically
+  // The old code was creating 120+ duplicate listeners per hour!
 }
 
 // ==================== LOGOUT HANDLER ====================
