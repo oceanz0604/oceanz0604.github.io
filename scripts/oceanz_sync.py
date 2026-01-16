@@ -540,24 +540,68 @@ def build_and_upload_optimized_members(members_array, cursor):
     
     This creates the single-key lookup structure at /members/{username}
     with embedded history, sessions, stats, ranks, and badges.
+    
+    ALL DATA IS FETCHED FROM LOCAL FDB - NO FIREBASE DOWNLOADS!
     """
     print("\n[V2] Building optimized member data structure...")
+    print("   [INFO] Using LOCAL FDB data (no Firebase downloads)")
     
-    # Fetch all history from Firebase (we need it for embedded data)
+    # ========== FETCH ALL DATA FROM LOCAL FDB ==========
+    
+    # 1. Fetch history from FDB MEMBERSHISTORY table (last 30 days for embedding)
+    all_history = {}
     try:
-        all_history = db.reference(FB_PATHS.HISTORY).get() or {}
-        print(f"   [DATA] Loaded history for {len(all_history)} users from Firebase")
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        cursor.execute(f"""
+            SELECT MEMBERS_USERNAME, ID, TARIH as DATE, SAAT as TIME, 
+                   MIKTAR as CHARGE, KALAN as BALANCE, NOTE, TERMINALNAME, 
+                   USINGMIN, USINGSEC, DISCOUNTNOTE
+            FROM MEMBERSHISTORY 
+            WHERE TARIH >= '{thirty_days_ago}'
+            ORDER BY ID DESC
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        
+        for row in cursor.fetchall():
+            record = dict(zip(columns, [convert_value(v) for v in row]))
+            username = (record.get("MEMBERS_USERNAME") or "").upper()
+            if username:
+                if username not in all_history:
+                    all_history[username] = []
+                all_history[username].append(record)
+        
+        print(f"   [DATA] Loaded history for {len(all_history)} users from FDB (last 30 days)")
     except Exception as e:
-        print(f"   [WARN] Could not load history: {e}")
+        print(f"   [WARN] Could not load history from FDB: {e}")
         all_history = {}
     
-    # Fetch all sessions from Firebase
+    # 2. Fetch sessions from FDB SESSIONS table (last 7 days for embedding)
+    all_sessions_by_member = {}
     try:
-        all_sessions_by_member = db.reference(FB_PATHS.SESSIONS_BY_MEMBER).get() or {}
-        print(f"   [DATA] Loaded sessions for {len(all_sessions_by_member)} members from Firebase")
+        seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        cursor.execute(f"""
+            SELECT MEMBERID, ID, TERMINALNAME, STARTPOINT, ENDPOINT, 
+                   USINGMIN, USINGSEC, TOTALPRICE
+            FROM SESSIONS 
+            WHERE MEMBERID > 0 AND STARTPOINT >= '{seven_days_ago}'
+            ORDER BY ID DESC
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        
+        for row in cursor.fetchall():
+            record = dict(zip(columns, [convert_value(v) for v in row]))
+            member_id = str(record.get("MEMBERID", 0))
+            if member_id != "0":
+                if member_id not in all_sessions_by_member:
+                    all_sessions_by_member[member_id] = []
+                all_sessions_by_member[member_id].append(record)
+        
+        print(f"   [DATA] Loaded sessions for {len(all_sessions_by_member)} members from FDB (last 7 days)")
     except Exception as e:
-        print(f"   [WARN] Could not load sessions: {e}")
+        print(f"   [WARN] Could not load sessions from FDB: {e}")
         all_sessions_by_member = {}
+    
+    # ========== CALCULATE RANKS FROM LOCAL FDB DATA ==========
     
     # Build member ID to username lookup
     member_id_to_username = {}
@@ -565,7 +609,7 @@ def build_and_upload_optimized_members(members_array, cursor):
         if m.get("ID"):
             member_id_to_username[str(m["ID"])] = m.get("USERNAME", "").upper()
     
-    # Calculate all-time ranks first (needed for badges)
+    # Calculate all-time ranks from FDB MEMBERS.TOTALACTMINUTE
     sorted_by_minutes = sorted(
         [m for m in members_array if m.get("TOTALACTMINUTE", 0) > 0],
         key=lambda x: x.get("TOTALACTMINUTE", 0),
@@ -588,27 +632,64 @@ def build_and_upload_optimized_members(members_array, cursor):
     
     # Get current month/week for ranks
     now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
     month_key = f"{now.year}-{now.month:02d}"
     week_num = now.isocalendar()[1]
     week_key = f"{now.year}-W{week_num:02d}"
+    day_of_week = now.weekday()
+    week_start = now - timedelta(days=day_of_week)
     
-    # Try to load existing leaderboards for rank lookup
-    monthly_ranks = {}
-    weekly_ranks = {}
+    # Calculate monthly/weekly ranks from FDB SESSIONS
+    monthly_stats = {}
+    weekly_stats = {}
+    
     try:
-        monthly_lb = db.reference(f"{FB_PATHS.LEADERBOARDS}/monthly/{month_key}").get() or []
-        for entry in monthly_lb:
-            if entry and entry.get("username"):
-                monthly_ranks[entry["username"].upper()] = entry.get("rank", 0)
+        month_start_str = month_start.strftime("%Y-%m-%d")
+        week_start_str = week_start.strftime("%Y-%m-%d")
         
-        weekly_lb = db.reference(f"{FB_PATHS.LEADERBOARDS}/weekly/{week_key}").get() or []
-        for entry in weekly_lb:
-            if entry and entry.get("username"):
-                weekly_ranks[entry["username"].upper()] = entry.get("rank", 0)
-    except:
-        pass
+        cursor.execute(f"""
+            SELECT MEMBERID, SUM(USINGMIN) as TOTAL_MINS, COUNT(*) as SESSION_COUNT, STARTPOINT
+            FROM SESSIONS 
+            WHERE MEMBERID > 0 AND STARTPOINT >= '{month_start_str}'
+            GROUP BY MEMBERID
+        """)
+        
+        for row in cursor.fetchall():
+            member_id = str(row[0])
+            total_mins = int(row[1] or 0)
+            username = member_id_to_username.get(member_id, "").upper()
+            if username:
+                monthly_stats[username] = total_mins
+        
+        # Weekly stats
+        cursor.execute(f"""
+            SELECT MEMBERID, SUM(USINGMIN) as TOTAL_MINS
+            FROM SESSIONS 
+            WHERE MEMBERID > 0 AND STARTPOINT >= '{week_start_str}'
+            GROUP BY MEMBERID
+        """)
+        
+        for row in cursor.fetchall():
+            member_id = str(row[0])
+            total_mins = int(row[1] or 0)
+            username = member_id_to_username.get(member_id, "").upper()
+            if username:
+                weekly_stats[username] = total_mins
+                
+    except Exception as e:
+        print(f"   [WARN] Could not calculate ranks from FDB: {e}")
     
-    # Build optimized data for each member
+    # Sort to get ranks
+    monthly_sorted = sorted(monthly_stats.items(), key=lambda x: x[1], reverse=True)
+    weekly_sorted = sorted(weekly_stats.items(), key=lambda x: x[1], reverse=True)
+    
+    monthly_ranks = {username: i+1 for i, (username, _) in enumerate(monthly_sorted)}
+    weekly_ranks = {username: i+1 for i, (username, _) in enumerate(weekly_sorted)}
+    
+    print(f"   [RANKS] All-time: {len(all_time_ranks)}, Monthly: {len(monthly_ranks)}, Weekly: {len(weekly_ranks)}")
+    
+    # ========== BUILD OPTIMIZED DATA FOR EACH MEMBER ==========
+    
     optimized_members = {}
     processed = 0
     
@@ -617,22 +698,14 @@ def build_and_upload_optimized_members(members_array, cursor):
         if not username:
             continue
         
-        # Get history for this user
-        user_history = all_history.get(username, {})
-        if isinstance(user_history, dict):
-            history_list = list(user_history.values())
-        else:
-            history_list = []
+        # Get history for this user (from local FDB data)
+        history_list = all_history.get(username, [])
         
-        # Get sessions for this user (by member ID)
+        # Get sessions for this user (from local FDB data)
         member_id = str(member.get("ID", 0))
-        user_sessions = all_sessions_by_member.get(member_id, {})
-        if isinstance(user_sessions, dict):
-            sessions_list = list(user_sessions.values())
-        else:
-            sessions_list = []
+        sessions_list = all_sessions_by_member.get(member_id, [])
         
-        # Build ranks dict
+        # Build ranks dict (all calculated locally)
         ranks = {
             "all_time": all_time_ranks.get(username),
             "monthly": monthly_ranks.get(username),
@@ -1198,8 +1271,11 @@ def process_and_upload_kasahar(records):
 
 # ==================== LEADERBOARD CALCULATION ====================
 
-def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
-    """Calculate leaderboards from local FDB data (no Firebase reads)."""
+def calculate_leaderboards_from_fdb(members, cursor):
+    """
+    Calculate leaderboards from local FDB data (no Firebase reads).
+    ALL DATA IS FETCHED FROM LOCAL FDB - NO FIREBASE DOWNLOADS!
+    """
     print("\n[LEADERBOARDS] Calculating from local FDB data...")
     
     try:
@@ -1209,19 +1285,39 @@ def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
         
         print(f"[DATA] Processing {len(members)} members")
         
-        # Use the history data passed in (already organized by username)
-        all_history = history_by_user
+        # ========== FETCH HISTORY FROM FDB FOR STREAKS/LAST_ACTIVE ==========
+        all_history = {}
+        try:
+            thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            cursor.execute(f"""
+                SELECT MEMBERS_USERNAME, ID, TARIH as DATE
+                FROM MEMBERSHISTORY 
+                WHERE TARIH >= '{thirty_days_ago}'
+                ORDER BY ID DESC
+            """)
+            
+            for row in cursor.fetchall():
+                username = (row[0] or "").upper()
+                record = {"ID": row[1], "DATE": convert_value(row[2])}
+                if username:
+                    if username not in all_history:
+                        all_history[username] = []
+                    all_history[username].append(record)
+            
+            print(f"   [FDB] Loaded history for {len(all_history)} users (last 30 days)")
+        except Exception as e:
+            print(f"   [WARN] Could not load history from FDB: {e}")
         
         # All-time leaderboard (from members TOTALACTMINUTE)
         all_time = []
         members_with_minutes = [m for m in members if m.get("TOTALACTMINUTE", 0) > 0]
-        print(f"[DEBUG] Found {len(members_with_minutes)} members with TOTALACTMINUTE > 0")
+        print(f"   [DATA] Found {len(members_with_minutes)} members with TOTALACTMINUTE > 0")
         
         # Show top 5 for debugging
         if members_with_minutes:
             top_debug = sorted(members_with_minutes, key=lambda m: m.get("TOTALACTMINUTE", 0), reverse=True)[:5]
             for td in top_debug:
-                print(f"   - {td.get('USERNAME')}: {td.get('TOTALACTMINUTE')} minutes")
+                print(f"      - {td.get('USERNAME')}: {td.get('TOTALACTMINUTE')} minutes")
         
         sorted_members = sorted(
             members_with_minutes,
@@ -1254,18 +1350,18 @@ def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
             if m.get("ID") is not None:
                 entry["member_id"] = m.get("ID")
             
-            # Get last activity date from history
-            user_history = all_history.get(username, {})
-            if isinstance(user_history, dict) and user_history:
-                history_list = list(user_history.values())
-                sorted_history = sorted(history_list, key=lambda x: x.get("ID", 0), reverse=True)
+            # Get last activity date and streak from local FDB history
+            user_history = all_history.get(username, [])
+            if user_history:
+                # Sort by ID descending to get most recent
+                sorted_history = sorted(user_history, key=lambda x: x.get("ID", 0), reverse=True)
                 if sorted_history:
                     last_date = sorted_history[0].get("DATE")
                     if last_date:
                         entry["last_active"] = last_date
                 
                 # Calculate streak
-                streak = calculate_streak(history_list)
+                streak = calculate_streak(user_history)
                 if streak > 0:
                     entry["streak_days"] = streak
             
@@ -1321,7 +1417,7 @@ def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
         
         # Query sessions from FDB using the passed cursor
         month_start_str = month_start.strftime("%Y-%m-%d")
-            
+        
         try:
             query = f"""
                 SELECT MEMBERID, USINGMIN, TOTALPRICE, STARTPOINT 
@@ -1528,12 +1624,6 @@ def run_fdb_sync():
         sync_state["last_history_id"] = new_max_id
         print(f"      {len(new_records)} new records")
         
-        # Load history for leaderboards
-        try:
-            history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
-        except:
-            history_by_user = {}
-        
         # Sessions
         print("      Processing sessions...")
         sessions = fetch_recent_sessions(cursor, hours=2)
@@ -1545,8 +1635,9 @@ def run_fdb_sync():
             upload_guest_sessions(guest_sessions)
         
         # ========== 3. LEADERBOARDS ==========
-        print("\n[3/5] Leaderboards (local calculation)...")
-        calculate_leaderboards_from_fdb(members, history_by_user, cursor)
+        print("\n[3/5] Leaderboards (local FDB calculation)...")
+        # NOTE: Leaderboards are calculated entirely from FDB data - no Firebase downloads!
+        calculate_leaderboards_from_fdb(members, cursor)
         print("      All-time, monthly, weekly updated")
         
         # ========== 4. TERMINALS ==========
