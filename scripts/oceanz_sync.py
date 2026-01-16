@@ -540,10 +540,11 @@ def fetch_changed_members(cursor, since_datetime):
     Uses LLOGDATE (last login date) and RECDATE (registration date) to identify changes.
     """
     try:
-        since_str = since_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        # Use date-only format for Firebird DATE fields
+        since_date = since_datetime.strftime("%Y-%m-%d")
         cursor.execute(f"""
             SELECT * FROM MEMBERS 
-            WHERE LLOGDATE >= '{since_str}' OR RECDATE >= '{since_str}'
+            WHERE LLOGDATE >= '{since_date}' OR RECDATE >= '{since_date}'
         """)
         columns = [desc[0].strip() for desc in cursor.description]
         rows = cursor.fetchall()
@@ -610,7 +611,7 @@ def build_and_upload_optimized_members(members_array, cursor):
         seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         cursor.execute(f"""
             SELECT MEMBERID, ID, TERMINALNAME, STARTPOINT, ENDPOINT, 
-                   USINGMIN, USINGSEC, TOTALPRICE
+                   USINGMIN, TOTALPRICE
             FROM SESSIONS 
             WHERE MEMBERID > 0 AND STARTPOINT >= '{seven_days_ago}'
             ORDER BY ID DESC
@@ -677,7 +678,7 @@ def build_and_upload_optimized_members(members_array, cursor):
         week_start_str = week_start.strftime("%Y-%m-%d")
         
         cursor.execute(f"""
-            SELECT MEMBERID, SUM(USINGMIN) as TOTAL_MINS, COUNT(*) as SESSION_COUNT, STARTPOINT
+            SELECT MEMBERID, SUM(USINGMIN) as TOTAL_MINS, COUNT(*) as SESSION_COUNT
             FROM SESSIONS 
             WHERE MEMBERID > 0 AND STARTPOINT >= '{month_start_str}'
             GROUP BY MEMBERID
