@@ -1790,14 +1790,6 @@
             </div>
             <div id="terminalsLastSync" class="text-[10px] text-gray-500">Loading...</div>
           </div>
-          <!-- Leaderboard Sync -->
-          <div class="p-2 rounded-lg" style="background: rgba(255,215,0,0.05); border: 1px solid rgba(255,215,0,0.2);">
-            <div class="flex items-center gap-2 mb-1">
-              <div id="leaderboardStatusDot" class="w-2 h-2 rounded-full bg-gray-600"></div>
-              <span class="text-xs font-medium" style="color: #ffd700;">Leaders</span>
-            </div>
-            <div id="leaderboardLastSync" class="text-[10px] text-gray-500">Loading...</div>
-          </div>
         </div>
       </div>
       
@@ -1810,7 +1802,7 @@
           </div>
           <div class="flex-1 text-left">
             <div class="font-semibold text-white">Full Sync</div>
-            <div class="text-xs text-gray-500">FDB Data → Terminals → Leaderboards</div>
+            <div class="text-xs text-gray-500">Members, History, Terminals, Leaderboards</div>
           </div>
           <i data-lucide="chevron-right" class="w-5 h-5 text-gray-600"></i>
         </button>
@@ -2220,7 +2212,7 @@
   <!-- Database Sync Panel - Firebase-based -->
   <script>
     // Firebase URLs for sync control
-    const FDB_BASE_URL = 'https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app';
+    const FDB_BASE_URL = 'https://oceanz-fdb-default-rtdb.firebaseio.com';
     const SYNC_CONTROL_URL = `${FDB_BASE_URL}/sync-control.json`;
     const SYNC_REQUEST_URL = `${FDB_BASE_URL}/sync-control/request.json`;
     const SYNC_STATUS_URL = `${FDB_BASE_URL}/sync-control/status.json`;
@@ -2246,12 +2238,9 @@
         // Update Terminals status  
         updateSyncStatusUI('terminals', data?.terminals?.last_sync, null, data?.terminals?.status);
         
-        // Update Leaderboard status
-        updateSyncStatusUI('leaderboard', data?.leaderboard?.last_sync, null, data?.leaderboard?.status);
-        
       } catch (error) {
         console.log('Could not fetch sync metadata:', error);
-        ['fdb', 'terminals', 'leaderboard'].forEach(type => {
+        ['fdb', 'terminals'].forEach(type => {
           const el = document.getElementById(`${type}LastSync`);
           if (el) el.textContent = 'No data';
         });

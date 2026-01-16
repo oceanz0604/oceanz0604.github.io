@@ -720,17 +720,9 @@
           <span class="text-lg">🏅</span>
           <span class="font-medium">Seasons</span>
         </a>
-        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="analytics">
-          <span class="text-lg">📊</span>
-          <span class="font-medium">Stats</span>
-        </a>
         <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="booking">
           <span class="text-lg">🎮</span>
           <span class="font-medium">Book PC</span>
-        </a>
-        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400" data-tab="history">
-          <span class="text-lg">📜</span>
-          <span class="font-medium">History</span>
         </a>
       </nav>
 
@@ -952,71 +944,6 @@
         </div>
       </div>
 
-      <!-- Analytics -->
-      <div class="tab-pane hidden" data-tab="analytics">
-        <div class="neon-card rounded-2xl p-6 space-y-6">
-          <h2 class="font-orbitron text-xl font-bold glow-cyan flex items-center gap-3" style="color: var(--neon-cyan);">
-            <i data-lucide="bar-chart-3" class="w-6 h-6"></i> PLAYER ANALYTICS
-          </h2>
-
-          <!-- Stats Grid -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="stat-card p-4 rounded-xl text-center">
-              <div class="text-gray-400 text-xs uppercase tracking-wider">Sessions</div>
-              <div id="totalSessions" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-cyan);">-</div>
-            </div>
-            <div class="stat-card p-4 rounded-xl text-center">
-              <div class="text-gray-400 text-xs uppercase tracking-wider">Minutes</div>
-              <div id="totalMinutes" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-purple);">-</div>
-            </div>
-            <div class="stat-card p-4 rounded-xl text-center">
-              <div class="text-gray-400 text-xs uppercase tracking-wider">Spent</div>
-              <div id="totalSpent" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-green);">-</div>
-            </div>
-            <div class="stat-card p-4 rounded-xl text-center">
-              <div class="text-gray-400 text-xs uppercase tracking-wider">Favorite PC</div>
-              <div id="mostUsedPC" class="text-2xl font-bold font-orbitron mt-1" style="color: var(--neon-orange);">-</div>
-            </div>
-          </div>
-
-          <!-- Charts -->
-          <div class="space-y-6">
-            <div class="chart-container">
-              <h3 class="font-orbitron text-sm font-bold mb-4 glow-cyan" style="color: var(--neon-cyan);">🎮 PC USAGE</h3>
-              <canvas id="pcUsageChart"></canvas>
-            </div>
-
-            <div class="chart-container">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-orbitron text-sm font-bold glow-green" style="color: var(--neon-green);">📅 SESSIONS</h3>
-                <div class="flex gap-2">
-                  <button id="sessionToggleMonth" class="neon-btn px-3 py-1 rounded text-xs">Month</button>
-                  <button id="sessionToggleAll" class="neon-btn px-3 py-1 rounded text-xs opacity-50">All</button>
-                </div>
-              </div>
-              <canvas id="sessionTimeChart"></canvas>
-            </div>
-
-            <div class="chart-container">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-orbitron text-sm font-bold glow-orange" style="color: var(--neon-orange);">💰 SPENDING</h3>
-                <div class="flex gap-2">
-                  <button id="spendToggleMonth" class="neon-btn px-3 py-1 rounded text-xs">Month</button>
-                  <button id="spendToggleAll" class="neon-btn px-3 py-1 rounded text-xs opacity-50">All</button>
-                </div>
-              </div>
-              <canvas id="spendChart"></canvas>
-            </div>
-          </div>
-
-          <!-- Recent Sessions -->
-          <div>
-            <h3 class="font-orbitron text-sm font-bold mb-4 glow-purple" style="color: var(--neon-purple);">🕒 RECENT SESSIONS</h3>
-            <ul id="recentSessionsList" class="space-y-2"></ul>
-          </div>
-        </div>
-      </div>
-
       <!-- Booking -->
       <div class="tab-pane hidden" data-tab="booking">
         <form id="bookingForm" class="neon-card rounded-2xl p-6 space-y-6">
@@ -1109,18 +1036,6 @@
         <div id="bookingResult" class="hidden neon-card neon-card-green rounded-xl p-4 text-center font-orbitron mt-4" style="color: var(--neon-green);"></div>
       </div>
 
-      <!-- History -->
-      <div class="tab-pane hidden" data-tab="history">
-        <div class="neon-card neon-card-purple rounded-2xl p-6 space-y-4">
-          <h2 class="font-orbitron text-xl font-bold glow-purple flex items-center gap-3" style="color: var(--neon-purple);">
-            <i data-lucide="scroll-text" class="w-6 h-6"></i> ACTIVITY LOG
-          </h2>
-          <div class="cyber-line"></div>
-          <div id="memberHistoryList" class="space-y-3">
-            <p class="text-gray-500">Loading your history...</p>
-          </div>
-        </div>
-      </div>
     </div>
       </div>
     </main>
