@@ -35,20 +35,10 @@ import firebase_admin
 from firebase_admin import credentials, db
 from config import FB_PATHS, FIREBASE_CRED_PATH, FDB_FIREBASE_DB_URL
 
-# Import functions from the unified sync script
+# Import sync functions from the unified sync script
 from oceanz_sync import (
-    init_firebase as init_sync_firebase,
-    copy_fdb_file,
-    connect_to_firebird,
-    load_local_sync_state, save_local_sync_state,
-    fetch_new_history_records, process_and_upload_history,
-    fetch_all_members,
-    fetch_recent_sessions, process_and_upload_sessions,
-    parse_messages_file, upload_guest_sessions,
-    fetch_terminals_from_fdb, process_and_upload_terminal_status,
-    fetch_kasahar_records, process_and_upload_kasahar,
-    calculate_leaderboards_from_fdb,  # Calculates from local FDB data
-    build_and_upload_optimized_members
+    run_terminals_sync,  # Quick terminal status sync
+    run_fdb_sync,        # Full FDB sync (members, history, leaderboards, cash register)
 )
 
 # ==================== CONFIG ====================
@@ -190,196 +180,40 @@ class SyncService:
             print(f"Error checking request: {e}")
             return False
     
-    def run_terminals_sync(self, silent=False):
-        """Run terminal status sync from FDB TERMINALS table."""
+    def do_terminals_sync(self, silent=False):
+        """Quick terminal status sync."""
         if not silent:
-            self.log("Starting: Terminal Status (from FDB)")
+            self.log("Starting: Terminal Status")
             self.set_status("syncing", "Terminal Status")
-        else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: Terminals sync")
         
         try:
-            # Copy FDB and connect
-            copy_fdb_file()
-            conn = connect_to_firebird()
-            cursor = conn.cursor()
-            
-            # Fetch terminal status from FDB TERMINALS table
-            terminals = fetch_terminals_from_fdb(cursor)
-            process_and_upload_terminal_status(terminals)
-            
-            conn.close()
-            
-            db.reference(f"{FB_PATHS.SYNC_META}/terminals").update({
-                "last_sync": datetime.now().isoformat(),
-                "status": "ok",
-                "terminal_count": len(terminals)
-            })
-            
-            if not silent:
-                self.log(f"Completed: {len(terminals)} terminals synced", "SUCCESS")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Terminals sync: {len(terminals)} PCs")
-            
-            return True
-            
+            success = run_terminals_sync()
+            if success and not silent:
+                self.log("Completed: Terminal Status", "SUCCESS")
+            return success
         except Exception as e:
             if not silent:
                 self.log(f"Terminals sync error: {e}", "ERROR")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] Terminals: {e}")
             return False
     
-    def run_fdb_sync(self, silent=False):
-        """Run FDB database sync (history, sessions, guest sessions). Members handled by V2."""
+    def do_fdb_sync(self, silent=False):
+        """Full FDB sync (members, history, leaderboards, cash register)."""
         if not silent:
-            self.log("Starting: FDB Database Sync")
-            self.set_status("syncing", "FDB Database Sync")
-        else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: FDB sync")
+            self.log("Starting: Full FDB Sync")
+            self.set_status("syncing", "FDB Sync")
         
         try:
-            copy_fdb_file()
-            conn = connect_to_firebird()
-            cursor = conn.cursor()
-            
-            sync_state = load_local_sync_state()
-            
-            # History
-            new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
-            new_max_id = process_and_upload_history(new_records, sync_state)
-            sync_state["last_history_id"] = new_max_id
-            
-            # Note: Members are now handled by V2 optimized structure (run_optimized_members_sync)
-            
-            # Sessions
-            sessions = fetch_recent_sessions(cursor, hours=2)
-            process_and_upload_sessions(sessions)
-            
-            # Guest sessions
-            guest_sessions = parse_messages_file()
-            if guest_sessions:
-                upload_guest_sessions(guest_sessions)
-            
-            sync_state["last_sync_time"] = datetime.now().isoformat()
-            save_local_sync_state(sync_state)
-            
-            # Update Firebase sync meta
-            db.reference("sync-meta").update({
-                "last_fdb_sync": datetime.now().isoformat(),
-                "last_history_id": new_max_id,
-                "records_synced": len(new_records)
-            })
-            
-            conn.close()
-            
-            if not silent:
-                self.log(f"  FDB: {len(new_records)} new history records", "SUCCESS")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] FDB sync: {len(new_records)} records")
-            
-            return True
-            
+            success = run_fdb_sync()
+            if success and not silent:
+                self.log("Completed: Full FDB Sync", "SUCCESS")
+            return success
         except Exception as e:
             if not silent:
                 self.log(f"FDB sync error: {e}", "ERROR")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] FDB: {e}")
             return False
-    
-    def run_optimized_members_sync(self, silent=False):
-        """Run V2 optimized member data sync."""
-        if not silent:
-            self.log("Starting: Optimized Member Data (V2)")
-            self.set_status("syncing", "Optimized Members V2")
-        else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: V2 Member sync")
-        
-        try:
-            copy_fdb_file()
-            conn = connect_to_firebird()
-            cursor = conn.cursor()
-            
-            # Fetch members and build optimized structure
-            members = fetch_all_members(cursor)
-            v2_count = build_and_upload_optimized_members(members, cursor)
-            
-            db.reference(f"{FB_PATHS.SYNC_META}/optimized_members").update({
-                "last_sync": datetime.now().isoformat(),
-                "status": "ok",
-                "members_count": v2_count
-            })
-            
-            conn.close()
-            
-            if not silent:
-                self.log(f"  V2 Members: {v2_count} profiles with embedded data", "SUCCESS")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] V2 Members: {v2_count} profiles")
-            
-            return True
-            
-        except Exception as e:
-            if not silent:
-                self.log(f"V2 Members sync error: {e}", "ERROR")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] V2 Members: {e}")
-            return False
-    
-    def run_leaderboard_sync(self, silent=False, conn=None, members=None, history_by_user=None):
-        """Run leaderboard calculation from local FDB data."""
-        if not silent:
-            self.log("Starting: Leaderboard Calculation (from FDB)")
-            self.set_status("syncing", "Leaderboard Calculation")
-        else:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: Leaderboard calculation")
-        
-        close_conn = False
-        try:
-            # If no connection provided, open one
-            if conn is None:
-                copy_fdb_file()
-                conn = connect_to_firebird()
-                close_conn = True
-            cursor = conn.cursor()
-            
-            # If no members provided, fetch them
-            if members is None:
-                members = fetch_all_members(cursor)
-            
-            # If no history provided, fetch from Firebase (needed for streak calculation)
-            if history_by_user is None:
-                try:
-                    from config import FB_PATHS
-                    history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
-                except:
-                    history_by_user = {}
-            
-            success = calculate_leaderboards_from_fdb(members, history_by_user, cursor)
-            
-            if success:
-                if not silent:
-                    self.log("Completed: Leaderboard Calculation", "SUCCESS")
-                else:
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] Leaderboards updated")
-            
-            return success
-            
-        except Exception as e:
-            if not silent:
-                self.log(f"Leaderboard sync error: {e}", "ERROR")
-            else:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] Leaderboards: {e}")
-            return False
-        finally:
-            if close_conn and conn:
-                try:
-                    conn.close()
-                except:
-                    pass
     
     def perform_full_sync(self, triggered_by="web_ui"):
-        """Execute the full sync process (triggered by web UI)."""
+        """Execute full sync (triggered by web UI)."""
         self.syncing = True
         self.progress_messages = []
         start_time = datetime.now()
@@ -387,36 +221,10 @@ class SyncService:
         self.log("=" * 50)
         self.log(f"[SYNC] FULL SYNC STARTED (triggered by {triggered_by})")
         self.log("=" * 50)
-        self.set_status("syncing", "Initializing...")
+        self.set_status("syncing", "Running FDB Sync...")
         
-        tasks_completed = 0
-        tasks_failed = 0
-        
-        # 1. FDB Sync
-        if self.run_fdb_sync(silent=False):
-            tasks_completed += 1
-        else:
-            tasks_failed += 1
-        
-        # 2. Terminal Status Sync (from FDB TERMINALS table)
-        if self.run_terminals_sync(silent=False):
-            tasks_completed += 1
-        else:
-            tasks_failed += 1
-        
-        # 3. Leaderboard Calculation
-        if self.run_leaderboard_sync(silent=False):
-            tasks_completed += 1
-        else:
-            tasks_failed += 1
-        
-        # 4. Optimized Members V2 (single-key structure with embedded data)
-        if self.run_optimized_members_sync(silent=False):
-            tasks_completed += 1
-        else:
-            tasks_failed += 1
-        
-        success = tasks_failed == 0
+        # Run full FDB sync (includes members, history, leaderboards, terminals, cash register)
+        success = self.do_fdb_sync(silent=False)
         
         # Update last sync times
         self.last_fdb_sync = datetime.now()
@@ -430,8 +238,6 @@ class SyncService:
         sync_info = {
             "timestamp": end_time.isoformat(),
             "duration_seconds": round(duration, 2),
-            "tasks_completed": tasks_completed,
-            "tasks_failed": tasks_failed,
             "success": success,
             "triggered_by": triggered_by
         }
@@ -460,11 +266,11 @@ class SyncService:
         return success
     
     def auto_sync_terminals(self):
-        """Run terminal status sync silently (scheduled)."""
+        """Quick terminal status sync (scheduled every 2 minutes)."""
         print(f"\n[AUTO-SYNC] Terminals - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        success = self.run_terminals_sync(silent=True)
+        success = self.do_terminals_sync(silent=True)
         
         self.last_terminals_sync = datetime.now()
         self.syncing = False
@@ -473,22 +279,19 @@ class SyncService:
         return success
     
     def auto_sync_fdb(self):
-        """Run complete sync silently (scheduled) - includes FDB, Terminals, Leaderboards, and V2 Members."""
-        print(f"\n[AUTO-SYNC] Complete Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        """Full FDB sync (scheduled every 15 minutes)."""
+        print(f"\n[AUTO-SYNC] FDB Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        # Run all syncs
-        fdb_ok = self.run_fdb_sync(silent=True)
-        terminals_ok = self.run_terminals_sync(silent=True)
-        leaders_ok = self.run_leaderboard_sync(silent=True)
-        v2_ok = self.run_optimized_members_sync(silent=True)  # V2 optimized member structure
+        # Run full FDB sync (includes members, history, leaderboards, terminals, cash register)
+        success = self.do_fdb_sync(silent=True)
         
         self.last_fdb_sync = datetime.now()
         self.last_terminals_sync = datetime.now()
         self.syncing = False
         self.update_schedule_info()
         
-        return fdb_ok and terminals_ok and leaders_ok and v2_ok
+        return success
     
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""

@@ -1378,109 +1378,19 @@ def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
 
 # ==================== MAIN ====================
 
-def main():
+def run_terminals_sync():
     """
-    Main unified sync routine with clean step process.
-    
-    Steps (single FDB connection):
-    1. Members     - Fetch and upload V2 optimized structure
-    2. History     - Incremental sync of member history
-    3. Leaderboards - Calculate from local FDB data
-    4. Terminals   - Real-time PC status
-    5. Cash Register - Revenue data (7 days)
+    Quick terminal status sync only.
+    Called frequently (every 2 minutes) for real-time PC status.
     """
     start_time = datetime.now()
-    
-    print("\n" + "="*60)
-    print("OceanZ Complete Unified Sync")
-    print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*60)
-    
-    # Initialize
     conn = None
-    members = []
-    history_by_user = {}
     
     try:
-        # Initialize Firebase
         init_firebase()
-        
-        # Open single FDB connection for all operations
-        print("\n[INIT] Opening Firebird database connection...")
         copy_fdb_file()
         conn = connect_to_firebird()
         cursor = conn.cursor()
-        print("[OK] Database connection established")
-        
-        # Load sync state
-        sync_state = load_local_sync_state()
-        last_sync = sync_state.get("last_sync_time")
-        if last_sync:
-            print(f"[INFO] Last sync: {last_sync}")
-        else:
-            print("[INFO] First sync - will upload all data")
-        
-        # ========== STEP 1: MEMBERS (V2 Optimized Structure) ==========
-        print("\n" + "="*60)
-        print("[STEP 1/5] Members - V2 Optimized Structure")
-        print("="*60)
-        
-        members = fetch_all_members(cursor)
-        v2_count = build_and_upload_optimized_members(members, cursor)
-        
-        db.reference(f"{FB_PATHS.SYNC_META}/members").update({
-            "last_sync": datetime.now().isoformat(),
-            "status": "ok",
-            "members_count": v2_count
-        })
-        print(f"\n[OK] Members: {v2_count} profiles uploaded to /members/{{username}}")
-        
-        # ========== STEP 2: HISTORY (Incremental) ==========
-        print("\n" + "="*60)
-        print("[STEP 2/5] History - Incremental Sync")
-        print("="*60)
-        
-        new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
-        new_max_id = process_and_upload_history(new_records, sync_state)
-        sync_state["last_history_id"] = new_max_id
-        
-        # Build history_by_user for leaderboard calculation (from new records)
-        # For leaderboards, we also need existing history - fetch from Firebase once
-        print("   [INFO] Loading history data for leaderboard calculation...")
-        try:
-            history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
-            print(f"   [OK] Loaded history for {len(history_by_user)} users")
-        except Exception as e:
-            print(f"   [WARN] Could not load history: {e}")
-            history_by_user = {}
-        
-        # Sessions
-        print("\n   Processing SESSIONS (recent only)...")
-        sessions = fetch_recent_sessions(cursor, hours=2)
-        process_and_upload_sessions(sessions)
-        
-        # Guest sessions
-        print("   Processing GUEST SESSIONS (from messages.msg)...")
-        guest_sessions = parse_messages_file()
-        if guest_sessions:
-            upload_guest_sessions(guest_sessions)
-        
-        print(f"\n[OK] History: {len(new_records)} new records synced")
-        
-        # ========== STEP 3: LEADERBOARDS (Local Calculation) ==========
-        print("\n" + "="*60)
-        print("[STEP 3/5] Leaderboards - Local Calculation")
-        print("="*60)
-        
-        if calculate_leaderboards_from_fdb(members, history_by_user, cursor):
-            print("\n[OK] Leaderboards calculated and uploaded")
-        else:
-            print("\n[WARN] Leaderboard calculation had errors")
-        
-        # ========== STEP 4: TERMINALS (Real-time Status) ==========
-        print("\n" + "="*60)
-        print("[STEP 4/5] Terminals - Real-time Status")
-        print("="*60)
         
         terminals = fetch_terminals_from_fdb(cursor)
         process_and_upload_terminal_status(terminals)
@@ -1490,30 +1400,98 @@ def main():
             "status": "ok",
             "terminal_count": len(terminals)
         })
-        print(f"\n[OK] Terminals: {len(terminals)} PCs status updated")
         
-        # ========== STEP 5: CASH REGISTER (Revenue) ==========
-        print("\n" + "="*60)
-        print("[STEP 5/5] Cash Register - Revenue Data")
-        print("="*60)
+        elapsed = (datetime.now() - start_time).total_seconds()
+        print(f"[TERMINALS] {len(terminals)} PCs synced in {elapsed:.1f}s")
+        return True
         
+    except Exception as e:
+        print(f"[ERROR] Terminals sync failed: {e}")
+        return False
+        
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+
+
+def run_fdb_sync():
+    """
+    Full FDB database sync.
+    Includes: Members, History, Sessions, Leaderboards, Cash Register.
+    Called periodically (every 15 minutes).
+    """
+    start_time = datetime.now()
+    conn = None
+    
+    print("\n" + "="*60)
+    print("OceanZ FDB Sync")
+    print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*60)
+    
+    try:
+        init_firebase()
+        
+        # Open single FDB connection
+        print("\n[INIT] Opening database connection...")
+        copy_fdb_file()
+        conn = connect_to_firebird()
+        cursor = conn.cursor()
+        
+        sync_state = load_local_sync_state()
+        
+        # ========== 1. MEMBERS ==========
+        print("\n[1/5] Members (V2 Structure)...")
+        members = fetch_all_members(cursor)
+        v2_count = build_and_upload_optimized_members(members, cursor)
+        print(f"      {v2_count} profiles uploaded")
+        
+        # ========== 2. HISTORY ==========
+        print("\n[2/5] History (incremental)...")
+        new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
+        new_max_id = process_and_upload_history(new_records, sync_state)
+        sync_state["last_history_id"] = new_max_id
+        print(f"      {len(new_records)} new records")
+        
+        # Load history for leaderboards
+        try:
+            history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
+        except:
+            history_by_user = {}
+        
+        # Sessions
+        print("      Processing sessions...")
+        sessions = fetch_recent_sessions(cursor, hours=2)
+        process_and_upload_sessions(sessions)
+        
+        # Guest sessions
+        guest_sessions = parse_messages_file()
+        if guest_sessions:
+            upload_guest_sessions(guest_sessions)
+        
+        # ========== 3. LEADERBOARDS ==========
+        print("\n[3/5] Leaderboards (local calculation)...")
+        calculate_leaderboards_from_fdb(members, history_by_user, cursor)
+        print("      All-time, monthly, weekly updated")
+        
+        # ========== 4. TERMINALS ==========
+        print("\n[4/5] Terminals...")
+        terminals = fetch_terminals_from_fdb(cursor)
+        process_and_upload_terminal_status(terminals)
+        print(f"      {len(terminals)} PCs")
+        
+        # ========== 5. CASH REGISTER ==========
+        print("\n[5/5] Cash Register (7 days)...")
         kasahar_records = fetch_kasahar_records(cursor, days=7)
         process_and_upload_kasahar(kasahar_records)
+        print(f"      {len(kasahar_records)} transactions")
         
-        db.reference(f"{FB_PATHS.SYNC_META}/cash_register").update({
-            "last_sync": datetime.now().isoformat(),
-            "status": "ok",
-            "days_synced": 7
-        })
-        print(f"\n[OK] Cash Register: {len(kasahar_records)} transactions (7 days)")
-        
-        # ========== FINALIZE ==========
-        
-        # Save sync state
+        # Save state
         sync_state["last_sync_time"] = start_time.isoformat()
         save_local_sync_state(sync_state)
         
-        # Update Firebase sync meta
         db.reference("sync-meta").update({
             "last_sync": datetime.now().isoformat(),
             "last_history_id": new_max_id,
@@ -1523,39 +1501,37 @@ def main():
         # Summary
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*60)
-        print(f"[DONE] All syncs completed in {elapsed:.1f}s")
-        print("="*60)
-        print(f"   1. Members:       {v2_count} profiles (V2 structure)")
-        print(f"   2. History:       {len(new_records)} new records")
-        print(f"   3. Leaderboards:  Calculated from local FDB")
-        print(f"   4. Terminals:     {len(terminals)} PCs")
-        print(f"   5. Cash Register: {len(kasahar_records)} transactions")
+        print(f"[DONE] FDB sync completed in {elapsed:.1f}s")
+        print(f"   Members: {v2_count} | History: {len(new_records)} | Terminals: {len(terminals)}")
         print("="*60 + "\n")
         
-        # Update sync control status
-        try:
-            db.reference(f"{FB_PATHS.SYNC_CONTROL}/last_sync").set({
-                "timestamp": datetime.now().isoformat(),
-                "duration_seconds": round(elapsed, 2),
-                "success": True
-            })
-        except:
-            pass
+        db.reference(f"{FB_PATHS.SYNC_CONTROL}/last_sync").set({
+            "timestamp": datetime.now().isoformat(),
+            "duration_seconds": round(elapsed, 2),
+            "success": True
+        })
+        
+        return True
         
     except Exception as e:
-        print(f"\n[ERROR] Sync failed: {e}")
+        print(f"\n[ERROR] FDB sync failed: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        return False
         
     finally:
-        # Always close the FDB connection
         if conn:
             try:
                 conn.close()
-                print("[CLEANUP] Database connection closed")
             except:
                 pass
+
+
+def main():
+    """Main entry point - runs full FDB sync."""
+    success = run_fdb_sync()
+    if not success:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
