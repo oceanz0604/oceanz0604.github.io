@@ -14,6 +14,7 @@ No dependencies on other scripts - everything is inline.
 import os
 import re
 import sys
+import math
 import shutil
 import fdb
 import json
@@ -49,6 +50,10 @@ def convert_value(val):
         return val.isoformat()
     if isinstance(val, bytes):
         return val.decode("utf-8", errors="ignore")
+    if isinstance(val, float):
+        # Handle NaN and Infinity - not valid in JSON
+        if math.isnan(val) or math.isinf(val):
+            return None
     return val
 
 
@@ -58,14 +63,49 @@ def get_record_hash(record):
     return hashlib.md5(serialized.encode()).hexdigest()[:8]
 
 
-def remove_none_values(data):
-    """Recursively remove None values from dict/list. Firebase doesn't accept None."""
+def sanitize_for_firebase(data):
+    """
+    Recursively sanitize data for Firebase:
+    - Remove None values
+    - Convert NaN/Infinity to None (then remove)
+    - Convert datetime objects to strings
+    - Handle bytes
+    """
+    if data is None:
+        return None
+    
     if isinstance(data, dict):
-        return {k: remove_none_values(v) for k, v in data.items() if v is not None}
+        result = {}
+        for k, v in data.items():
+            sanitized = sanitize_for_firebase(v)
+            if sanitized is not None:
+                result[k] = sanitized
+        return result
+    
     elif isinstance(data, list):
-        return [remove_none_values(item) for item in data if item is not None]
+        return [sanitize_for_firebase(item) for item in data if sanitize_for_firebase(item) is not None]
+    
+    elif isinstance(data, float):
+        if math.isnan(data) or math.isinf(data):
+            return None
+        return data
+    
+    elif isinstance(data, (date, datetime)):
+        return data.isoformat()
+    
+    elif isinstance(data, time):
+        return data.isoformat()
+    
+    elif isinstance(data, bytes):
+        return data.decode("utf-8", errors="ignore")
+    
     else:
         return data
+
+
+def remove_none_values(data):
+    """Recursively remove None values from dict/list. Firebase doesn't accept None."""
+    return sanitize_for_firebase(data)
 
 
 # ==================== V2 OPTIMIZATION HELPERS ====================
@@ -199,10 +239,11 @@ def build_optimized_member_data(member, history_entries, sessions, ranks):
     """
     username = member.get("USERNAME", "").upper()
     
-    # Profile
+    # Profile (includes PASSWORD for member login authentication)
     profile = {
         "ID": member.get("ID"),
         "USERNAME": username,
+        "PASSWORD": member.get("PASSWORD") or "",  # Required for member login
         "DISPLAY_NAME": member.get("DISPLAY_NAME") or username,
         "FIRSTNAME": member.get("NAME") or member.get("FIRSTNAME") or "",
         "LASTNAME": member.get("LASTNAME") or "",
@@ -272,6 +313,13 @@ def build_optimized_member_data(member, history_entries, sessions, ranks):
         max_spent=ranks.get("max_spent", 0)
     )
     
+    # Clean up ranks - remove max_spent (internal use only)
+    clean_ranks = {
+        "all_time": ranks.get("all_time"),
+        "monthly": ranks.get("monthly"),
+        "weekly": ranks.get("weekly"),
+    }
+    
     # Recent history (last N entries, sorted by ID descending)
     sorted_history = sorted(history_entries, key=lambda x: x.get("ID", 0), reverse=True)
     recent_history = sorted_history[:RECENT_HISTORY_COUNT]
@@ -284,7 +332,7 @@ def build_optimized_member_data(member, history_entries, sessions, ranks):
         "profile": remove_none_values(profile),
         "balance": remove_none_values(balance),
         "stats": remove_none_values(stats),
-        "ranks": remove_none_values(ranks),
+        "ranks": remove_none_values(clean_ranks),
         "badges": remove_none_values(badges),
         "recent_history": [remove_none_values(h) for h in recent_history],
         "recent_sessions": [remove_none_values(s) for s in recent_sessions],
@@ -606,17 +654,42 @@ def build_and_upload_optimized_members(members_array, cursor):
     # Upload to Firebase at /members/{username}
     if optimized_members:
         try:
+            # Sanitize all data before upload to handle NaN, Infinity, etc.
+            sanitized_members = {}
+            for username, data in optimized_members.items():
+                try:
+                    sanitized_members[username] = sanitize_for_firebase(data)
+                except Exception as e:
+                    print(f"   [WARN] Skipping {username} due to sanitization error: {e}")
+            
             # Upload in batches to avoid timeout
             batch_size = 50
-            usernames = list(optimized_members.keys())
+            usernames = list(sanitized_members.keys())
             
             for i in range(0, len(usernames), batch_size):
-                batch = {u: optimized_members[u] for u in usernames[i:i+batch_size]}
-                db.reference("members").update(batch)
+                batch = {u: sanitized_members[u] for u in usernames[i:i+batch_size]}
+                try:
+                    db.reference("members").update(batch)
+                except Exception as batch_err:
+                    # If batch fails, try uploading one by one to find the problematic record
+                    print(f"   [WARN] Batch upload failed, trying individual uploads...")
+                    for u in usernames[i:i+batch_size]:
+                        try:
+                            db.reference(f"members/{u}").set(sanitized_members[u])
+                        except Exception as single_err:
+                            print(f"   [ERROR] Failed to upload {u}: {single_err}")
+                            # Try to identify problematic field
+                            for field, value in sanitized_members[u].items():
+                                try:
+                                    json.dumps(value)
+                                except:
+                                    print(f"      -> Problem in field '{field}': {type(value)} = {str(value)[:100]}")
             
-            print(f"   [OK] Uploaded optimized data for {processed} members to /members/{{username}}")
+            print(f"   [OK] Uploaded optimized data for {len(sanitized_members)} members to /members/{{username}}")
         except Exception as e:
             print(f"   [ERROR] Failed to upload optimized members: {e}")
+            import traceback
+            traceback.print_exc()
     
     return processed
 
@@ -1248,7 +1321,7 @@ def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
         
         # Query sessions from FDB using the passed cursor
         month_start_str = month_start.strftime("%Y-%m-%d")
-        
+            
         try:
             query = f"""
                 SELECT MEMBERID, USINGMIN, TOTALPRICE, STARTPOINT 
@@ -1430,7 +1503,7 @@ def run_fdb_sync():
     print("OceanZ FDB Sync")
     print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60)
-    
+        
     try:
         init_firebase()
         

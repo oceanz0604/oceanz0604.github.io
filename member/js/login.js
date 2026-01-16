@@ -83,17 +83,31 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
     return;
   }
 
-  fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value")
+  // V2: Single-member lookup /members/{username} - much more efficient!
+  fdbDb.ref(`${FB_PATHS.MEMBERS}/${username}`).once("value")
     .then(snapshot => {
-      const membersData = snapshot.val();
-      const members = Array.isArray(membersData) ? membersData.filter(m => m) : Object.values(membersData || {});
-      const match = members.find(m =>
-        m.USERNAME?.toLowerCase() === username && m.PASSWORD === password
-      );
-
-      if (match) {
-        // Use persistent localStorage session
-        setMemberSession(match);
+      const memberData = snapshot.val();
+      
+      if (!memberData) {
+        showError(errorDiv, "❌ Invalid credentials. Please try again.");
+        return;
+      }
+      
+      const profile = memberData.profile || {};
+      const storedPassword = profile.PASSWORD || "";
+      
+      if (storedPassword === password) {
+        // Build session object from V2 structure
+        const sessionData = {
+          USERNAME: username,
+          DISPLAY_NAME: profile.DISPLAY_NAME || username,
+          FIRSTNAME: profile.FIRSTNAME || "",
+          LASTNAME: profile.LASTNAME || "",
+          RECDATE: profile.RECDATE || "",
+          BALANCE: memberData.balance?.current_balance || 0,
+          TOTALACTMINUTE: memberData.stats?.total_minutes || 0
+        };
+        setMemberSession(sessionData);
         window.location.href = "dashboard.html";
       } else {
         showError(errorDiv, "❌ Invalid credentials. Please try again.");

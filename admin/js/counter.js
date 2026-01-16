@@ -121,10 +121,22 @@ function updateDateTime() {
 
 async function loadMembers() {
   try {
-    const snap = await fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value");
-    const data = snap.val() || [];
-    allMembers = Array.isArray(data) ? data.filter(Boolean) : Object.values(data);
-    console.log(`✅ Loaded ${allMembers.length} members`);
+    // V2 structure: /members/{username}/{ profile, balance, stats, ... }
+    const snap = await fdbDb.ref(FB_PATHS.MEMBERS).once("value");
+    const data = snap.val() || {};
+    allMembers = Object.entries(data).map(([username, memberData]) => {
+      const profile = memberData.profile || {};
+      const balance = memberData.balance || {};
+      return {
+        USERNAME: username,
+        DISPLAY_NAME: profile.DISPLAY_NAME || username,
+        FIRSTNAME: profile.FIRSTNAME || "",
+        LASTNAME: profile.LASTNAME || "",
+        BALANCE: balance.current_balance || 0,
+        PASSWORD: profile.PASSWORD || ""  // For member verification
+      };
+    });
+    console.log(`✅ Loaded ${allMembers.length} members (V2)`);
   } catch (error) {
     console.error("Failed to load members:", error);
     allMembers = [];

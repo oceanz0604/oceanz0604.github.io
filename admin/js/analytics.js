@@ -89,8 +89,24 @@ export async function loadAnalytics() {
         console.log("📦 Using cached members");
         return analyticsCache.members.data;
       }
-      const snap = await timeout(fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once('value'), 10000);
-      const data = Object.values(snap.val() || {});
+      // V2 structure: /members/{username}/{ profile, balance, stats, ... }
+      const snap = await timeout(fdbDb.ref(FB_PATHS.MEMBERS).once('value'), 10000);
+      const membersData = snap.val() || {};
+      const data = Object.entries(membersData).map(([username, memberData]) => {
+        const profile = memberData.profile || {};
+        const stats = memberData.stats || {};
+        const balance = memberData.balance || {};
+        return {
+          USERNAME: username,
+          DISPLAY_NAME: profile.DISPLAY_NAME || username,
+          FIRSTNAME: profile.FIRSTNAME || "",
+          LASTNAME: profile.LASTNAME || "",
+          RECDATE: profile.RECDATE || "",
+          TOTALACTMINUTE: stats.total_minutes || 0,
+          BALANCE: balance.current_balance || 0,
+          TOTALBAKIYE: balance.total_loaded || 0
+        };
+      });
       setCache(analyticsCache.members, data);
       return data;
     };

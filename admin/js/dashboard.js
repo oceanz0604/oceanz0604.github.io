@@ -25,9 +25,9 @@ const db = getDatabase(fdbApp);
 
 // ==================== DATABASE REFS ====================
 
-const terminalsRef = ref(db, FB_PATHS.LEGACY_STATUS);
+const terminalsRef = ref(db, FB_PATHS.TERMINAL_STATUS);  // V2: /terminal-status
 const sessionsRef = ref(db, FB_PATHS.SESSIONS);
-const membersRef = ref(db, FB_PATHS.LEGACY_MEMBERS);
+const membersRef = ref(db, FB_PATHS.MEMBERS);  // V2: /members
 
 // ==================== DOM ELEMENTS ====================
 
@@ -235,7 +235,21 @@ function loadAllMembers() {
       return;
     }
 
-    const members = Object.values(snapshot.val());
+    // V2 structure: /members/{username}/{ profile, balance, stats, ... }
+    const membersData = snapshot.val();
+    const members = Object.entries(membersData).map(([username, data]) => {
+      const profile = data.profile || {};
+      return {
+        USERNAME: username,
+        DISPLAY_NAME: profile.DISPLAY_NAME || username,
+        FIRSTNAME: profile.FIRSTNAME || "",
+        LASTNAME: profile.LASTNAME || "",
+        RECDATE: profile.RECDATE || "",
+        TOTALACTMINUTE: data.stats?.total_minutes || 0,
+        BALANCE: data.balance?.current_balance || 0
+      };
+    });
+    
     membersCache.data = members;
     membersCache.timestamp = Date.now();
     
@@ -245,7 +259,7 @@ function loadAllMembers() {
 
 function renderMembers(container, members) {
   container.innerHTML = members.map(m => {
-    const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.USERNAME;
+    const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.DISPLAY_NAME || m.USERNAME;
     return `
       <div class="member-card p-4 rounded-xl">
         <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${displayName}</h3>
