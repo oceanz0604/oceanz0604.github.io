@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Member Portal - CyberCafe Manager</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    .member-header {
+      background: linear-gradient(135deg, var(--bg-card) 0%, rgba(0, 240, 255, 0.1) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl);
+      padding: 32px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    
+    .member-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      margin: 0 auto 16px;
+    }
+    
+    .member-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.75rem;
+      margin-bottom: 8px;
+    }
+    
+    .member-balance {
+      font-size: 2.5rem;
+      font-family: 'Orbitron', sans-serif;
+      color: var(--primary);
+      text-shadow: var(--glow-primary);
+    }
+    
+    .quick-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .quick-stat {
+      text-align: center;
+    }
+    
+    .quick-stat-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.5rem;
+      color: var(--primary);
+    }
+    
+    .quick-stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .device-selector {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .device-btn {
+      flex: 1;
+      padding: 20px;
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+    
+    .device-btn:hover {
+      border-color: var(--primary);
+    }
+    
+    .device-btn.active {
+      border-color: var(--primary);
+      background: rgba(0, 240, 255, 0.1);
+    }
+    
+    .device-btn .icon {
+      font-size: 2rem;
+      display: block;
+      margin-bottom: 8px;
+    }
+    
+    .device-btn .rate {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    .slot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+    }
+    
+    .slot-card {
+      padding: 16px;
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .slot-card:hover:not(.occupied) {
+      border-color: var(--success);
+    }
+    
+    .slot-card.selected {
+      border-color: var(--primary);
+      background: rgba(0, 240, 255, 0.1);
+    }
+    
+    .slot-card.occupied {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .time-selector {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    
+    .time-btn {
+      padding: 12px 24px;
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    
+    .time-btn:hover {
+      border-color: var(--primary);
+    }
+    
+    .time-btn.active {
+      border-color: var(--primary);
+      background: rgba(0, 240, 255, 0.1);
+    }
+    
+    .booking-summary {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-top: 24px;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .summary-row:last-child {
+      border-bottom: none;
+      font-size: 1.25rem;
+      color: var(--primary);
+    }
+    
+    .history-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+    }
+    
+    .history-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: var(--bg-input);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+    
+    .history-info {
+      flex: 1;
+    }
+    
+    .history-title {
+      font-weight: 600;
+    }
+    
+    .history-meta {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+    
+    .history-amount {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.125rem;
+    }
+    
+    .history-amount.positive { color: var(--success); }
+    .history-amount.negative { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-container">
+    <div class="login-card">
+      <div class="login-logo">👤</div>
+      <h1 class="login-title">Member Login</h1>
+      
+      <form id="loginForm" onsubmit="login(event)">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-input" name="username" required 
+            placeholder="Enter your username">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" name="password" required 
+            placeholder="Enter your password">
+        </div>
+        <button type="submit" class="btn btn-primary w-full">Login</button>
+      </form>
+      
+      <div class="mt-3">
+        <a href="/" class="text-secondary">← Back to Home</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="hidden">
+    <header class="navbar">
+      <div class="flex items-center gap-2">
+        <span>🎮</span>
+        <h2>Member Portal</h2>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">
+        🚪 Logout
+      </button>
+    </header>
+
+    <div class="container">
+      <!-- Member Header -->
+      <div class="member-header">
+        <div class="member-avatar">👤</div>
+        <div class="member-name" id="memberName">-</div>
+        <div class="text-secondary mb-2">@<span id="memberUsername">-</span></div>
+        <div class="member-balance">₹<span id="memberBalance">0</span></div>
+        
+        <div class="quick-stats">
+          <div class="quick-stat">
+            <div class="quick-stat-value" id="memberTime">0h</div>
+            <div class="quick-stat-label">Total Time</div>
+          </div>
+          <div class="quick-stat">
+            <div class="quick-stat-value" id="memberSessions">0</div>
+            <div class="quick-stat-label">Sessions</div>
+          </div>
+          <div class="quick-stat">
+            <div class="quick-stat-value" id="memberSpent">₹0</div>
+            <div class="quick-stat-label">Total Spent</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex gap-1 mb-3">
+        <button class="btn btn-primary" onclick="showTab('booking')" id="tab-booking">📅 Book Now</button>
+        <button class="btn btn-ghost" onclick="showTab('history')" id="tab-history">📜 History</button>
+        <button class="btn btn-ghost" onclick="showTab('leaderboard')" id="tab-leaderboard">🏆 Leaderboard</button>
+      </div>
+
+      <!-- Booking Tab -->
+      <div id="content-booking">
+        <div class="card">
+          <h3 class="card-title mb-3">🎮 Book Your Slot</h3>
+          
+          <!-- Device Selection -->
+          <p class="text-secondary mb-2">Select Device Type</p>
+          <div class="device-selector">
+            <div class="device-btn active" data-type="PC" onclick="selectDevice(this)">
+              <span class="icon">🖥️</span>
+              <div>Gaming PC</div>
+              <div class="rate">₹<span class="device-rate">40</span>/hr</div>
+            </div>
+            <div class="device-btn" data-type="XBOX" onclick="selectDevice(this)">
+              <span class="icon">🎮</span>
+              <div>Xbox</div>
+              <div class="rate">₹<span class="device-rate">60</span>/hr</div>
+            </div>
+            <div class="device-btn" data-type="PS" onclick="selectDevice(this)">
+              <span class="icon">🎮</span>
+              <div>PlayStation</div>
+              <div class="rate">₹<span class="device-rate">100</span>/hr</div>
+            </div>
+          </div>
+
+          <!-- Date Selection -->
+          <div class="form-group">
+            <label class="form-label">Select Date</label>
+            <input type="date" class="form-input" id="bookingDate" onchange="loadSlots()">
+          </div>
+
+          <!-- Terminal Selection -->
+          <p class="text-secondary mb-2">Select Terminal</p>
+          <div class="slot-grid" id="slotGrid">
+            <!-- Slots will be loaded here -->
+          </div>
+
+          <!-- Duration Selection -->
+          <p class="text-secondary mb-2 mt-3">Select Duration</p>
+          <div class="time-selector">
+            <button type="button" class="time-btn" data-duration="60" onclick="selectDuration(this)">1 Hour</button>
+            <button type="button" class="time-btn active" data-duration="120" onclick="selectDuration(this)">2 Hours</button>
+            <button type="button" class="time-btn" data-duration="180" onclick="selectDuration(this)">3 Hours</button>
+            <button type="button" class="time-btn" data-duration="240" onclick="selectDuration(this)">4 Hours</button>
+          </div>
+
+          <!-- Time Slot -->
+          <div class="form-group">
+            <label class="form-label">Start Time</label>
+            <select class="form-select" id="startTime" onchange="updateSummary()">
+              <!-- Options will be loaded -->
+            </select>
+          </div>
+
+          <!-- Booking Summary -->
+          <div class="booking-summary">
+            <h4 class="card-title mb-2">Booking Summary</h4>
+            <div class="summary-row">
+              <span>Device</span>
+              <span id="summaryDevice">Gaming PC</span>
+            </div>
+            <div class="summary-row">
+              <span>Terminal</span>
+              <span id="summaryTerminal">-</span>
+            </div>
+            <div class="summary-row">
+              <span>Date</span>
+              <span id="summaryDate">-</span>
+            </div>
+            <div class="summary-row">
+              <span>Time</span>
+              <span id="summaryTime">-</span>
+            </div>
+            <div class="summary-row">
+              <span>Duration</span>
+              <span id="summaryDuration">2 Hours</span>
+            </div>
+            <div class="summary-row">
+              <span>Total Cost</span>
+              <span id="summaryCost">₹80</span>
+            </div>
+          </div>
+
+          <button class="btn btn-primary w-full mt-3" onclick="confirmBooking()">
+            ✅ Confirm Booking
+          </button>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="content-history" class="hidden">
+        <div class="card">
+          <h3 class="card-title mb-3">📜 Transaction History</h3>
+          <div id="historyList">
+            <!-- History will be loaded here -->
+          </div>
+        </div>
+        
+        <div class="card mt-3">
+          <h3 class="card-title mb-3">⏱️ Session History</h3>
+          <div id="sessionHistory">
+            <!-- Sessions will be loaded here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard Tab -->
+      <div id="content-leaderboard" class="hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🏆 Leaderboard</h3>
+            <select class="form-select" id="leaderboardPeriod" style="width: 150px;" onchange="loadLeaderboard()">
+              <option value="all">All Time</option>
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div id="leaderboardList">
+            <!-- Leaderboard will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/member/js/member.js"></script>
+</body>
+</html>

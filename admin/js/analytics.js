@@ -20,6 +20,25 @@ const fdbDb = fdbApp.database();
 
 let revenueChart, peakHoursChart, pcUsageChart, memberGrowthChart;
 
+// ==================== CACHING LAYER ====================
+// Prevents repeated Firebase calls
+
+const analyticsCache = {
+  recharges: { data: null, timestamp: 0, ttl: 2 * 60 * 1000 },   // 2 min
+  members: { data: null, timestamp: 0, ttl: 10 * 60 * 1000 },    // 10 min
+  sessions: { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },    // 5 min
+  guestSessions: { data: null, timestamp: 0, ttl: 5 * 60 * 1000 } // 5 min
+};
+
+function isCacheValid(cacheEntry) {
+  return cacheEntry && cacheEntry.data !== null && (Date.now() - cacheEntry.timestamp < cacheEntry.ttl);
+}
+
+function setCache(cacheEntry, data) {
+  cacheEntry.data = data;
+  cacheEntry.timestamp = Date.now();
+}
+
 // ==================== LOAD ANALYTICS ====================
 
 export async function loadAnalytics() {
@@ -40,92 +59,122 @@ export async function loadAnalytics() {
   let recharges = {}, bookings = {}, members = [], sessions = [], guestSessions = [];
 
   try {
-    console.log("📊 Loading analytics data...");
+    console.log("📊 Loading analytics data (with caching)...");
     
     // Verify databases are initialized
     if (!bookingDb || !fdbDb) {
       throw new Error("Firebase databases not initialized");
     }
     
-    // Fetch data in parallel with timeout
+    // Fetch data in parallel with caching and timeout
     const timeout = (promise, ms) => Promise.race([
       promise,
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
     ]);
     
-    // OPTIMIZATION: Add query limits to reduce data transfer
-    // Sessions can grow very large - limit to last 1000 for analytics
-    // Guest sessions - limit to last 500
+    // Check cache and fetch only what's needed
+    const fetchRecharges = async () => {
+      if (isCacheValid(analyticsCache.recharges)) {
+        console.log("📦 Using cached recharges");
+        return analyticsCache.recharges.data;
+      }
+      const snap = await timeout(bookingDb.ref(FB_PATHS.RECHARGES).once('value'), 10000);
+      const data = snap.val() || {};
+      setCache(analyticsCache.recharges, data);
+      return data;
+    };
+    
+    const fetchMembers = async () => {
+      if (isCacheValid(analyticsCache.members)) {
+        console.log("📦 Using cached members");
+        return analyticsCache.members.data;
+      }
+      const snap = await timeout(fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once('value'), 10000);
+      const data = Object.values(snap.val() || {});
+      setCache(analyticsCache.members, data);
+      return data;
+    };
+    
+    const fetchSessions = async () => {
+      if (isCacheValid(analyticsCache.sessions)) {
+        console.log("📦 Using cached sessions");
+        return analyticsCache.sessions.data;
+      }
+      // Limit to 500 for performance
+      const snap = await timeout(fdbDb.ref(FB_PATHS.SESSIONS).limitToLast(500).once('value'), 10000);
+      const data = Object.values(snap.val() || {});
+      setCache(analyticsCache.sessions, data);
+      return data;
+    };
+    
+    const fetchGuestSessions = async () => {
+      if (isCacheValid(analyticsCache.guestSessions)) {
+        console.log("📦 Using cached guest sessions");
+        return analyticsCache.guestSessions.data;
+      }
+      
+      let guestData = [];
+      
+      // Fetch from guest-sessions path (limited)
+      try {
+        const snap = await timeout(fdbDb.ref(FB_PATHS.GUEST_SESSIONS).limitToLast(200).once('value'), 10000);
+        const data = snap.val() || {};
+        Object.values(data).forEach(dateData => {
+          if (dateData && typeof dateData === 'object') {
+            Object.values(dateData).forEach(session => {
+              guestData.push({
+                TERMINAL_SHORT: session.terminal_short || session.terminal,
+                TERMINALNAME: session.terminal,
+                PRICE: session.total || session.usage || 0,
+                USINGMIN: session.duration_minutes || 0,
+                DATE: session.date,
+                source: 'messages.msg'
+              });
+            });
+          }
+        });
+      } catch (e) {
+        console.warn("Guest sessions fetch failed:", e);
+      }
+      
+      setCache(analyticsCache.guestSessions, guestData);
+      return guestData;
+    };
+    
+    // Fetch in parallel
     const results = await Promise.allSettled([
-      timeout(bookingDb.ref(FB_PATHS.RECHARGES).once('value'), 10000),
-      timeout(bookingDb.ref(FB_PATHS.BOOKINGS).once('value'), 10000),
-      timeout(fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once('value'), 10000),
-      timeout(fdbDb.ref(FB_PATHS.SESSIONS).limitToLast(1000).once('value'), 10000),
-      timeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).limitToLast(500).once('value'), 10000),
-      timeout(fdbDb.ref(FB_PATHS.GUEST_SESSIONS).limitToLast(500).once('value'), 10000) // New messages.msg data
+      fetchRecharges(),
+      bookingDb.ref(FB_PATHS.BOOKINGS).once('value'),
+      fetchMembers(),
+      fetchSessions(),
+      fetchGuestSessions()
     ]);
 
     // Process results safely
     if (results[0].status === 'fulfilled') {
-      recharges = results[0].value?.val?.() || {};
-      console.log("✅ Recharges loaded:", Object.keys(recharges).length);
-    } else {
-      console.warn("⚠️ Recharges failed:", results[0].reason);
+      recharges = results[0].value || {};
+      console.log("✅ Recharges:", Object.keys(recharges).length, "days");
     }
     
     if (results[1].status === 'fulfilled') {
       bookings = results[1].value?.val?.() || {};
-      console.log("✅ Bookings loaded:", Object.keys(bookings).length);
-    } else {
-      console.warn("⚠️ Bookings failed:", results[1].reason);
+      console.log("✅ Bookings:", Object.keys(bookings).length);
     }
     
     if (results[2].status === 'fulfilled') {
-      members = Object.values(results[2].value?.val?.() || {});
-      console.log("✅ Members loaded:", members.length);
-    } else {
-      console.warn("⚠️ Members failed:", results[2].reason);
+      members = results[2].value || [];
+      console.log("✅ Members:", members.length);
     }
     
     if (results[3].status === 'fulfilled') {
-      sessions = Object.values(results[3].value?.val?.() || {});
-      console.log("✅ Sessions loaded:", sessions.length);
-    } else {
-      console.warn("⚠️ Sessions failed:", results[3].reason);
+      sessions = results[3].value || [];
+      console.log("✅ Sessions:", sessions.length);
     }
     
-    // Merge guest sessions from both sources
     if (results[4].status === 'fulfilled') {
-      const oldGuestSessions = Object.values(results[4].value?.val?.() || {});
-      guestSessions = [...oldGuestSessions];
-      console.log("✅ Legacy guest sessions loaded:", oldGuestSessions.length);
+      guestSessions = results[4].value || [];
+      console.log("✅ Guest sessions:", guestSessions.length);
     }
-    
-    // Also load from new messages.msg parsed data
-    if (results[5].status === 'fulfilled') {
-      const newGuestData = results[5].value?.val?.() || {};
-      // Flatten date-based structure: { "2026-01-09": { "CT1_120000": {...} }, ... }
-      let newCount = 0;
-      Object.values(newGuestData).forEach(dateData => {
-        if (dateData && typeof dateData === 'object') {
-          Object.values(dateData).forEach(session => {
-            // Normalize to same format as legacy data
-            guestSessions.push({
-              TERMINAL_SHORT: session.terminal_short || session.terminal,
-              TERMINALNAME: session.terminal,
-              PRICE: session.total || session.usage || 0,
-              USINGMIN: session.duration_minutes || 0,
-              DATE: session.date,
-              source: 'messages.msg'
-            });
-            newCount++;
-          });
-        }
-      });
-      console.log("✅ New guest sessions (messages.msg) loaded:", newCount);
-    }
-    
-    console.log("✅ Total guest sessions:", guestSessions.length);
     
     console.log(`📊 Data loading complete`);
   } catch (error) {

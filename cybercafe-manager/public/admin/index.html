@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - CyberCafe Manager</title>
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span>🎮</span>
+      <span>CyberCafe</span>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="sidebar-link active" data-page="dashboard">
+        <span class="icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#terminals" class="sidebar-link" data-page="terminals">
+        <span class="icon">🖥️</span>
+        <span>Terminals</span>
+      </a>
+      <a href="#members" class="sidebar-link" data-page="members">
+        <span class="icon">👥</span>
+        <span>Members</span>
+      </a>
+      <a href="#sessions" class="sidebar-link" data-page="sessions">
+        <span class="icon">⏱️</span>
+        <span>Sessions</span>
+      </a>
+      <a href="#bookings" class="sidebar-link" data-page="bookings">
+        <span class="icon">📅</span>
+        <span>Bookings</span>
+      </a>
+      <a href="#leaderboard" class="sidebar-link" data-page="leaderboard">
+        <span class="icon">🏆</span>
+        <span>Leaderboard</span>
+      </a>
+      <a href="#settings" class="sidebar-link" data-page="settings">
+        <span class="icon">⚙️</span>
+        <span>Settings</span>
+      </a>
+    </nav>
+    
+    <div style="position: absolute; bottom: 24px; left: 16px; right: 16px;">
+      <button class="btn btn-ghost w-full" onclick="logout()">
+        <span>🚪</span>
+        Logout
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <header class="navbar">
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost btn-sm" id="menuToggle" style="display: none;">☰</button>
+        <h2 id="pageTitle">Dashboard</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-success" id="connectionStatus">
+          <span class="pulse">●</span> Connected
+        </span>
+        <span class="text-secondary" id="currentTime"></span>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Dashboard Page -->
+      <section id="page-dashboard" class="page">
+        <!-- Stats -->
+        <div class="grid grid-4 mb-3">
+          <div class="stat-card">
+            <span class="stat-icon">👥</span>
+            <div class="stat-value" id="stat-members">0</div>
+            <div class="stat-label">Total Members</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">🖥️</span>
+            <div class="stat-value" id="stat-terminals">0/0</div>
+            <div class="stat-label">Available / Total</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">⏱️</span>
+            <div class="stat-value" id="stat-sessions">0</div>
+            <div class="stat-label">Active Sessions</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon">💰</span>
+            <div class="stat-value" id="stat-revenue">₹0</div>
+            <div class="stat-label">Today's Revenue</div>
+          </div>
+        </div>
+
+        <!-- Terminal Grid -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🖥️ Terminal Status</h3>
+            <button class="btn btn-primary btn-sm" onclick="showAddTerminalModal()">
+              + Add Terminal
+            </button>
+          </div>
+          <div class="terminal-grid" id="terminalGrid">
+            <!-- Terminals will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Recent Sessions -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">⏱️ Today's Sessions</h3>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Terminal</th>
+                  <th>User</th>
+                  <th>Type</th>
+                  <th>Start Time</th>
+                  <th>Duration</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recentSessions">
+                <!-- Sessions will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Terminals Page -->
+      <section id="page-terminals" class="page hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🖥️ All Terminals</h3>
+            <button class="btn btn-primary btn-sm" onclick="showAddTerminalModal()">
+              + Add Terminal
+            </button>
+          </div>
+          <div class="terminal-grid" id="terminalsPage">
+            <!-- Terminals will be loaded here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Members Page -->
+      <section id="page-members" class="page hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">👥 Members</h3>
+            <div class="flex gap-1">
+              <input type="text" class="form-input" id="memberSearch" 
+                placeholder="Search members..." style="width: 250px;">
+              <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">
+                + Add Member
+              </button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Display Name</th>
+                  <th>Balance</th>
+                  <th>Total Time</th>
+                  <th>Sessions</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="membersTable">
+                <!-- Members will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sessions Page -->
+      <section id="page-sessions" class="page hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">⏱️ Session History</h3>
+            <input type="date" class="form-input" id="sessionDate" style="width: 180px;">
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Terminal</th>
+                  <th>User</th>
+                  <th>Type</th>
+                  <th>Start Time</th>
+                  <th>End Time</th>
+                  <th>Duration</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="sessionsTable">
+                <!-- Sessions will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bookings Page -->
+      <section id="page-bookings" class="page hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📅 Bookings</h3>
+            <input type="date" class="form-input" id="bookingDate" style="width: 180px;">
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Terminal</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Duration</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="bookingsTable">
+                <!-- Bookings will be loaded here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Leaderboard Page -->
+      <section id="page-leaderboard" class="page hidden">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🏆 Leaderboard</h3>
+            <select class="form-select" id="leaderboardPeriod" style="width: 150px;">
+              <option value="all">All Time</option>
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div id="leaderboardList">
+            <!-- Leaderboard will be loaded here -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Page -->
+      <section id="page-settings" class="page hidden">
+        <div class="grid grid-2">
+          <div class="card">
+            <h3 class="card-title mb-3">💰 Pricing</h3>
+            <div class="form-group">
+              <label class="form-label">PC Rate (per hour)</label>
+              <input type="number" class="form-input" id="rate-pc" value="40">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Xbox Rate (per hour)</label>
+              <input type="number" class="form-input" id="rate-xbox" value="60">
+            </div>
+            <div class="form-group">
+              <label class="form-label">PlayStation Rate (per hour)</label>
+              <input type="number" class="form-input" id="rate-ps" value="100">
+            </div>
+            <button class="btn btn-primary" onclick="saveRates()">Save Rates</button>
+          </div>
+          
+          <div class="card">
+            <h3 class="card-title mb-3">🕐 Operating Hours</h3>
+            <div class="form-group">
+              <label class="form-label">Opening Time</label>
+              <input type="time" class="form-input" id="openTime" value="10:00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Closing Time</label>
+              <input type="time" class="form-input" id="closeTime" value="23:00">
+            </div>
+            <button class="btn btn-primary" onclick="saveHours()">Save Hours</button>
+          </div>
+          
+          <div class="card">
+            <h3 class="card-title mb-3">📦 Backup</h3>
+            <p class="text-secondary mb-3">Download a backup of all your data</p>
+            <button class="btn btn-secondary" onclick="downloadBackup()">
+              📥 Download Backup
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <div class="modal-overlay" id="terminalModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="terminalModalTitle">Terminal</h3>
+        <button class="modal-close" onclick="closeModal('terminalModal')">&times;</button>
+      </div>
+      <div id="terminalModalContent">
+        <!-- Modal content will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="memberModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Member</h3>
+        <button class="modal-close" onclick="closeModal('memberModal')">&times;</button>
+      </div>
+      <form id="addMemberForm" onsubmit="addMember(event)">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-input" name="username" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-input" name="displayName">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" name="password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Initial Balance (₹)</label>
+          <input type="number" class="form-input" name="balance" value="0">
+        </div>
+        <button type="submit" class="btn btn-primary w-full">Add Member</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="rechargeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Recharge Balance</h3>
+        <button class="modal-close" onclick="closeModal('rechargeModal')">&times;</button>
+      </div>
+      <form id="rechargeForm" onsubmit="rechargeMember(event)">
+        <input type="hidden" name="memberId" id="rechargeMemberId">
+        <div class="form-group">
+          <label class="form-label">Member</label>
+          <input type="text" class="form-input" id="rechargeMemberName" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (₹)</label>
+          <input type="number" class="form-input" name="amount" required min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select class="form-select" name="paymentMethod">
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-success w-full">Recharge</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/admin/js/admin.js"></script>
+</body>
+</html>
