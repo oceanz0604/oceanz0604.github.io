@@ -486,75 +486,6 @@ def fetch_all_members(cursor):
         return []
 
 
-def process_and_upload_members(records, sync_state):
-    """Upload only changed member profiles."""
-    old_hashes = sync_state.get("member_hashes", {})
-    new_hashes = {}
-    members_to_update = {}
-    members_array = []
-    
-    for record in records:
-        username = record.get("USERNAME")
-        if not username or not isinstance(username, str):
-            continue
-        
-        original_username = username.strip()  # Preserve original case for display
-        username = original_username.upper()  # Uppercase for Firebase key
-        if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
-            continue
-        
-        # Map FDB fields to our standard names
-        # FDB has: NAME, LASTNAME, BAKIYE, ACCSTATUS, LOGIN, RECDATE, LLOGDATE, TOTALBAKIYE, TOTALACTMINUTE
-        clean_record = {
-            "USERNAME": username,
-            "DISPLAY_NAME": original_username,  # Original case for display
-            "PASSWORD": record.get("PASSWORD") or "",  # Required for member login
-            "BALANCE": float(record.get("BAKIYE") or 0),  # FDB: BAKIYE
-            "FIRSTNAME": record.get("NAME") or "",  # FDB: NAME (not FIRSTNAME!)
-            "LASTNAME": record.get("LASTNAME") or "",
-            "EMAIL": record.get("EMAIL") or "",
-            "PHONE": record.get("PHONE") or record.get("GSM") or "",  # FDB has both PHONE and GSM
-            "MEMBERSTATE": int(record.get("ACCSTATUS") or 0),  # FDB: ACCSTATUS
-            "ISLOGIN": int(record.get("LOGIN") or 0),  # FDB: LOGIN
-            "TOTALACTMINUTE": int(record.get("TOTALACTMINUTE") or 0),  # Total active minutes
-            "TOTALBAKIYE": float(record.get("TOTALBAKIYE") or 0),  # Total balance/paid
-        }
-        
-        if record.get("ID") is not None:
-            clean_record["ID"] = record.get("ID")
-        if record.get("PRICETYPE") is not None:
-            clean_record["PRICETYPE"] = record.get("PRICETYPE")  # Pricing group
-        if record.get("ACCTYPE") is not None:
-            clean_record["ACCTYPE"] = record.get("ACCTYPE")  # Account type
-        if record.get("RECDATE"):
-            clean_record["RECDATE"] = record.get("RECDATE")  # Registration date
-        if record.get("LLOGDATE"):
-            clean_record["LASTLOGIN"] = record.get("LLOGDATE")  # FDB: LLOGDATE (Last Login Date)
-        if record.get("AVAILBONUS") is not None:
-            clean_record["AVAILBONUS"] = float(record.get("AVAILBONUS") or 0)  # Available bonus
-        
-        members_array.append(clean_record)
-        record_hash = get_record_hash(clean_record)
-        new_hashes[username] = record_hash
-        
-        if old_hashes.get(username) != record_hash:
-            members_to_update[username] = clean_record
-    
-    if members_to_update:
-        print(f"[DATA] Found {len(members_to_update)} CHANGED members (out of {len(records)})")
-        
-        # Update legacy members array (used by frontend for search, analytics, etc.)
-        try:
-            db.reference(FB_PATHS.LEGACY_MEMBERS).set(members_array)
-            print(f"   [OK] Updated members array ({len(members_array)} members)")
-        except Exception as e:
-            print(f"[WARN] Failed to update members: {e}")
-    else:
-        print("   No member changes detected")
-    
-    return new_hashes
-
-
 def build_and_upload_optimized_members(members_array, cursor):
     """
     Build and upload optimized v2 member data structure.
@@ -1194,33 +1125,19 @@ def process_and_upload_kasahar(records):
 
 # ==================== LEADERBOARD CALCULATION ====================
 
-def calculate_leaderboards_from_firebase():
-    """Calculate leaderboards directly from Firebase data (like frontend does)."""
-    print(f"\n{'='*60}")
-    print("[LEADERBOARDS] Calculating from Firebase data...")
-    print(f"{'='*60}")
+def calculate_leaderboards_from_fdb(members, history_by_user, cursor):
+    """Calculate leaderboards from local FDB data (no Firebase reads)."""
+    print("\n[LEADERBOARDS] Calculating from local FDB data...")
     
     try:
-        # Fetch members
-        members_ref = db.reference(FB_PATHS.LEGACY_MEMBERS)
-        members_data = members_ref.get()
-        
-        if not members_data:
-            print("[WARN] No members data found")
+        if not members:
+            print("[WARN] No members data")
             return False
         
-        if isinstance(members_data, list):
-            members = [m for m in members_data if m]
-        elif isinstance(members_data, dict):
-            members = list(members_data.values())
-        else:
-            members = []
+        print(f"[DATA] Processing {len(members)} members")
         
-        print(f"[DATA] Loaded {len(members)} members")
-        
-        # Fetch history
-        history_ref = db.reference(FB_PATHS.HISTORY)
-        all_history = history_ref.get() or {}
+        # Use the history data passed in (already organized by username)
+        all_history = history_by_user
         
         # All-time leaderboard (from members TOTALACTMINUTE)
         all_time = []
@@ -1315,8 +1232,7 @@ def calculate_leaderboards_from_firebase():
             if member_id and display_name:
                 member_id_to_display_name[member_id] = display_name
         
-        # Fetch sessions from FDB for monthly/weekly calculation
-        # SESSIONS table has accurate USINGMIN per session with timestamps
+        # Fetch sessions from FDB for monthly/weekly calculation using existing cursor
         now = datetime.now()
         month_start = datetime(now.year, now.month, 1)
         month_key = f"{now.year}-{now.month:02d}"
@@ -1327,24 +1243,13 @@ def calculate_leaderboards_from_firebase():
         week_num = now.isocalendar()[1]
         week_key = f"{now.year}-W{week_num:02d}"
         
-        # Try to fetch from FDB SESSIONS table
         monthly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0, "spent": 0})
         weekly_stats = defaultdict(lambda: {"minutes": 0, "sessions": 0})
         
+        # Query sessions from FDB using the passed cursor
+        month_start_str = month_start.strftime("%Y-%m-%d")
+        
         try:
-            con = fdb.connect(
-                dsn=WORKING_FDB_PATH,
-                user=FIREBIRD_USER,
-                password=FIREBIRD_PASSWORD,
-                charset='UTF8'
-            )
-            cursor = con.cursor()
-            
-            # Fetch sessions from current month
-            month_start_str = month_start.strftime("%Y-%m-%d")
-            week_start_str = week_start.strftime("%Y-%m-%d")
-            
-            # Query for member sessions (MEMBERID > 0 means member session, not guest)
             query = f"""
                 SELECT MEMBERID, USINGMIN, TOTALPRICE, STARTPOINT 
                 FROM SESSIONS 
@@ -1382,12 +1287,11 @@ def calculate_leaderboards_from_firebase():
                     weekly_stats[username]["sessions"] += 1
                     weekly_stats[username]["minutes"] += usingmin
             
-            con.close()
-            print(f"[OK] Fetched session data from FDB SESSIONS table")
+            print(f"[OK] Calculated monthly/weekly stats from FDB SESSIONS")
             
         except Exception as e:
-            print(f"[WARN] Could not fetch from FDB SESSIONS, falling back to Firebase history: {e}")
-            # Fallback to Firebase history if FDB not available
+            print(f"[WARN] Could not query SESSIONS, using history data: {e}")
+            # Fallback to history data
             for username, records in all_history.items():
                 if not isinstance(records, dict):
                     continue
@@ -1398,7 +1302,7 @@ def calculate_leaderboards_from_firebase():
                     if not record_date:
                         continue
                     try:
-                        record_dt = datetime.strptime(record_date, "%Y-%m-%d")
+                        record_dt = datetime.strptime(str(record_date).split("T")[0], "%Y-%m-%d")
                         if record_dt >= month_start:
                             monthly_stats[username]["sessions"] += 1
                             usingmin = float(record.get("USINGMIN") or 0)
@@ -1475,27 +1379,40 @@ def calculate_leaderboards_from_firebase():
 # ==================== MAIN ====================
 
 def main():
-    """Main unified sync routine."""
+    """
+    Main unified sync routine with clean step process.
+    
+    Steps (single FDB connection):
+    1. Members     - Fetch and upload V2 optimized structure
+    2. History     - Incremental sync of member history
+    3. Leaderboards - Calculate from local FDB data
+    4. Terminals   - Real-time PC status
+    5. Cash Register - Revenue data (7 days)
+    """
     start_time = datetime.now()
     
     print("\n" + "="*60)
     print("OceanZ Complete Unified Sync")
     print(f"   Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*60 + "\n")
+    print("="*60)
+    
+    # Initialize
+    conn = None
+    members = []
+    history_by_user = {}
     
     try:
         # Initialize Firebase
         init_firebase()
         
-        # ========== 1. FDB SYNC ==========
-        print("\n" + "="*60)
-        print("[STEP 1/4] FDB Database Sync")
-        print("="*60)
-        
+        # Open single FDB connection for all operations
+        print("\n[INIT] Opening Firebird database connection...")
         copy_fdb_file()
         conn = connect_to_firebird()
         cursor = conn.cursor()
+        print("[OK] Database connection established")
         
+        # Load sync state
         sync_state = load_local_sync_state()
         last_sync = sync_state.get("last_sync_time")
         if last_sync:
@@ -1503,51 +1420,67 @@ def main():
         else:
             print("[INFO] First sync - will upload all data")
         
-        # History
-        print("\n[STEP] Processing HISTORY (incremental)...")
+        # ========== STEP 1: MEMBERS (V2 Optimized Structure) ==========
+        print("\n" + "="*60)
+        print("[STEP 1/5] Members - V2 Optimized Structure")
+        print("="*60)
+        
+        members = fetch_all_members(cursor)
+        v2_count = build_and_upload_optimized_members(members, cursor)
+        
+        db.reference(f"{FB_PATHS.SYNC_META}/members").update({
+            "last_sync": datetime.now().isoformat(),
+            "status": "ok",
+            "members_count": v2_count
+        })
+        print(f"\n[OK] Members: {v2_count} profiles uploaded to /members/{{username}}")
+        
+        # ========== STEP 2: HISTORY (Incremental) ==========
+        print("\n" + "="*60)
+        print("[STEP 2/5] History - Incremental Sync")
+        print("="*60)
+        
         new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
         new_max_id = process_and_upload_history(new_records, sync_state)
         sync_state["last_history_id"] = new_max_id
         
-        # Members
-        print("\n[STEP] Processing MEMBERS (change detection)...")
-        members = fetch_all_members(cursor)
-        new_hashes = process_and_upload_members(members, sync_state)
-        sync_state["member_hashes"] = new_hashes
+        # Build history_by_user for leaderboard calculation (from new records)
+        # For leaderboards, we also need existing history - fetch from Firebase once
+        print("   [INFO] Loading history data for leaderboard calculation...")
+        try:
+            history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
+            print(f"   [OK] Loaded history for {len(history_by_user)} users")
+        except Exception as e:
+            print(f"   [WARN] Could not load history: {e}")
+            history_by_user = {}
         
         # Sessions
-        print("\n[STEP] Processing SESSIONS (recent only)...")
+        print("\n   Processing SESSIONS (recent only)...")
         sessions = fetch_recent_sessions(cursor, hours=2)
         process_and_upload_sessions(sessions)
         
         # Guest sessions
-        print("\n[STEP] Processing GUEST SESSIONS (from messages.msg)...")
+        print("   Processing GUEST SESSIONS (from messages.msg)...")
         guest_sessions = parse_messages_file()
         if guest_sessions:
             upload_guest_sessions(guest_sessions)
         
-        sync_state["last_sync_time"] = start_time.isoformat()
-        save_local_sync_state(sync_state)
+        print(f"\n[OK] History: {len(new_records)} new records synced")
         
-        # Update Firebase sync meta
-        db.reference("sync-meta").update({
-            "last_fdb_sync": start_time.isoformat(),
-            "last_history_id": new_max_id,
-            "records_synced": len(new_records)
-        })
-        
-        conn.close()
-        print("\n[OK] FDB sync completed")
-        
-        # ========== 2. TERMINAL STATUS (from FDB TERMINALS table) ==========
+        # ========== STEP 3: LEADERBOARDS (Local Calculation) ==========
         print("\n" + "="*60)
-        print("[STEP 2/4] Terminal Status Sync (from FDB)")
+        print("[STEP 3/5] Leaderboards - Local Calculation")
         print("="*60)
         
-        # Re-open FDB connection for terminal status
-        copy_fdb_file()
-        conn = connect_to_firebird()
-        cursor = conn.cursor()
+        if calculate_leaderboards_from_fdb(members, history_by_user, cursor):
+            print("\n[OK] Leaderboards calculated and uploaded")
+        else:
+            print("\n[WARN] Leaderboard calculation had errors")
+        
+        # ========== STEP 4: TERMINALS (Real-time Status) ==========
+        print("\n" + "="*60)
+        print("[STEP 4/5] Terminals - Real-time Status")
+        print("="*60)
         
         terminals = fetch_terminals_from_fdb(cursor)
         process_and_upload_terminal_status(terminals)
@@ -1555,14 +1488,13 @@ def main():
         db.reference(f"{FB_PATHS.SYNC_META}/terminals").update({
             "last_sync": datetime.now().isoformat(),
             "status": "ok",
-            "source": "fdb_terminals_table"
+            "terminal_count": len(terminals)
         })
+        print(f"\n[OK] Terminals: {len(terminals)} PCs status updated")
         
-        print("\n[OK] Terminal status sync completed")
-        
-        # ========== 3. CASH REGISTER (from FDB KASAHAR table) ==========
+        # ========== STEP 5: CASH REGISTER (Revenue) ==========
         print("\n" + "="*60)
-        print("[STEP 3/4] Cash Register Sync (Revenue)")
+        print("[STEP 5/5] Cash Register - Revenue Data")
         print("="*60)
         
         kasahar_records = fetch_kasahar_records(cursor, days=7)
@@ -1573,52 +1505,31 @@ def main():
             "status": "ok",
             "days_synced": 7
         })
+        print(f"\n[OK] Cash Register: {len(kasahar_records)} transactions (7 days)")
         
-        conn.close()
-        print("\n[OK] Cash register sync completed")
+        # ========== FINALIZE ==========
         
-        # ========== 4. LEADERBOARDS ==========
-        print("\n" + "="*60)
-        print("[STEP 4/5] Leaderboard Calculation")
-        print("="*60)
+        # Save sync state
+        sync_state["last_sync_time"] = start_time.isoformat()
+        save_local_sync_state(sync_state)
         
-        if calculate_leaderboards_from_firebase():
-            print("\n[OK] Leaderboard calculation completed")
-        else:
-            print("\n[WARN] Leaderboard calculation had errors")
-        
-        # ========== 5. OPTIMIZED MEMBER DATA (V2) ==========
-        print("\n" + "="*60)
-        print("[STEP 5/5] Optimized Member Data (V2 Structure)")
-        print("="*60)
-        
-        # Re-open FDB connection for member data
-        copy_fdb_file()
-        conn = connect_to_firebird()
-        cursor = conn.cursor()
-        
-        # Fetch fresh member data
-        members_for_v2 = fetch_all_members(cursor)
-        v2_count = build_and_upload_optimized_members(members_for_v2, cursor)
-        
-        db.reference(f"{FB_PATHS.SYNC_META}/optimized_members").update({
+        # Update Firebase sync meta
+        db.reference("sync-meta").update({
             "last_sync": datetime.now().isoformat(),
-            "status": "ok",
-            "members_count": v2_count
+            "last_history_id": new_max_id,
+            "records_synced": len(new_records)
         })
-        
-        conn.close()
-        print("\n[OK] Optimized member data sync completed")
         
         # Summary
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*60)
         print(f"[DONE] All syncs completed in {elapsed:.1f}s")
-        print(f"   - FDB History: {len(new_records)} new records")
-        print(f"   - Terminals: {len(terminals)} PCs (from FDB TERMINALS table)")
-        print(f"   - Cash Register: {len(kasahar_records)} transactions (7 days)")
-        print("   - Leaderboards: Calculated from Firebase")
-        print(f"   - Optimized Members: {v2_count} profiles with embedded data")
+        print("="*60)
+        print(f"   1. Members:       {v2_count} profiles (V2 structure)")
+        print(f"   2. History:       {len(new_records)} new records")
+        print(f"   3. Leaderboards:  Calculated from local FDB")
+        print(f"   4. Terminals:     {len(terminals)} PCs")
+        print(f"   5. Cash Register: {len(kasahar_records)} transactions")
         print("="*60 + "\n")
         
         # Update sync control status
@@ -1636,6 +1547,15 @@ def main():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+        
+    finally:
+        # Always close the FDB connection
+        if conn:
+            try:
+                conn.close()
+                print("[CLEANUP] Database connection closed")
+            except:
+                pass
 
 
 if __name__ == "__main__":
