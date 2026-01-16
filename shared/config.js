@@ -350,6 +350,207 @@ export class DataCache {
   }
 }
 
+// ==================== SHARED GLOBAL CACHE ====================
+// These caches are shared across ALL admin pages to avoid duplicate downloads
+
+/**
+ * Global shared cache for expensive Firebase data.
+ * Shared across all admin pages (dashboard, counter, recharges, analytics).
+ * 
+ * Usage:
+ *   import { SharedCache } from '../shared/config.js';
+ *   
+ *   // Load members (uses cache if valid)
+ *   const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+ *   
+ *   // Force refresh
+ *   SharedCache.invalidateMembers();
+ */
+export const SharedCache = {
+  // Members cache (5 min TTL) - shared across all admin pages
+  _membersCache: new DataCache(5 * 60 * 1000),
+  _membersPromise: null,
+  
+  // Recharges cache (3 min TTL) - shared across recharges, analytics, cash-register
+  _rechargesCache: new DataCache(3 * 60 * 1000),
+  _rechargesPromise: null,
+  
+  /**
+   * Get all members from Firebase with caching.
+   * Returns V2 structure: array of { profile, balance, stats, ... }
+   * @param {object} fdbDb - Firebase database reference
+   * @param {string} path - Firebase path (FB_PATHS.MEMBERS)
+   * @returns {Promise<Array>} Array of member objects
+   */
+  async getMembers(fdbDb, path = "members") {
+    // Return cached data if valid
+    if (this._membersCache.isValid()) {
+      console.log("📦 SharedCache: Using cached members data");
+      return this._membersCache.data;
+    }
+    
+    // If already fetching, wait for that promise
+    if (this._membersPromise) {
+      console.log("⏳ SharedCache: Waiting for pending members fetch");
+      return this._membersPromise;
+    }
+    
+    // Fetch from Firebase
+    console.log("🔄 SharedCache: Fetching members from Firebase");
+    this._membersPromise = fdbDb.ref(path).once("value")
+      .then(snap => {
+        const rawData = snap.val() || {};
+        // Convert V2 structure to array
+        const members = Object.entries(rawData).map(([username, memberData]) => {
+          const profile = memberData.profile || {};
+          return {
+            username,
+            id: profile.ID,
+            USERNAME: profile.USERNAME || username,
+            FIRSTNAME: profile.FIRSTNAME || "",
+            LASTNAME: profile.LASTNAME || "",
+            DISPLAY_NAME: profile.DISPLAY_NAME || profile.USERNAME || username,
+            EMAIL: profile.EMAIL || "",
+            PHONE: profile.PHONE || "",
+            RECDATE: profile.RECDATE || "",
+            MEMBERSTATE: profile.MEMBERSTATE || 0,
+            // Include balance and stats for convenience
+            balance: memberData.balance || {},
+            stats: memberData.stats || {},
+            ranks: memberData.ranks || {},
+            badges: memberData.badges || {},
+          };
+        });
+        
+        this._membersCache.set(members);
+        this._membersPromise = null;
+        console.log(`✅ SharedCache: Loaded ${members.length} members`);
+        return members;
+      })
+      .catch(err => {
+        this._membersPromise = null;
+        console.error("❌ SharedCache: Failed to load members", err);
+        throw err;
+      });
+    
+    return this._membersPromise;
+  },
+  
+  /**
+   * Get all recharges from Firebase with caching.
+   * @param {object} bookingDb - Firebase database reference
+   * @param {string} path - Firebase path (FB_PATHS.RECHARGES)
+   * @returns {Promise<Object>} Recharges data keyed by date
+   */
+  async getRecharges(bookingDb, path = "recharges") {
+    // Return cached data if valid
+    if (this._rechargesCache.isValid()) {
+      console.log("📦 SharedCache: Using cached recharges data");
+      return this._rechargesCache.data;
+    }
+    
+    // If already fetching, wait for that promise
+    if (this._rechargesPromise) {
+      console.log("⏳ SharedCache: Waiting for pending recharges fetch");
+      return this._rechargesPromise;
+    }
+    
+    // Fetch from Firebase
+    console.log("🔄 SharedCache: Fetching recharges from Firebase");
+    this._rechargesPromise = bookingDb.ref(path).once("value")
+      .then(snap => {
+        const data = snap.val() || {};
+        this._rechargesCache.set(data);
+        this._rechargesPromise = null;
+        console.log(`✅ SharedCache: Loaded recharges for ${Object.keys(data).length} dates`);
+        return data;
+      })
+      .catch(err => {
+        this._rechargesPromise = null;
+        console.error("❌ SharedCache: Failed to load recharges", err);
+        throw err;
+      });
+    
+    return this._rechargesPromise;
+  },
+  
+  /**
+   * Invalidate members cache (call after adding/editing member)
+   */
+  invalidateMembers() {
+    this._membersCache.invalidate();
+    this._membersPromise = null;
+    console.log("🗑️ SharedCache: Members cache invalidated");
+  },
+  
+  /**
+   * Invalidate recharges cache (call after adding/editing recharge)
+   */
+  invalidateRecharges() {
+    this._rechargesCache.invalidate();
+    this._rechargesPromise = null;
+    console.log("🗑️ SharedCache: Recharges cache invalidated");
+  },
+  
+  /**
+   * Get raw members data (V2 structure as-is from Firebase)
+   */
+  async getMembersRaw(fdbDb, path = "members") {
+    if (this._membersCache.isValid()) {
+      // Convert back to raw format - this is a bit wasteful but maintains compatibility
+      const raw = {};
+      this._membersCache.data.forEach(m => {
+        raw[m.username] = {
+          profile: {
+            ID: m.id,
+            USERNAME: m.USERNAME,
+            FIRSTNAME: m.FIRSTNAME,
+            LASTNAME: m.LASTNAME,
+            DISPLAY_NAME: m.DISPLAY_NAME,
+            EMAIL: m.EMAIL,
+            PHONE: m.PHONE,
+            RECDATE: m.RECDATE,
+            MEMBERSTATE: m.MEMBERSTATE,
+          },
+          balance: m.balance,
+          stats: m.stats,
+          ranks: m.ranks,
+          badges: m.badges,
+        };
+      });
+      return raw;
+    }
+    
+    // Fetch fresh and return raw format
+    const snap = await fdbDb.ref(path).once("value");
+    const data = snap.val() || {};
+    
+    // Also populate the parsed cache
+    const members = Object.entries(data).map(([username, memberData]) => {
+      const profile = memberData.profile || {};
+      return {
+        username,
+        id: profile.ID,
+        USERNAME: profile.USERNAME || username,
+        FIRSTNAME: profile.FIRSTNAME || "",
+        LASTNAME: profile.LASTNAME || "",
+        DISPLAY_NAME: profile.DISPLAY_NAME || profile.USERNAME || username,
+        EMAIL: profile.EMAIL || "",
+        PHONE: profile.PHONE || "",
+        RECDATE: profile.RECDATE || "",
+        MEMBERSTATE: profile.MEMBERSTATE || 0,
+        balance: memberData.balance || {},
+        stats: memberData.stats || {},
+        ranks: memberData.ranks || {},
+        badges: memberData.badges || {},
+      };
+    });
+    this._membersCache.set(members);
+    
+    return data;
+  }
+};
+
 // Legacy exports for backward compatibility
 export const PRIMARY_CONFIG = BOOKING_DB_CONFIG;
 export const SECONDARY_CONFIG = FDB_DATASET_CONFIG;

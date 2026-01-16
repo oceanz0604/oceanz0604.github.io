@@ -49,7 +49,7 @@ A modern, full-featured management system for gaming cafes built with vanilla Ja
 │                           │                                      │
 │                    Firebase Realtime DB                          │
 │         ┌─────────────────┴─────────────────┐                   │
-│         │  booking-db  │  fdb-dataset-db    │                   │
+│         │  booking-db  │  oceanz-fdb        │                   │
 │         │  (bookings,  │  (members, history,│                   │
 │         │   recharges) │   sessions, etc.)  │                   │
 │         └─────────────────┬─────────────────┘                   │
@@ -133,7 +133,7 @@ oceanz0604.github.io/
 │
 └── firebase-rules/            # Firebase security rules
     ├── booking-db-rules.json
-    └── fdb-dataset-rules.json
+    └── oceanz-fdb-rules.json
 ```
 
 ---
@@ -151,7 +151,7 @@ oceanz0604.github.io/
 
 1. Create two Firebase Realtime Databases:
    - `booking-db` - For bookings, recharges, staff, cash register
-   - `fdb-dataset-db` - For synced member data, sessions, leaderboards
+   - `oceanz-fdb` - For synced member data, sessions, leaderboards
 
 2. Update Firebase config in `shared/config.js`:
 ```javascript
@@ -164,7 +164,7 @@ export const BOOKING_DB_CONFIG = {
 };
 
 export const FDB_DATASET_CONFIG = {
-  // ... similar config for fdb-dataset-db
+  // ... similar config for oceanz-fdb
 };
 ```
 
@@ -270,7 +270,7 @@ FDB_INTERVAL = 15        # Minutes between full database syncs
         └── {log-id}/ (action logs)
 ```
 
-### fdb-dataset-db
+### oceanz-fdb
 ```
 ├── members/
 │   └── {username}/

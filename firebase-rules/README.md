@@ -7,7 +7,7 @@ This folder contains the Firebase Realtime Database security rules for both data
 | File | Database | Project |
 |------|----------|---------|
 | `booking-db-rules.json` | Booking DB | gaming-cafe-booking |
-| `fdb-dataset-rules.json` | FDB Dataset | fdb-dataset |
+| `oceanz-fdb-rules.json` | FDB Dataset | oceanz-fdb |
 
 ## How to Apply
 
@@ -25,7 +25,7 @@ This folder contains the Firebase Realtime Database security rules for both data
 - Staff can read/write all data when logged in
 - No public access allowed
 
-### FDB Dataset (`fdb-dataset-rules.json`)
+### FDB Dataset (`oceanz-fdb-rules.json`)
 - Read requires authentication
 - Write is set to `false` (only Admin SDK / service account can write)
 - Python sync scripts use service account credentials, which bypass rules
@@ -34,5 +34,5 @@ This folder contains the Firebase Realtime Database security rules for both data
 
 ⚠️ **Service Account Access**: The Python sync scripts use Firebase Admin SDK with service account credentials. This gives them **full database access regardless of security rules**.
 
-⚠️ **Cross-Project Auth**: If you need web app (authenticated via `gaming-cafe-booking`) to read from `fdb-dataset`, you may need to configure cross-project authentication or use the same Firebase project for both.
+⚠️ **Cross-Project Auth**: If you need web app (authenticated via `gaming-cafe-booking`) to read from `oceanz-fdb`, you may need to configure cross-project authentication or use the same Firebase project for both.
 

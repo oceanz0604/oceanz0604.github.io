@@ -11,7 +11,8 @@ import {
   FDB_APP_NAME, 
   AUTH_APP_NAME, 
   FB_PATHS, 
-  CONSTANTS 
+  CONSTANTS,
+  SharedCache 
 } from "../../shared/config.js";
 import { getISTDate, getTodayIST, getISTTimestamp } from "../../shared/utils.js";
 import { getStaffSession, clearStaffSession, logStaffActivity } from "./permissions.js";
@@ -121,10 +122,14 @@ function updateDateTime() {
 
 async function loadMembers() {
   try {
-    // V2 structure: /members/{username}/{ profile, balance, stats, ... }
-    const snap = await fdbDb.ref(FB_PATHS.MEMBERS).once("value");
-    const data = snap.val() || {};
-    allMembers = Object.entries(data).map(([username, memberData]) => {
+    // Use SharedCache for members - shared across all admin pages
+    const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+    
+    // Map to counter format (needs PASSWORD for verification)
+    // Note: SharedCache doesn't include PASSWORD, so we need raw data for counter
+    const rawData = await SharedCache.getMembersRaw(fdbDb, FB_PATHS.MEMBERS);
+    
+    allMembers = Object.entries(rawData).map(([username, memberData]) => {
       const profile = memberData.profile || {};
       const balance = memberData.balance || {};
       return {
@@ -136,7 +141,7 @@ async function loadMembers() {
         PASSWORD: profile.PASSWORD || ""  // For member verification
       };
     });
-    console.log(`✅ Loaded ${allMembers.length} members (V2)`);
+    console.log(`✅ Loaded ${allMembers.length} members (SharedCache)`);
   } catch (error) {
     console.error("Failed to load members:", error);
     allMembers = [];

@@ -5,7 +5,7 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS } from "../../shared/config.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS, SharedCache } from "../../shared/config.js";
 import { 
   getStaffSession, 
   hasPermission, 
@@ -213,48 +213,40 @@ navLinks.forEach(({ el, view }) => {
 
 // ==================== MEMBERS ====================
 
-// Cache for members list to avoid repeated fetches
-let membersCache = { data: null, timestamp: 0, ttl: 5 * 60 * 1000 };
+// Create a db wrapper for SharedCache compatibility
+const fdbDb = { ref: (path) => ref(db, path) };
 
-function loadAllMembers() {
+async function loadAllMembers() {
   const container = $("membersList");
   if (!container) return;
   
-  // Check cache first
-  if (membersCache.data && (Date.now() - membersCache.timestamp < membersCache.ttl)) {
-    console.log("📦 Using cached members list");
-    renderMembers(container, membersCache.data);
-    return;
-  }
-  
   container.innerHTML = `<p class="text-gray-500 font-orbitron text-sm">🔄 LOADING...</p>`;
 
-  get(membersRef).then(snapshot => {
-    if (!snapshot.exists()) {
+  try {
+    // Use SharedCache for members - shared across all admin pages
+    const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+    
+    if (!members || members.length === 0) {
       container.innerHTML = `<p class="text-gray-500">No members found</p>`;
       return;
     }
 
-    // V2 structure: /members/{username}/{ profile, balance, stats, ... }
-    const membersData = snapshot.val();
-    const members = Object.entries(membersData).map(([username, data]) => {
-      const profile = data.profile || {};
-      return {
-        USERNAME: username,
-        DISPLAY_NAME: profile.DISPLAY_NAME || username,
-        FIRSTNAME: profile.FIRSTNAME || "",
-        LASTNAME: profile.LASTNAME || "",
-        RECDATE: profile.RECDATE || "",
-        TOTALACTMINUTE: data.stats?.total_minutes || 0,
-        BALANCE: data.balance?.current_balance || 0
-      };
-    });
+    // Map to display format
+    const displayMembers = members.map(m => ({
+      USERNAME: m.USERNAME,
+      DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
+      FIRSTNAME: m.FIRSTNAME || "",
+      LASTNAME: m.LASTNAME || "",
+      RECDATE: m.RECDATE || "",
+      TOTALACTMINUTE: m.stats?.total_minutes || 0,
+      BALANCE: m.balance?.current_balance || 0
+    }));
     
-    membersCache.data = members;
-    membersCache.timestamp = Date.now();
-    
-    renderMembers(container, members);
-  });
+    renderMembers(container, displayMembers);
+  } catch (error) {
+    console.error("Error loading members:", error);
+    container.innerHTML = `<p class="text-red-500">Error loading members</p>`;
+  }
 }
 
 function renderMembers(container, members) {
