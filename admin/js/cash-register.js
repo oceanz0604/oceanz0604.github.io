@@ -9,7 +9,8 @@ import {
   TIMEZONE,
   getISTDate,
   formatToIST,
-  FB_PATHS
+  FB_PATHS,
+  SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
 
@@ -569,9 +570,8 @@ async function autoFetchTodaySale() {
   const saleDisplay = document.getElementById("todaySaleDisplay");
   
   try {
-    // Get all recharges (to include credit collections from any date that were paid today)
-    const allSnapshot = await db.ref(FB_PATHS.RECHARGES).once("value");
-    const allRecharges = allSnapshot.val() || {};
+    // Get all recharges using SharedCache (shared across all admin pages)
+    const allRecharges = await SharedCache.getRecharges(db, FB_PATHS.RECHARGES);
     
     let totalCash = 0;
     let totalUpi = 0;

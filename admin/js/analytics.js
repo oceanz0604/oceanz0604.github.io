@@ -3,7 +3,7 @@
  * Revenue charts, peak hours, popular PCs, member stats
  */
 
-import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, FB_PATHS } from "../../shared/config.js";
+import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, FB_PATHS, SharedCache } from "../../shared/config.js";
 
 // ==================== FIREBASE INIT (Compat SDK) ====================
 
@@ -72,43 +72,26 @@ export async function loadAnalytics() {
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
     ]);
     
-    // Check cache and fetch only what's needed
+    // Use SharedCache for recharges and members (shared across all admin pages)
     const fetchRecharges = async () => {
-      if (isCacheValid(analyticsCache.recharges)) {
-        console.log("📦 Using cached recharges");
-        return analyticsCache.recharges.data;
-      }
-      const snap = await timeout(bookingDb.ref(FB_PATHS.RECHARGES).once('value'), 10000);
-      const data = snap.val() || {};
-      setCache(analyticsCache.recharges, data);
-      return data;
+      // SharedCache handles caching internally
+      return SharedCache.getRecharges(bookingDb, FB_PATHS.RECHARGES);
     };
     
     const fetchMembers = async () => {
-      if (isCacheValid(analyticsCache.members)) {
-        console.log("📦 Using cached members");
-        return analyticsCache.members.data;
-      }
-      // V2 structure: /members/{username}/{ profile, balance, stats, ... }
-      const snap = await timeout(fdbDb.ref(FB_PATHS.MEMBERS).once('value'), 10000);
-      const membersData = snap.val() || {};
-      const data = Object.entries(membersData).map(([username, memberData]) => {
-        const profile = memberData.profile || {};
-        const stats = memberData.stats || {};
-        const balance = memberData.balance || {};
-        return {
-          USERNAME: username,
-          DISPLAY_NAME: profile.DISPLAY_NAME || username,
-          FIRSTNAME: profile.FIRSTNAME || "",
-          LASTNAME: profile.LASTNAME || "",
-          RECDATE: profile.RECDATE || "",
-          TOTALACTMINUTE: stats.total_minutes || 0,
-          BALANCE: balance.current_balance || 0,
-          TOTALBAKIYE: balance.total_loaded || 0
-        };
-      });
-      setCache(analyticsCache.members, data);
-      return data;
+      // SharedCache handles caching internally
+      const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+      // Map to analytics format
+      return members.map(m => ({
+        USERNAME: m.USERNAME,
+        DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
+        FIRSTNAME: m.FIRSTNAME || "",
+        LASTNAME: m.LASTNAME || "",
+        RECDATE: m.RECDATE || "",
+        TOTALACTMINUTE: m.stats?.total_minutes || 0,
+        BALANCE: m.balance?.current_balance || 0,
+        TOTALBAKIYE: m.balance?.total_loaded || 0
+      }));
     };
     
     const fetchSessions = async () => {

@@ -14,7 +14,8 @@ import {
   formatToIST,
   normalizeTerminalName,
   getShortTerminalName,
-  isGuestTerminal
+  isGuestTerminal,
+  SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
 
@@ -49,26 +50,16 @@ let auditData = [];
 let auditLimit = 20;
 let auditFilter = "all";
 
-// OPTIMIZATION: Cache for recharges data to avoid repeated full downloads
-// This cache is invalidated when data changes
-let rechargesCache = null;
-let rechargesCacheTime = 0;
-const CACHE_TTL = 60000; // 1 minute cache
+// OPTIMIZATION: Use SharedCache for recharges data to avoid repeated downloads
+// SharedCache is shared across all admin pages (recharges, analytics, cash-register)
 
 async function getCachedRecharges() {
-  const now = Date.now();
-  if (rechargesCache && (now - rechargesCacheTime) < CACHE_TTL) {
-    return rechargesCache;
-  }
-  const snap = await rechargeDb.ref(FB_PATHS.RECHARGES).once("value");
-  rechargesCache = snap.val() || {};
-  rechargesCacheTime = now;
-  return rechargesCache;
+  return SharedCache.getRecharges(rechargeDb, FB_PATHS.RECHARGES);
 }
 
+// Invalidate cache after modifications
 function invalidateRechargesCache() {
-  rechargesCache = null;
-  rechargesCacheTime = 0;
+  SharedCache.invalidateRecharges();
 }
 
 // Get admin name from staff session
@@ -234,21 +225,19 @@ if (elements.datePicker) {
 
 // ==================== MEMBER AUTOCOMPLETE ====================
 
-// Load members from Firebase (V2 structure: /members/{username}/profile)
-fdbDb.ref(FB_PATHS.MEMBERS).once("value").then(snap => {
-  const data = snap.val() || {};
-  // V2 structure: each key is username, value has { profile, balance, stats, ... }
-  allMembers = Object.entries(data).map(([username, memberData]) => {
-    const profile = memberData.profile || {};
-    return {
-      USERNAME: username,
-      DISPLAY_NAME: profile.DISPLAY_NAME || username,
-      FIRSTNAME: profile.FIRSTNAME || "",
-      LASTNAME: profile.LASTNAME || "",
-      BALANCE: memberData.balance?.current_balance || 0
-    };
-  });
-  console.log(`✅ Loaded ${allMembers.length} members (V2)`);
+// Load members from Firebase using SharedCache (shared across all admin pages)
+SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS).then(members => {
+  allMembers = members.map(m => ({
+    USERNAME: m.USERNAME,
+    DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
+    FIRSTNAME: m.FIRSTNAME || "",
+    LASTNAME: m.LASTNAME || "",
+    BALANCE: m.balance?.current_balance || 0
+  }));
+  console.log(`✅ Loaded ${allMembers.length} members (SharedCache)`);
+}).catch(err => {
+  console.error("Failed to load members:", err);
+  allMembers = [];
 });
 
 elements.memberInput?.addEventListener("input", () => {
