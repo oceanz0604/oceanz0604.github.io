@@ -42,12 +42,13 @@ from oceanz_sync import (
     connect_to_firebird,
     load_local_sync_state, save_local_sync_state,
     fetch_new_history_records, process_and_upload_history,
-    fetch_all_members, process_and_upload_members,
+    fetch_all_members,
     fetch_recent_sessions, process_and_upload_sessions,
     parse_messages_file, upload_guest_sessions,
     fetch_terminals_from_fdb, process_and_upload_terminal_status,
     fetch_kasahar_records, process_and_upload_kasahar,
-    calculate_leaderboards_from_firebase
+    calculate_leaderboards_from_fdb,  # Calculates from local FDB data
+    build_and_upload_optimized_members
 )
 
 # ==================== CONFIG ====================
@@ -230,7 +231,7 @@ class SyncService:
             return False
     
     def run_fdb_sync(self, silent=False):
-        """Run FDB database sync directly (no subprocess)."""
+        """Run FDB database sync (history, sessions, guest sessions). Members handled by V2."""
         if not silent:
             self.log("Starting: FDB Database Sync")
             self.set_status("syncing", "FDB Database Sync")
@@ -249,10 +250,7 @@ class SyncService:
             new_max_id = process_and_upload_history(new_records, sync_state)
             sync_state["last_history_id"] = new_max_id
             
-            # Members
-            members = fetch_all_members(cursor)
-            new_hashes = process_and_upload_members(members, sync_state)
-            sync_state["member_hashes"] = new_hashes
+            # Note: Members are now handled by V2 optimized structure (run_optimized_members_sync)
             
             # Sessions
             sessions = fetch_recent_sessions(cursor, hours=2)
@@ -289,16 +287,75 @@ class SyncService:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] FDB: {e}")
             return False
     
-    def run_leaderboard_sync(self, silent=False):
-        """Run leaderboard calculation directly (no subprocess)."""
+    def run_optimized_members_sync(self, silent=False):
+        """Run V2 optimized member data sync."""
         if not silent:
-            self.log("Starting: Leaderboard Calculation")
+            self.log("Starting: Optimized Member Data (V2)")
+            self.set_status("syncing", "Optimized Members V2")
+        else:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: V2 Member sync")
+        
+        try:
+            copy_fdb_file()
+            conn = connect_to_firebird()
+            cursor = conn.cursor()
+            
+            # Fetch members and build optimized structure
+            members = fetch_all_members(cursor)
+            v2_count = build_and_upload_optimized_members(members, cursor)
+            
+            db.reference(f"{FB_PATHS.SYNC_META}/optimized_members").update({
+                "last_sync": datetime.now().isoformat(),
+                "status": "ok",
+                "members_count": v2_count
+            })
+            
+            conn.close()
+            
+            if not silent:
+                self.log(f"  V2 Members: {v2_count} profiles with embedded data", "SUCCESS")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] V2 Members: {v2_count} profiles")
+            
+            return True
+            
+        except Exception as e:
+            if not silent:
+                self.log(f"V2 Members sync error: {e}", "ERROR")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] V2 Members: {e}")
+            return False
+    
+    def run_leaderboard_sync(self, silent=False, conn=None, members=None, history_by_user=None):
+        """Run leaderboard calculation from local FDB data."""
+        if not silent:
+            self.log("Starting: Leaderboard Calculation (from FDB)")
             self.set_status("syncing", "Leaderboard Calculation")
         else:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Running: Leaderboard calculation")
         
+        close_conn = False
         try:
-            success = calculate_leaderboards_from_firebase()
+            # If no connection provided, open one
+            if conn is None:
+                copy_fdb_file()
+                conn = connect_to_firebird()
+                close_conn = True
+            cursor = conn.cursor()
+            
+            # If no members provided, fetch them
+            if members is None:
+                members = fetch_all_members(cursor)
+            
+            # If no history provided, fetch from Firebase (needed for streak calculation)
+            if history_by_user is None:
+                try:
+                    from config import FB_PATHS
+                    history_by_user = db.reference(FB_PATHS.HISTORY).get() or {}
+                except:
+                    history_by_user = {}
+            
+            success = calculate_leaderboards_from_fdb(members, history_by_user, cursor)
             
             if success:
                 if not silent:
@@ -314,6 +371,12 @@ class SyncService:
             else:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] [ERROR] Leaderboards: {e}")
             return False
+        finally:
+            if close_conn and conn:
+                try:
+                    conn.close()
+                except:
+                    pass
     
     def perform_full_sync(self, triggered_by="web_ui"):
         """Execute the full sync process (triggered by web UI)."""
@@ -343,6 +406,12 @@ class SyncService:
         
         # 3. Leaderboard Calculation
         if self.run_leaderboard_sync(silent=False):
+            tasks_completed += 1
+        else:
+            tasks_failed += 1
+        
+        # 4. Optimized Members V2 (single-key structure with embedded data)
+        if self.run_optimized_members_sync(silent=False):
             tasks_completed += 1
         else:
             tasks_failed += 1
@@ -404,21 +473,22 @@ class SyncService:
         return success
     
     def auto_sync_fdb(self):
-        """Run complete sync silently (scheduled) - includes FDB, Terminals, and Leaderboards."""
+        """Run complete sync silently (scheduled) - includes FDB, Terminals, Leaderboards, and V2 Members."""
         print(f"\n[AUTO-SYNC] Complete Sync - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.syncing = True
         
-        # Run all three syncs
+        # Run all syncs
         fdb_ok = self.run_fdb_sync(silent=True)
         terminals_ok = self.run_terminals_sync(silent=True)
         leaders_ok = self.run_leaderboard_sync(silent=True)
+        v2_ok = self.run_optimized_members_sync(silent=True)  # V2 optimized member structure
         
         self.last_fdb_sync = datetime.now()
         self.last_terminals_sync = datetime.now()
         self.syncing = False
         self.update_schedule_info()
         
-        return fdb_ok and terminals_ok and leaders_ok
+        return fdb_ok and terminals_ok and leaders_ok and v2_ok
     
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""
