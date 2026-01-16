@@ -534,6 +534,26 @@ def fetch_all_members(cursor):
         return []
 
 
+def fetch_changed_members(cursor, since_datetime):
+    """
+    Fetch only members that have changed since a given datetime.
+    Uses LLOGDATE (last login date) and RECDATE (registration date) to identify changes.
+    """
+    try:
+        since_str = since_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute(f"""
+            SELECT * FROM MEMBERS 
+            WHERE LLOGDATE >= '{since_str}' OR RECDATE >= '{since_str}'
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        rows = cursor.fetchall()
+        members = [dict(zip(columns, [convert_value(v) for v in row])) for row in rows]
+        return members
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch changed members: {e}")
+        return []
+
+
 def build_and_upload_optimized_members(members_array, cursor):
     """
     Build and upload optimized v2 member data structure.
@@ -552,20 +572,29 @@ def build_and_upload_optimized_members(members_array, cursor):
     all_history = {}
     try:
         thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        # Use SELECT * to get all columns, then map them in Python
         cursor.execute(f"""
-            SELECT MEMBERS_USERNAME, ID, TARIH as DATE, SAAT as TIME, 
-                   MIKTAR as CHARGE, KALAN as BALANCE, NOTE, TERMINALNAME, 
-                   USINGMIN, USINGSEC, DISCOUNTNOTE
-            FROM MEMBERSHISTORY 
+            SELECT * FROM MEMBERSHISTORY 
             WHERE TARIH >= '{thirty_days_ago}'
             ORDER BY ID DESC
         """)
         columns = [desc[0].strip() for desc in cursor.description]
         
         for row in cursor.fetchall():
-            record = dict(zip(columns, [convert_value(v) for v in row]))
-            username = (record.get("MEMBERS_USERNAME") or "").upper()
+            raw_record = dict(zip(columns, [convert_value(v) for v in row]))
+            username = (raw_record.get("MEMBERS_USERNAME") or "").upper()
             if username:
+                # Map Turkish columns to English names
+                record = {
+                    "ID": raw_record.get("ID"),
+                    "DATE": raw_record.get("TARIH"),
+                    "TIME": raw_record.get("SAAT"),
+                    "CHARGE": raw_record.get("MIKTAR", 0),
+                    "BALANCE": raw_record.get("KALAN", 0),
+                    "NOTE": raw_record.get("NOTE"),
+                    "TERMINALNAME": raw_record.get("TERMINALNAME"),
+                    "USINGMIN": raw_record.get("USINGMIN", 0),
+                }
                 if username not in all_history:
                     all_history[username] = []
                 all_history[username].append(record)
@@ -729,36 +758,54 @@ def build_and_upload_optimized_members(members_array, cursor):
         try:
             # Sanitize all data before upload to handle NaN, Infinity, etc.
             sanitized_members = {}
+            skipped_count = 0
             for username, data in optimized_members.items():
                 try:
                     sanitized_members[username] = sanitize_for_firebase(data)
                 except Exception as e:
                     print(f"   [WARN] Skipping {username} due to sanitization error: {e}")
+                    skipped_count += 1
             
-            # Upload in batches to avoid timeout
-            batch_size = 50
+            if skipped_count > 0:
+                print(f"   [WARN] Skipped {skipped_count} members due to data issues")
+            
+            # Upload in smaller batches for better reliability
+            batch_size = 25  # Reduced from 50 for better reliability
             usernames = list(sanitized_members.keys())
+            total_batches = (len(usernames) + batch_size - 1) // batch_size
+            uploaded_count = 0
+            failed_count = 0
             
-            for i in range(0, len(usernames), batch_size):
-                batch = {u: sanitized_members[u] for u in usernames[i:i+batch_size]}
+            for batch_num, i in enumerate(range(0, len(usernames), batch_size), 1):
+                batch_usernames = usernames[i:i+batch_size]
+                batch = {u: sanitized_members[u] for u in batch_usernames}
+                
                 try:
                     db.reference("members").update(batch)
+                    uploaded_count += len(batch)
+                    
+                    # Show progress for large uploads
+                    if total_batches > 2:
+                        print(f"      Batch {batch_num}/{total_batches}: {len(batch)} members uploaded")
+                        
                 except Exception as batch_err:
-                    # If batch fails, try uploading one by one to find the problematic record
-                    print(f"   [WARN] Batch upload failed, trying individual uploads...")
-                    for u in usernames[i:i+batch_size]:
+                    # If batch fails, try uploading one by one
+                    print(f"   [WARN] Batch {batch_num} failed ({batch_err}), uploading individually...")
+                    
+                    for u in batch_usernames:
                         try:
                             db.reference(f"members/{u}").set(sanitized_members[u])
+                            uploaded_count += 1
                         except Exception as single_err:
-                            print(f"   [ERROR] Failed to upload {u}: {single_err}")
-                            # Try to identify problematic field
-                            for field, value in sanitized_members[u].items():
-                                try:
-                                    json.dumps(value)
-                                except:
-                                    print(f"      -> Problem in field '{field}': {type(value)} = {str(value)[:100]}")
+                            failed_count += 1
+                            print(f"   [ERROR] Failed {u}: {str(single_err)[:80]}")
             
-            print(f"   [OK] Uploaded optimized data for {len(sanitized_members)} members to /members/{{username}}")
+            # Final summary
+            if failed_count > 0:
+                print(f"   [WARN] Uploaded {uploaded_count}, failed {failed_count} members")
+            else:
+                print(f"   [OK] Uploaded {uploaded_count} members to /members/{{username}}")
+                
         except Exception as e:
             print(f"   [ERROR] Failed to upload optimized members: {e}")
             import traceback
@@ -1289,17 +1336,19 @@ def calculate_leaderboards_from_fdb(members, cursor):
         all_history = {}
         try:
             thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            # Use SELECT * and map in Python to avoid column name issues
             cursor.execute(f"""
-                SELECT MEMBERS_USERNAME, ID, TARIH as DATE
-                FROM MEMBERSHISTORY 
+                SELECT * FROM MEMBERSHISTORY 
                 WHERE TARIH >= '{thirty_days_ago}'
                 ORDER BY ID DESC
             """)
+            columns = [desc[0].strip() for desc in cursor.description]
             
             for row in cursor.fetchall():
-                username = (row[0] or "").upper()
-                record = {"ID": row[1], "DATE": convert_value(row[2])}
+                raw = dict(zip(columns, [convert_value(v) for v in row]))
+                username = (raw.get("MEMBERS_USERNAME") or "").upper()
                 if username:
+                    record = {"ID": raw.get("ID"), "DATE": raw.get("TARIH")}
                     if username not in all_history:
                         all_history[username] = []
                     all_history[username].append(record)
@@ -1610,15 +1659,10 @@ def run_fdb_sync():
         cursor = conn.cursor()
         
         sync_state = load_local_sync_state()
+        last_member_sync = sync_state.get("last_member_sync_time")
         
-        # ========== 1. MEMBERS ==========
-        print("\n[1/5] Members (V2 Structure)...")
-        members = fetch_all_members(cursor)
-        v2_count = build_and_upload_optimized_members(members, cursor)
-        print(f"      {v2_count} profiles uploaded")
-        
-        # ========== 2. HISTORY ==========
-        print("\n[2/5] History (incremental)...")
+        # ========== 1. HISTORY ==========
+        print("\n[1/5] History (incremental)...")
         new_records = fetch_new_history_records(cursor, sync_state.get("last_history_id", 0))
         new_max_id = process_and_upload_history(new_records, sync_state)
         sync_state["last_history_id"] = new_max_id
@@ -1634,26 +1678,49 @@ def run_fdb_sync():
         if guest_sessions:
             upload_guest_sessions(guest_sessions)
         
-        # ========== 3. LEADERBOARDS ==========
-        print("\n[3/5] Leaderboards (local FDB calculation)...")
+        # ========== 2. LEADERBOARDS ==========
+        print("\n[2/5] Leaderboards (local FDB calculation)...")
         # NOTE: Leaderboards are calculated entirely from FDB data - no Firebase downloads!
-        calculate_leaderboards_from_fdb(members, cursor)
+        # Fetch all members for leaderboard calculation (we need all for rankings)
+        all_members = fetch_all_members(cursor)
+        calculate_leaderboards_from_fdb(all_members, cursor)
         print("      All-time, monthly, weekly updated")
         
-        # ========== 4. TERMINALS ==========
-        print("\n[4/5] Terminals...")
+        # ========== 3. TERMINALS ==========
+        print("\n[3/5] Terminals...")
         terminals = fetch_terminals_from_fdb(cursor)
         process_and_upload_terminal_status(terminals)
         print(f"      {len(terminals)} PCs")
         
-        # ========== 5. CASH REGISTER ==========
-        print("\n[5/5] Cash Register (7 days)...")
+        # ========== 4. CASH REGISTER ==========
+        print("\n[4/5] Cash Register (7 days)...")
         kasahar_records = fetch_kasahar_records(cursor, days=7)
         process_and_upload_kasahar(kasahar_records)
         print(f"      {len(kasahar_records)} transactions")
         
+        # ========== 5. MEMBERS (incremental) ==========
+        print("\n[5/5] Members (incremental sync)...")
+        if last_member_sync:
+            # Incremental: only sync members that changed since last sync
+            last_sync_dt = datetime.fromisoformat(last_member_sync)
+            changed_members = fetch_changed_members(cursor, last_sync_dt)
+            print(f"      Found {len(changed_members)} changed members since {last_member_sync}")
+            
+            if changed_members:
+                v2_count = build_and_upload_optimized_members(changed_members, cursor)
+                print(f"      {v2_count} profiles uploaded")
+            else:
+                v2_count = 0
+                print("      No changes detected, skipping upload")
+        else:
+            # First run: sync all members
+            print("      First run - syncing all members...")
+            v2_count = build_and_upload_optimized_members(all_members, cursor)
+            print(f"      {v2_count} profiles uploaded")
+        
         # Save state
         sync_state["last_sync_time"] = start_time.isoformat()
+        sync_state["last_member_sync_time"] = start_time.isoformat()
         save_local_sync_state(sync_state)
         
         db.reference("sync-meta").update({
@@ -1666,7 +1733,7 @@ def run_fdb_sync():
         elapsed = (datetime.now() - start_time).total_seconds()
         print("\n" + "="*60)
         print(f"[DONE] FDB sync completed in {elapsed:.1f}s")
-        print(f"   Members: {v2_count} | History: {len(new_records)} | Terminals: {len(terminals)}")
+        print(f"   History: {len(new_records)} | Members: {v2_count} | Terminals: {len(terminals)}")
         print("="*60 + "\n")
         
         db.reference(f"{FB_PATHS.SYNC_CONTROL}/last_sync").set({
