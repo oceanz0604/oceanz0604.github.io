@@ -42,18 +42,17 @@ export const BOOKING_DB_CONFIG = {
 };
 
 /**
- * FDB Dataset Database (fdb-dataset)
+ * FDB Dataset Database (oceanz-fdb)
  * Used for: Members, Sessions, History, Terminal Status
  */
 export const FDB_DATASET_CONFIG = {
-  apiKey: "AIzaSyCaC558bQ7mhYlhjmthvZZX9SBVvNe6wYg",
-  authDomain: "fdb-dataset.firebaseapp.com",
-  databaseURL: "https://fdb-dataset-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "fdb-dataset",
-  storageBucket: "fdb-dataset.appspot.com",
-  messagingSenderId: "497229278574",
-  appId: "1:497229278574:web:c8f127aad76b8ed004657f",
-  measurementId: "G-4FLTSGLWBR"
+  apiKey: "AIzaSyB-DKTtleay44TXjFH0inqAFMztdy7JB1E",
+  authDomain: "oceanz-fdb.firebaseapp.com",
+  databaseURL: "https://oceanz-fdb-default-rtdb.firebaseio.com",
+  projectId: "oceanz-fdb",
+  storageBucket: "oceanz-fdb.firebasestorage.app",
+  messagingSenderId: "67265567513",
+  appId: "1:67265567513:web:25595b8adf10aa3d7c8388"
 };
 
 // ==================== FIREBASE APP NAMES ====================
@@ -258,6 +257,97 @@ export function isGuestTerminal(name) {
   const guestPrefixes = ["CT", "T", "PS", "XBOX"];
   
   return guestPrefixes.some(p => short.startsWith(p) || short === p);
+}
+
+// ==================== OPTIMIZED PATHS (V2) ====================
+// For single-key lookups and pre-computed data
+
+export const FB_PATHS_V2 = {
+  // Member data (single-key lookup) - /members/{username}/{ profile, balance, stats, ranks, badges, recent_history, recent_sessions }
+  MEMBERS: "members",
+  MEMBER: (username) => `members/${username}`,
+  MEMBER_PROFILE: (username) => `members/${username}/profile`,
+  MEMBER_BALANCE: (username) => `members/${username}/balance`,
+  MEMBER_STATS: (username) => `members/${username}/stats`,
+  MEMBER_RANKS: (username) => `members/${username}/ranks`,
+  MEMBER_BADGES: (username) => `members/${username}/badges`,
+  MEMBER_RECENT_HISTORY: (username) => `members/${username}/recent_history`,
+  MEMBER_RECENT_SESSIONS: (username) => `members/${username}/recent_sessions`,
+  
+  // Terminals (real-time status with session embedded)
+  TERMINALS: "terminals",
+  TERMINAL: (name) => `terminals/${name}`,
+  
+  // Leaderboards (pre-computed, ready to render)
+  LEADERBOARD_ALL_TIME: "leaderboards/all-time",
+  LEADERBOARD_MONTHLY: (month) => `leaderboards/monthly/${month}`,  // YYYY-MM
+  LEADERBOARD_WEEKLY: (week) => `leaderboards/weekly/${week}`,      // YYYY-Wxx
+  
+  // Daily stats (pre-computed analytics)
+  DAILY_STATS: "daily-stats",
+  DAILY_STAT: (date) => `daily-stats/${date}`,  // YYYY-MM-DD
+  
+  // History archive (full history, rarely needed)
+  HISTORY_ARCHIVE: "history-archive",
+  HISTORY_MONTH: (month, username) => `history-archive/${month}/${username}`,
+};
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Get current month key (YYYY-MM)
+ */
+export function getCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Get current week key (YYYY-Wxx)
+ */
+export function getCurrentWeekKey() {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const weekNum = Math.ceil((((now - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+/**
+ * Get today's date key (YYYY-MM-DD)
+ */
+export function getTodayKey() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ==================== CACHING UTILITIES ====================
+
+/**
+ * Generic cache class for Firebase data
+ * Usage: 
+ *   const myCache = new DataCache(5 * 60 * 1000); // 5 min TTL
+ *   if (myCache.isValid()) return myCache.data;
+ *   myCache.set(newData);
+ */
+export class DataCache {
+  constructor(ttl = 5 * 60 * 1000) {
+    this.data = null;
+    this.timestamp = 0;
+    this.ttl = ttl;
+  }
+  
+  isValid() {
+    return this.data !== null && (Date.now() - this.timestamp < this.ttl);
+  }
+  
+  set(data) {
+    this.data = data;
+    this.timestamp = Date.now();
+  }
+  
+  invalidate() {
+    this.data = null;
+    this.timestamp = 0;
+  }
 }
 
 // Legacy exports for backward compatibility

@@ -61,6 +61,10 @@ let autoRefreshInterval = null;
 let terminalsListener = null;
 let sessionsListener = null;
 
+// CRITICAL: Track if listener is active to prevent duplication
+// This was the root cause of 4GB+ bandwidth usage!
+let isListenerActive = false;
+
 // ==================== PERMISSIONS SETUP ====================
 
 function initializePermissions() {
@@ -209,9 +213,19 @@ navLinks.forEach(({ el, view }) => {
 
 // ==================== MEMBERS ====================
 
+// Cache for members list to avoid repeated fetches
+let membersCache = { data: null, timestamp: 0, ttl: 5 * 60 * 1000 };
+
 function loadAllMembers() {
   const container = $("membersList");
   if (!container) return;
+  
+  // Check cache first
+  if (membersCache.data && (Date.now() - membersCache.timestamp < membersCache.ttl)) {
+    console.log("📦 Using cached members list");
+    renderMembers(container, membersCache.data);
+    return;
+  }
   
   container.innerHTML = `<p class="text-gray-500 font-orbitron text-sm">🔄 LOADING...</p>`;
 
@@ -222,17 +236,24 @@ function loadAllMembers() {
     }
 
     const members = Object.values(snapshot.val());
-    container.innerHTML = members.map(m => {
-      const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.USERNAME;
-      return `
-        <div class="member-card p-4 rounded-xl">
-          <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${displayName}</h3>
-          <p class="text-sm text-gray-400">@${m.USERNAME}</p>
-          <p class="text-xs text-gray-600 mt-2">Joined: <span style="color: #b829ff;">${m.RECDATE || "-"}</span></p>
-        </div>
-      `;
-    }).join("");
+    membersCache.data = members;
+    membersCache.timestamp = Date.now();
+    
+    renderMembers(container, members);
   });
+}
+
+function renderMembers(container, members) {
+  container.innerHTML = members.map(m => {
+    const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.USERNAME;
+    return `
+      <div class="member-card p-4 rounded-xl">
+        <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${displayName}</h3>
+        <p class="text-sm text-gray-400">@${m.USERNAME}</p>
+        <p class="text-xs text-gray-600 mt-2">Joined: <span style="color: #b829ff;">${m.RECDATE || "-"}</span></p>
+      </div>
+    `;
+  }).join("");
 }
 
 // ==================== TERMINALS ====================
@@ -331,10 +352,22 @@ function renderTerminals(data) {
 
 // ==================== DATA SYNC ====================
 
+/**
+ * Start real-time terminal sync with SINGLE listener
+ * 
+ * CRITICAL FIX: Previous code was creating new listeners repeatedly,
+ * causing 4GB+ daily bandwidth usage!
+ * 
+ * Firebase onValue listeners automatically receive updates - no polling needed!
+ */
 function startDataSync() {
-  // CRITICAL FIX: Only set up listeners ONCE, not repeatedly
-  // Previous code was creating new listeners every 30 seconds, causing
-  // massive data downloads (each listener downloads full data independently)
+  // IMPORTANT: Only set up listener ONCE
+  if (isListenerActive) {
+    console.log("⚠️ Listeners already active - skipping duplicate setup");
+    return;
+  }
+  
+  console.log("🔄 Setting up Firebase listeners...");
   
   // Clean up any existing listeners first
   if (terminalsListener) {
@@ -347,11 +380,33 @@ function startDataSync() {
   }
   
   // Set up real-time listeners (Firebase handles updates automatically)
-  terminalsListener = onValue(terminalsRef, snap => renderTerminals(snap.val() || {}));
+  terminalsListener = onValue(terminalsRef, snap => {
+    console.log("📡 Terminal update received");
+    renderTerminals(snap.val() || {});
+  });
   sessionsListener = onValue(sessionsRef, parseActiveSessions);
   
-  // Note: No need for setInterval - Firebase real-time listeners push updates automatically
-  // The old code was creating 120+ duplicate listeners per hour!
+  isListenerActive = true;
+  console.log("✅ Firebase listeners active (single instance)");
+  
+  // NOTE: No setInterval needed! Firebase pushes updates automatically.
+  // The old setInterval was creating 120+ duplicate listeners per hour!
+}
+
+/**
+ * Stop data sync (cleanup)
+ */
+function stopDataSync() {
+  if (terminalsListener) {
+    terminalsListener();
+    terminalsListener = null;
+  }
+  if (sessionsListener) {
+    sessionsListener();
+    sessionsListener = null;
+  }
+  isListenerActive = false;
+  console.log("🛑 Firebase listeners stopped");
 }
 
 // ==================== LOGOUT HANDLER ====================
@@ -437,6 +492,9 @@ function setupLogout() {
     if (logoutConfirmBtn) logoutConfirmBtn.disabled = true;
     
     try {
+      // Stop data sync before logout
+      stopDataSync();
+      
       // Clear staff session first
       await handleStaffLogout();
       clearStaffSession();
@@ -475,6 +533,12 @@ function setupLogout() {
   console.log("✅ Logout handler setup complete");
 }
 
+// ==================== CLEANUP ON PAGE UNLOAD ====================
+
+window.addEventListener("beforeunload", () => {
+  stopDataSync();
+});
+
 // ==================== INIT ====================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -500,6 +564,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   startDataSync();
+  
+  console.log("✅ Admin dashboard initialized (optimized)");
 });
 
 // Export for external use

@@ -116,6 +116,24 @@ let fullDateMap = {};
 let fullSpendMap = {};
 let charts = { pc: null, session: null, spend: null };
 
+// ==================== CACHING LAYER ====================
+// Prevents repeated Firebase calls during a session
+
+const memberCache = {
+  history: { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },      // 5 min
+  sessions: { data: null, timestamp: 0, ttl: 5 * 60 * 1000 },     // 5 min
+  bookings: { data: null, timestamp: 0, ttl: 2 * 60 * 1000 }      // 2 min
+};
+
+function isCacheValid(cacheEntry) {
+  return cacheEntry && cacheEntry.data !== null && (Date.now() - cacheEntry.timestamp < cacheEntry.ttl);
+}
+
+function setCache(cacheEntry, data) {
+  cacheEntry.data = data;
+  cacheEntry.timestamp = Date.now();
+}
+
 // ==================== TIME DROPDOWNS ====================
 
 function populateTimeDropdowns() {
@@ -336,9 +354,19 @@ function loadProfile() {
   loadStreak();
 }
 
-function loadStreak() {
-  secondDb.ref(`${FB_PATHS.HISTORY}/${member.USERNAME}`).once("value").then(snapshot => {
-    const entries = Object.values(snapshot.val() || {});
+async function loadStreak() {
+  try {
+    // Use cached history if available
+    let entries;
+    if (isCacheValid(memberCache.history)) {
+      console.log("📦 Using cached history for streak");
+      entries = memberCache.history.data;
+    } else {
+      const snapshot = await secondDb.ref(`${FB_PATHS.HISTORY}/${member.USERNAME}`).limitToLast(50).once("value");
+      entries = Object.values(snapshot.val() || {});
+      setCache(memberCache.history, entries);
+    }
+    
     const streak = calculateStreak(entries);
     const streakDiv = document.getElementById("streakInfo");
     
@@ -347,21 +375,36 @@ function loadStreak() {
         ? `<span class="inline-block text-orange-500 text-sm font-semibold">${streak}🔥</span>` 
         : "";
     }
-  });
+  } catch (error) {
+    console.error("Error loading streak:", error);
+  }
 }
 
-function loadRecentActivity(username) {
+async function loadRecentActivity(username) {
   const recentDiv = document.getElementById("recentActivity");
   if (!recentDiv) return;
 
-  secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).once("value").then(snapshot => {
-    const data = snapshot.val();
-    if (!data || Object.keys(data).length === 0) {
+  try {
+    // Use cached history if available
+    let data;
+    if (isCacheValid(memberCache.history)) {
+      console.log("📦 Using cached history for recent activity");
+      data = memberCache.history.data;
+    } else {
+      const snapshot = await secondDb.ref(`${FB_PATHS.HISTORY}/${username}`).limitToLast(50).once("value");
+      data = Object.values(snapshot.val() || {});
+      setCache(memberCache.history, data);
+    }
+    
+    if (!data || data.length === 0) {
       recentDiv.innerHTML = `<p class="text-gray-400">No recent activity found.</p>`;
       return;
     }
 
-    const entries = Object.values(data).sort((a, b) => b.ID - a.ID).slice(0, 5);
+    const entries = (Array.isArray(data) ? data : Object.values(data))
+      .sort((a, b) => (b.ID || 0) - (a.ID || 0))
+      .slice(0, 5);
+      
     recentDiv.innerHTML = entries.map(event => `
       <div class="flex items-start gap-3 p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border-left: 2px solid #b829ff;">
         <div class="text-xl">${getActivityIcon(event.NOTE)}</div>
@@ -374,7 +417,10 @@ function loadRecentActivity(username) {
         </div>
       </div>
     `).join("");
-  });
+  } catch (error) {
+    console.error("Error loading recent activity:", error);
+    recentDiv.innerHTML = `<p class="text-gray-400">Error loading activity.</p>`;
+  }
 }
 
 // ==================== BOOKINGS ====================
@@ -512,12 +558,24 @@ function loadMemberHistory(username) {
 // ==================== ANALYTICS ====================
 
 async function loadAnalytics(memberId) {
-  // OPTIMIZATION: Limit to last 500 sessions for analytics
-  // Most users don't need full history for charts
-  const snapshot = await secondDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/${memberId}`).limitToLast(500).once("value");
+  // Check cache first
+  if (isCacheValid(memberCache.sessions)) {
+    console.log("📦 Using cached sessions for analytics");
+    renderAnalyticsFromSessions(memberCache.sessions.data);
+    return;
+  }
+  
+  // OPTIMIZATION: Limit to last 200 sessions for analytics
+  const snapshot = await secondDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/${memberId}`).limitToLast(200).once("value");
   if (!snapshot.exists()) return;
-
+  
   const sessions = Object.values(snapshot.val());
+  setCache(memberCache.sessions, sessions);
+  
+  renderAnalyticsFromSessions(sessions);
+}
+
+function renderAnalyticsFromSessions(sessions) {
   const totalSessions = sessions.length;
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.USINGMIN || 0), 0);
   const totalSpent = sessions.reduce((sum, s) => sum + (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0), 0);

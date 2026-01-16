@@ -1,0 +1,20 @@
+{
+  "members": [],
+  "sessions": [],
+  "terminals": [],
+  "bookings": [],
+  "transactions": [],
+  "settings": {
+    "rates": {
+      "PC": 40,
+      "XBOX": 60,
+      "PS": 100
+    },
+    "openTime": "10:00",
+    "closeTime": "23:00",
+    "currency": "₹",
+    "cafeName": "OceanZ Gaming Cafe"
+  },
+  "admins": [],
+  "staff": []
+}
