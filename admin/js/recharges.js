@@ -234,16 +234,21 @@ if (elements.datePicker) {
 
 // ==================== MEMBER AUTOCOMPLETE ====================
 
-// Load members from Firebase (supports both new and legacy format)
-fdbDb.ref(FB_PATHS.LEGACY_MEMBERS).once("value").then(snap => {
-  const data = snap.val();
-  if (Array.isArray(data)) {
-    allMembers = data.filter(m => m); // Legacy array format
-  } else if (data && typeof data === "object") {
-    allMembers = Object.values(data); // New object format
-  } else {
-    allMembers = [];
-  }
+// Load members from Firebase (V2 structure: /members/{username}/profile)
+fdbDb.ref(FB_PATHS.MEMBERS).once("value").then(snap => {
+  const data = snap.val() || {};
+  // V2 structure: each key is username, value has { profile, balance, stats, ... }
+  allMembers = Object.entries(data).map(([username, memberData]) => {
+    const profile = memberData.profile || {};
+    return {
+      USERNAME: username,
+      DISPLAY_NAME: profile.DISPLAY_NAME || username,
+      FIRSTNAME: profile.FIRSTNAME || "",
+      LASTNAME: profile.LASTNAME || "",
+      BALANCE: memberData.balance?.current_balance || 0
+    };
+  });
+  console.log(`✅ Loaded ${allMembers.length} members (V2)`);
 });
 
 elements.memberInput?.addEventListener("input", () => {
@@ -822,6 +827,13 @@ window.addRecharge = () => {
     }
     data.updatedAt = new Date().toISOString();
     data.updatedBy = getAdminName();
+    
+    // IMPORTANT: Clear credit payment history fields when editing
+    // Firebase .update() doesn't remove fields, so we must explicitly set them to null
+    // This prevents double-counting when changing payment methods after credit collection
+    data.creditPayments = null;  // Clear payment history
+    data.lastPaidAt = null;      // Clear last payment timestamp
+    data.lastPaidBy = null;      // Clear last payment admin
     
     rechargeDb.ref(`${refPath}/${editId}`).update(data);
     logAudit("EDIT", member, total + free);
