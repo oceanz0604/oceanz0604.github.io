@@ -74,7 +74,7 @@ if (existingSession) {
 document.getElementById("memberLoginForm")?.addEventListener("submit", function(e) {
   e.preventDefault();
 
-  const username = document.getElementById("username").value.trim().toLowerCase();
+  const username = document.getElementById("username").value.trim().toUpperCase();
   const password = document.getElementById("password").value.trim();
   const errorDiv = document.getElementById("login-error");
 
@@ -99,8 +99,8 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
       if (storedPassword === password) {
         // Build session object from V2 structure
         const sessionData = {
-          USERNAME: username,
-          DISPLAY_NAME: profile.DISPLAY_NAME || username,
+          USERNAME: profile.USERNAME || username,  // Use username from profile (uppercase)
+          DISPLAY_NAME: profile.DISPLAY_NAME || profile.USERNAME || username,
           FIRSTNAME: profile.FIRSTNAME || "",
           LASTNAME: profile.LASTNAME || "",
           RECDATE: profile.RECDATE || "",
