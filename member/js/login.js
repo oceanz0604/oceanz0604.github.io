@@ -94,9 +94,11 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
       }
       
       const profile = memberData.profile || {};
-      const storedPassword = profile.PASSWORD || "";
+      // Convert both to string for comparison (Firebase may store numeric passwords as numbers)
+      const storedPassword = String(profile.PASSWORD || "");
+      const enteredPassword = String(password);
       
-      if (storedPassword === password) {
+      if (storedPassword === enteredPassword) {
         // Build session object from V2 structure
         const sessionData = {
           USERNAME: profile.USERNAME || username,  // Use username from profile (uppercase)
