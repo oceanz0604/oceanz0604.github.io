@@ -1,6 +1,8 @@
 /**
  * OceanZ Gaming Cafe - Cash Register Management
  * Daily cash tracking with denomination breakdown
+ * 
+ * Redesigned: Card-based history with modal details
  */
 
 import { 
@@ -25,6 +27,7 @@ const db = bookingApp.database();
 
 let cashData = [];
 let selectedMonth = getISTDateString().slice(0, 7); // YYYY-MM format
+let currentDetailEntry = null; // For modal
 
 function getISTDateString() {
   const now = getISTDate();
@@ -60,189 +63,88 @@ window.loadCashRegister = function() {
   container.innerHTML = `
     <div class="space-y-6">
       
-      <!-- Today's Quick Entry -->
-      <div class="neon-card rounded-xl p-6 relative" style="border-color: rgba(0,255,136,0.3);">
-        <div class="absolute top-0 left-0 right-0 h-1 rounded-t-xl" style="background: linear-gradient(90deg, #00ff88, #00f0ff);"></div>
-        
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="font-orbitron text-lg font-bold flex items-center gap-2" style="color: #00ff88;">
-            💰 TODAY'S CASH ENTRY
-          </h3>
-          <span id="todayDate" class="text-sm px-3 py-1 rounded-full font-orbitron" 
-            style="background: rgba(0,255,136,0.2); color: #00ff88;"></span>
-        </div>
-
-        <!-- Opening & Closing Balance -->
-        <div class="grid md:grid-cols-4 gap-4 mb-6">
+      <!-- Header with Add Button -->
+      <div class="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-              Opening Balance
-              <span id="openingBalanceIcon" class="text-green-400 hidden" title="Auto-fetched from previous day">🔒</span>
-            </label>
-            <input type="number" id="openingBalance" placeholder="₹0" 
-              class="neon-input w-full px-4 py-3 rounded-lg text-white text-lg font-orbitron" 
-              style="border-color: rgba(0,255,136,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
-            <p id="openingBalanceHint" class="text-xs text-gray-600 mt-1">Enter manually (no previous record)</p>
+          <h2 class="font-orbitron text-xl font-bold" style="color: #00f0ff;">💰 CASH REGISTER</h2>
+          <p class="text-gray-500 text-sm mt-1">Daily cash tracking and denomination breakdown</p>
           </div>
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-2">
-              Today's Sale (Cash Only)
-              <span class="text-cyan-400" title="Auto-fetched from recharges">🔒</span>
-              <button onclick="refreshSaleFromRecharges()" class="text-cyan-400 hover:text-cyan-300 text-xs" title="Refresh from recharges">↻</button>
-            </label>
-            <div id="todaySaleDisplay" class="px-4 py-3 rounded-lg font-orbitron text-lg font-bold"
-              style="background: rgba(0,240,255,0.1); border: 1px solid rgba(0,240,255,0.3); color: #00f0ff;">
-              ₹0
+        <div class="flex items-center gap-3">
+          <input type="month" id="monthPicker" class="neon-input px-3 py-2 rounded-lg text-white text-sm"/>
+          <button onclick="exportCashPDF()" class="neon-btn px-4 py-2 rounded-lg text-sm" style="border-color: rgba(0,240,255,0.3); color: #00f0ff;">
+            📄 Export
+          </button>
+          <button onclick="openCashEntryModal()" class="px-4 py-2 rounded-lg font-orbitron font-bold text-sm"
+            style="background: linear-gradient(135deg, #00ff88, #00cc66); color: #000;">
+            + NEW ENTRY
+          </button>
             </div>
-            <input type="hidden" id="todaySale" value="0"/>
-            <p class="text-xs text-gray-600 mt-1">From recharges (cash only)</p>
           </div>
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Withdrawal</label>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <input type="number" id="withdrawalCash" placeholder="₹ Cash" 
-                  class="neon-input w-full px-3 py-2 rounded-lg text-white font-orbitron" 
-                  style="border-color: rgba(255,107,0,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
-                <p class="text-[10px] text-gray-600 mt-0.5 text-center">💵 Cash</p>
+
+      <!-- Monthly Stats Summary Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="p-4 rounded-xl text-center" style="background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,255,136,0.05)); border: 1px solid rgba(0,255,136,0.2);">
+          <div class="text-gray-500 text-[10px] uppercase tracking-wider">Total Sales</div>
+          <div id="monthSales" class="text-xl font-bold font-orbitron mt-1" style="color: #00ff88;">₹0</div>
               </div>
-              <div>
-                <input type="number" id="withdrawalCoins" placeholder="₹ Coins" 
-                  class="neon-input w-full px-3 py-2 rounded-lg text-white font-orbitron" 
-                  style="border-color: rgba(255,200,0,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
-                <p class="text-[10px] text-gray-600 mt-0.5 text-center">🪙 Coins</p>
+        <div class="p-4 rounded-xl text-center" style="background: linear-gradient(135deg, rgba(255,107,0,0.1), rgba(255,107,0,0.05)); border: 1px solid rgba(255,107,0,0.2);">
+          <div class="text-gray-500 text-[10px] uppercase tracking-wider">Withdrawals</div>
+          <div id="monthWithdrawals" class="text-xl font-bold font-orbitron mt-1" style="color: #ff6b00;">₹0</div>
               </div>
+        <div class="p-4 rounded-xl text-center" style="background: linear-gradient(135deg, rgba(255,0,68,0.1), rgba(255,0,68,0.05)); border: 1px solid rgba(255,0,68,0.2);">
+          <div class="text-gray-500 text-[10px] uppercase tracking-wider">Expenses</div>
+          <div id="monthExpenses" class="text-xl font-bold font-orbitron mt-1" style="color: #ff0044;">₹0</div>
             </div>
+        <div class="p-4 rounded-xl text-center" style="background: linear-gradient(135deg, rgba(0,240,255,0.1), rgba(0,240,255,0.05)); border: 1px solid rgba(0,240,255,0.2);">
+          <div class="text-gray-500 text-[10px] uppercase tracking-wider">Net Cash</div>
+          <div id="monthNet" class="text-xl font-bold font-orbitron mt-1" style="color: #00f0ff;">₹0</div>
           </div>
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Expenses</label>
-            <input type="number" id="expenses" placeholder="₹0" 
-              class="neon-input w-full px-4 py-3 rounded-lg text-white text-lg font-orbitron" 
-              style="border-color: rgba(255,0,68,0.3);" oninput="calculateCashTotals()" onfocus="this.select()"/>
-            <p class="text-xs text-gray-600 mt-1">Daily expenses</p>
-          </div>
-        </div>
-
-        <!-- Denomination Breakdown -->
-        <div class="p-4 rounded-lg mb-6" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
-          <div class="flex items-center justify-between mb-4">
-            <span class="text-xs text-gray-400 uppercase tracking-wider">Cash Denomination Count (Notes × Count)</span>
-            <span id="denominationTotal" class="font-orbitron text-sm" style="color: #00f0ff;">Total: ₹0</span>
-          </div>
-          <div class="grid grid-cols-4 md:grid-cols-7 gap-3">
-            ${DENOMINATIONS.map(d => `
-              <div class="text-center">
-                <label class="text-xs mb-1 block font-orbitron" style="color: ${d.color};">${d.label}</label>
-                <input type="number" id="denom${d.value}" data-value="${d.value}" placeholder="${d.isCoins ? '₹' : '0'}" 
-                  class="neon-input w-full px-2 py-2 rounded-lg text-white text-center text-sm" 
-                  oninput="calculateDenominations()" onfocus="this.select()"
-                  title="${d.isCoins ? 'Enter total coin amount in ₹' : `Number of ₹${d.value} notes`}"/>
-              </div>
-            `).join("")}
-          </div>
-          <p class="text-xs text-gray-600 mt-2">💡 Enter note counts (e.g., 5 for five ₹500 notes). For Coins, enter total amount.</p>
-        </div>
-
-        <!-- Calculated Balances -->
-        <div class="grid md:grid-cols-3 gap-4 mb-6">
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Expected Closing</label>
-            <div id="closingBalance" class="px-4 py-3 rounded-lg font-orbitron text-xl font-bold"
-              style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: #00ff88;">
-              ₹0
-            </div>
-            <p class="text-xs text-gray-600 mt-1">Open + Sale - W/D - Exp</p>
-          </div>
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Actual Cash Count</label>
-            <div id="actualClosing" class="px-4 py-3 rounded-lg font-orbitron text-xl font-bold"
-              style="background: rgba(184,41,255,0.1); border: 1px solid rgba(184,41,255,0.3); color: #b829ff;">
-              ₹0
-            </div>
-            <p class="text-xs text-gray-600 mt-1">Sum of all denominations</p>
-          </div>
-          <div>
-            <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Difference</label>
-            <div id="differenceDisplay" class="px-4 py-3 rounded-lg font-orbitron text-xl font-bold"
-              style="background: rgba(100,100,100,0.1); border: 1px solid rgba(100,100,100,0.3); color: #888;">
-              ₹0
-            </div>
-            <p id="differenceLabel" class="text-xs text-gray-600 mt-1">Actual - Expected</p>
+        <div class="p-4 rounded-xl text-center" style="background: linear-gradient(135deg, rgba(184,41,255,0.1), rgba(184,41,255,0.05)); border: 1px solid rgba(184,41,255,0.2);">
+          <div class="text-gray-500 text-[10px] uppercase tracking-wider">Avg Daily</div>
+          <div id="avgDailySale" class="text-xl font-bold font-orbitron mt-1" style="color: #b829ff;">₹0</div>
           </div>
         </div>
 
-        <!-- Difference Alert -->
-        <div id="differenceAlert" class="hidden p-3 rounded-lg mb-6" style="background: rgba(255,255,0,0.1); border: 1px solid rgba(255,255,0,0.3);">
-          <div class="flex items-center gap-2">
-            <span>⚠️</span>
-            <span id="differenceText" class="text-sm font-orbitron" style="color: #ffff00;"></span>
+      <!-- History Cards Grid -->
+      <div id="cashHistoryCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      
+      <!-- Empty State -->
+      <div id="cashEmptyState" class="hidden text-center py-12">
+        <div class="text-6xl mb-4">📭</div>
+        <p class="text-gray-500">No entries for this month</p>
+        <button onclick="openCashEntryModal()" class="mt-4 px-6 py-2 rounded-lg text-sm" 
+          style="background: rgba(0,255,136,0.2); color: #00ff88; border: 1px solid rgba(0,255,136,0.3);">
+          Add First Entry
+        </button>
           </div>
         </div>
 
-        <!-- Comments -->
-        <div class="mb-6">
-          <label class="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Comments</label>
-          <input type="text" id="cashComments" placeholder="Any notes for today..." 
-            class="neon-input w-full px-4 py-3 rounded-lg text-white"/>
+    <!-- Detail/Edit Modal -->
+    <div id="cashDetailModal" class="fixed inset-0 z-50 hidden" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
+      <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="neon-card rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative"
+          style="border-color: rgba(0,240,255,0.3); background: linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%);">
+          
+          <!-- Modal Header -->
+          <div class="sticky top-0 z-10 p-4 border-b border-gray-800 flex items-center justify-between"
+            style="background: linear-gradient(180deg, #0a1628 0%, #0d1f3c 100%);">
+            <div>
+              <h3 id="modalTitle" class="font-orbitron text-lg font-bold" style="color: #00f0ff;">Cash Entry</h3>
+              <p id="modalSubtitle" class="text-xs text-gray-500 mt-0.5"></p>
         </div>
-
-        <!-- Save Button -->
-        <button onclick="saveCashEntry()" class="w-full py-4 rounded-lg font-orbitron font-bold text-sm transition-all"
-          style="background: linear-gradient(135deg, #00ff88, #00cc66); color: #000;">
-          💾 SAVE TODAY'S ENTRY
+            <button onclick="closeCashModal()" class="p-2 rounded-lg hover:bg-gray-800 transition-colors">
+              <span class="text-2xl text-gray-400">×</span>
         </button>
       </div>
 
-      <!-- Monthly Summary -->
-      <div class="neon-card rounded-xl p-6 relative">
-        <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <h3 class="font-orbitron text-lg font-bold flex items-center gap-2" style="color: #00f0ff;">
-            📊 MONTHLY SUMMARY
-          </h3>
-          <div class="flex items-center gap-3">
-            <input type="month" id="monthPicker" class="neon-input px-3 py-2 rounded-lg text-white"/>
-            <button onclick="exportCashPDF()" class="neon-btn neon-btn-cyan px-4 py-2 rounded-lg text-sm">
-              📄 Export PDF
-            </button>
+          <!-- Modal Content -->
+          <div id="modalContent" class="p-6">
+            <!-- Content will be dynamically loaded -->
           </div>
         </div>
-
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <div class="stat-card p-4 rounded-xl text-center">
-            <div class="text-gray-500 text-xs uppercase tracking-wider">Total Sales</div>
-            <div id="monthSales" class="text-2xl font-bold font-orbitron mt-1" style="color: #00ff88;">₹0</div>
-          </div>
-          <div class="stat-card p-4 rounded-xl text-center">
-            <div class="text-gray-500 text-xs uppercase tracking-wider">Withdrawals</div>
-            <div id="monthWithdrawals" class="text-2xl font-bold font-orbitron mt-1" style="color: #ff6b00;">₹0</div>
-          </div>
-          <div class="stat-card p-4 rounded-xl text-center">
-            <div class="text-gray-500 text-xs uppercase tracking-wider">Expenses</div>
-            <div id="monthExpenses" class="text-2xl font-bold font-orbitron mt-1" style="color: #ff0044;">₹0</div>
-          </div>
-          <div class="stat-card p-4 rounded-xl text-center">
-            <div class="text-gray-500 text-xs uppercase tracking-wider">Net Cash</div>
-            <div id="monthNet" class="text-2xl font-bold font-orbitron mt-1" style="color: #00f0ff;">₹0</div>
-          </div>
-          <div class="stat-card p-4 rounded-xl text-center">
-            <div class="text-gray-500 text-xs uppercase tracking-wider">Avg Daily Sale</div>
-            <div id="avgDailySale" class="text-2xl font-bold font-orbitron mt-1" style="color: #b829ff;">₹0</div>
-          </div>
-        </div>
-
-        <!-- History List -->
-        <div id="cashHistoryTable" class="max-h-[400px] overflow-y-auto pr-1"></div>
       </div>
     </div>
   `;
-
-  // Set today's date
-  document.getElementById("todayDate").textContent = getISTDate().toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short"
-  });
 
   // Set month picker
   const monthPicker = document.getElementById("monthPicker");
@@ -252,483 +154,150 @@ window.loadCashRegister = function() {
     loadCashHistory();
   };
 
-  // Load existing data
-  loadTodayEntry();
+  // Load history
   loadCashHistory();
 };
 
-// ==================== CALCULATIONS ====================
+// ==================== CALCULATIONS (Legacy - kept for compatibility) ====================
 
 window.calculateDenominations = function() {
-  let total = 0;
-  DENOMINATIONS.forEach(d => {
-    const input = document.getElementById(`denom${d.value}`);
-    const count = Number(input?.value) || 0;
-    
-    if (d.isCoins) {
-      // Coins - direct amount
-      total += count;
-    } else {
-      // Notes - multiply by value
-      total += count * d.value;
-    }
-  });
-  
-  const totalEl = document.getElementById("denominationTotal");
-  if (totalEl) totalEl.textContent = `Total: ₹${total.toLocaleString("en-IN")}`;
-  
-  // Auto-update actual closing display
-  const actualEl = document.getElementById("actualClosing");
-  if (actualEl) actualEl.textContent = `₹${total.toLocaleString("en-IN")}`;
-  
-  // Store for calculations
-  window.currentActualCash = total;
-  
-  calculateCashTotals();
+  calculateModalDenominations();
 };
 
 window.calculateCashTotals = function() {
-  const opening = Number(document.getElementById("openingBalance")?.value) || 0;
-  const sale = Number(document.getElementById("todaySale")?.value) || 0;
-  const withdrawalCash = Number(document.getElementById("withdrawalCash")?.value) || 0;
-  const withdrawalCoins = Number(document.getElementById("withdrawalCoins")?.value) || 0;
-  const withdrawal = withdrawalCash + withdrawalCoins;
-  const expenses = Number(document.getElementById("expenses")?.value) || 0;
-  const actual = window.currentActualCash || 0;
-  
-  // Calculate expected closing
-  const expectedClosing = opening + sale - withdrawal - expenses;
-  
-  // Update displays
-  const closingEl = document.getElementById("closingBalance");
-  if (closingEl) closingEl.textContent = `₹${expectedClosing.toLocaleString("en-IN")}`;
-  
-  // Calculate and display difference
-  const diff = actual - expectedClosing;
-  const diffDisplayEl = document.getElementById("differenceDisplay");
-  const diffLabelEl = document.getElementById("differenceLabel");
-  const diffAlertEl = document.getElementById("differenceAlert");
-  const diffTextEl = document.getElementById("differenceText");
-  
-  if (diffDisplayEl) {
-    diffDisplayEl.textContent = `₹${Math.abs(diff).toLocaleString("en-IN")}`;
-    
-    if (actual > 0) {
-      if (diff > 0) {
-        diffDisplayEl.style.color = "#00ff88";
-        diffDisplayEl.style.borderColor = "rgba(0,255,136,0.3)";
-        diffDisplayEl.style.background = "rgba(0,255,136,0.1)";
-        if (diffLabelEl) diffLabelEl.textContent = "Excess (+)";
-      } else if (diff < 0) {
-        diffDisplayEl.style.color = "#ff0044";
-        diffDisplayEl.style.borderColor = "rgba(255,0,68,0.3)";
-        diffDisplayEl.style.background = "rgba(255,0,68,0.1)";
-        if (diffLabelEl) diffLabelEl.textContent = "Shortage (-)";
-      } else {
-        diffDisplayEl.style.color = "#00ff88";
-        diffDisplayEl.style.borderColor = "rgba(0,255,136,0.3)";
-        diffDisplayEl.style.background = "rgba(0,255,136,0.1)";
-        if (diffLabelEl) diffLabelEl.textContent = "✓ Balanced";
-      }
-    }
-  }
-  
-  // Show alert for significant differences
-  if (actual > 0 && diff !== 0) {
-    diffAlertEl?.classList.remove("hidden");
-    
-    if (diff > 0) {
-      diffTextEl.textContent = `Excess: ₹${diff.toLocaleString("en-IN")} in drawer (more than expected)`;
-      diffAlertEl.style.background = "rgba(0,255,136,0.1)";
-      diffAlertEl.style.borderColor = "rgba(0,255,136,0.3)";
-      diffTextEl.style.color = "#00ff88";
-    } else {
-      diffTextEl.textContent = `Shortage: ₹${Math.abs(diff).toLocaleString("en-IN")} from drawer (less than expected)`;
-      diffAlertEl.style.background = "rgba(255,0,68,0.1)";
-      diffAlertEl.style.borderColor = "rgba(255,0,68,0.3)";
-      diffTextEl.style.color = "#ff0044";
-    }
-  } else {
-    diffAlertEl?.classList.add("hidden");
-  }
+  calculateModalTotals();
 };
 
-// ==================== SAVE ENTRY ====================
+// ==================== SAVE ENTRY (Legacy - redirects to modal) ====================
 
 window.saveCashEntry = async function() {
-  // Check if user can edit (Finance Manager cannot)
-  if (!canEditData()) {
-    if (typeof notifyWarning === "function") {
-      notifyWarning("You have view-only access. Saving is not allowed.");
-    } else {
-      alert("You have view-only access. Saving is not allowed.");
-    }
-    return;
-  }
-  
-  // Use editing date if present, otherwise today
-  const dateToSave = window.editingDate || getISTDateString();
-  
-  // Calculate actual closing from denominations
-  let actualClosing = 0;
-  DENOMINATIONS.forEach(d => {
-    const count = Number(document.getElementById(`denom${d.value}`)?.value) || 0;
-    if (d.isCoins) {
-      actualClosing += count;
-    } else {
-      actualClosing += count * d.value;
-    }
-  });
-  
-  const entry = {
-    date: dateToSave,
-    opening: Number(document.getElementById("openingBalance")?.value) || 0,
-    sale: Number(document.getElementById("todaySale")?.value) || 0,
-    withdrawalCash: Number(document.getElementById("withdrawalCash")?.value) || 0,
-    withdrawalCoins: Number(document.getElementById("withdrawalCoins")?.value) || 0,
-    withdrawal: (Number(document.getElementById("withdrawalCash")?.value) || 0) + (Number(document.getElementById("withdrawalCoins")?.value) || 0),
-    expenses: Number(document.getElementById("expenses")?.value) || 0,
-    actualClosing: actualClosing,
-    comments: document.getElementById("cashComments")?.value || "",
-    denominations: {},
-    admin: getAdminName(),
-    updatedAt: new Date().toISOString()
-  };
-  
-  // Collect denominations (store count for notes, amount for coins)
-  DENOMINATIONS.forEach(d => {
-    const key = d.isCoins ? "coins" : `d${d.value}`;
-    entry.denominations[key] = Number(document.getElementById(`denom${d.value}`)?.value) || 0;
-  });
-  
-  // Calculate expected closing
-  entry.closing = entry.opening + entry.sale - entry.withdrawal - entry.expenses;
-  entry.difference = entry.actualClosing - entry.closing;
-  
-  try {
-    await db.ref(`cash_register/${dateToSave}`).set(entry);
-    
-    const isEdit = !!window.editingDate;
-    notifySuccess(isEdit ? "Entry updated successfully!" : "Cash entry saved successfully!");
-    
-    // Reset editing state
-    window.editingDate = null;
-    
-    // Reset form to today
-    resetFormToToday();
-    
-    loadCashHistory();
-  } catch (error) {
-    console.error("Error saving cash entry:", error);
-    notifyError("Failed to save entry: " + error.message);
-  }
+  // Legacy function - now handled by modal
+  saveModalEntry();
 };
 
-// Reset form to today's entry
-function resetFormToToday() {
-  window.editingDate = null;
-  
-  // Reset date display
-  document.getElementById("todayDate").textContent = getISTDate().toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short"
-  });
-  
-  // Reset save button
-  const saveBtn = document.querySelector("#cash-register-content button[onclick='saveCashEntry()']");
-  if (saveBtn) {
-    saveBtn.innerHTML = "💾 SAVE TODAY'S ENTRY";
-    saveBtn.style.background = "linear-gradient(135deg, #00ff88, #00cc66)";
-  }
-  
-  // Clear form fields
-  document.getElementById("withdrawalCash").value = "";
-  document.getElementById("withdrawalCoins").value = "";
-  document.getElementById("expenses").value = "";
-  document.getElementById("cashComments").value = "";
-  DENOMINATIONS.forEach(d => {
-    const el = document.getElementById(`denom${d.value}`);
-    if (el) el.value = "";
-  });
-  
-  // Reset opening balance field state (will be set properly by loadTodayEntry)
-  const openingInput = document.getElementById("openingBalance");
-  openingInput.value = "";
-  openingInput.readOnly = false;
-  openingInput.style.opacity = "1";
-  openingInput.style.cursor = "text";
-  
-  // Reload today's entry
-  loadTodayEntry();
-}
-
-// ==================== LOAD DATA ====================
-
-async function loadTodayEntry() {
-  const today = getISTDateString();
-  
-  try {
-    // Check if today's entry already exists
-    const snapshot = await db.ref(`cash_register/${today}`).once("value");
-    const data = snapshot.val();
-    
-    if (data) {
-      // Fill form with existing data
-      const openingInput = document.getElementById("openingBalance");
-      const openingIcon = document.getElementById("openingBalanceIcon");
-      const openingHint = document.getElementById("openingBalanceHint");
-      const saleDisplay = document.getElementById("todaySaleDisplay");
-      
-      openingInput.value = data.opening || "";
-      // Lock opening balance for existing entries
-      openingInput.readOnly = true;
-      openingInput.style.opacity = "0.8";
-      openingInput.style.cursor = "not-allowed";
-      openingIcon?.classList.remove("hidden");
-      if (openingHint) openingHint.textContent = "Saved entry";
-      
-      document.getElementById("todaySale").value = data.sale || "";
-      if (saleDisplay) saleDisplay.textContent = `₹${(data.sale || 0).toLocaleString("en-IN")}`;
-      
-      document.getElementById("withdrawalCash").value = data.withdrawalCash || data.withdrawal || "";
-      document.getElementById("withdrawalCoins").value = data.withdrawalCoins || "";
-      document.getElementById("expenses").value = data.expenses || "";
-      document.getElementById("cashComments").value = data.comments || "";
-      
-      // Fill denominations
-      if (data.denominations) {
-        DENOMINATIONS.forEach(d => {
-          const key = d.isCoins ? "coins" : `d${d.value}`;
-          const el = document.getElementById(`denom${d.value}`);
-          if (el) el.value = data.denominations[key] || "";
-        });
-      }
-      
-      calculateDenominations();
-    } else {
-      // New entry - auto-fetch opening balance and sale
-      await autoFetchOpeningBalance();
-      await autoFetchTodaySale();
-    }
-  } catch (error) {
-    console.error("Error loading today's entry:", error);
-  }
-}
-
-// Auto-fetch opening balance from previous day's closing
-async function autoFetchOpeningBalance() {
-  const openingInput = document.getElementById("openingBalance");
-  const openingIcon = document.getElementById("openingBalanceIcon");
-  const openingHint = document.getElementById("openingBalanceHint");
-  
-  try {
-    // Find the most recent entry
-    const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().limitToLast(5).once("value");
-    const entries = snapshot.val();
-    
-    if (entries) {
-      const today = getISTDateString();
-      const sortedDates = Object.keys(entries).sort().reverse();
-      
-      // Find the most recent entry that's not today
-      for (const date of sortedDates) {
-        if (date < today && entries[date]?.actualClosing) {
-          openingInput.value = entries[date].actualClosing;
-          
-          // Lock the field since we have previous data
-          openingInput.readOnly = true;
-          openingInput.style.opacity = "0.8";
-          openingInput.style.cursor = "not-allowed";
-          openingIcon?.classList.remove("hidden");
-          if (openingHint) openingHint.textContent = `From ${formatDateShort(date)}'s closing`;
-          
-          console.log(`✅ Opening balance auto-fetched from ${date}: ₹${entries[date].actualClosing}`);
-          return;
-        }
-      }
-    }
-    
-    // No previous record found - keep field editable
-    openingInput.readOnly = false;
-    openingInput.style.opacity = "1";
-    openingInput.style.cursor = "text";
-    openingIcon?.classList.add("hidden");
-    if (openingHint) openingHint.textContent = "Enter manually (no previous record)";
-    
-  } catch (error) {
-    console.error("Error fetching opening balance:", error);
-    // On error, keep field editable
-    openingInput.readOnly = false;
-  }
-}
-
-// Auto-fetch today's sale from recharges data
-async function autoFetchTodaySale() {
-  const today = getISTDateString();
-  const saleInput = document.getElementById("todaySale");
-  const saleDisplay = document.getElementById("todaySaleDisplay");
-  
-  try {
-    // Get all recharges using SharedCache (shared across all admin pages)
-    const allRecharges = await SharedCache.getRecharges(db, FB_PATHS.RECHARGES);
-    
-    let totalCash = 0;
-    let totalUpi = 0;
-    let creditCash = 0; // Credit collected via cash
-    let creditUpi = 0;  // Credit collected via UPI
-    
-    // Process today's direct recharges
-    const todayRecharges = allRecharges[today] || {};
-    Object.values(todayRecharges).forEach(r => {
-      // Handle both old format (mode-based) and new format (split payment)
-      if (r.total !== undefined) {
-        // New split format - direct payments
-        totalCash += r.cash || 0;
-        totalUpi += r.upi || 0;
-      } else if (r.amount !== undefined) {
-        // Old format
-        if (r.mode === "cash") totalCash += r.amount;
-        if (r.mode === "upi") totalUpi += r.amount;
-      }
-    });
-    
-    // Process credit collections that happened today (from any date's recharges)
-    Object.entries(allRecharges).forEach(([date, dayData]) => {
-      Object.values(dayData).forEach(r => {
-        // Check if credit was paid today
-        if (r.lastPaidAt) {
-          const paidDate = r.lastPaidAt.split("T")[0];
-          if (paidDate === today) {
-            creditCash += r.lastPaidCash || 0;
-            creditUpi += r.lastPaidUpi || 0;
-          }
-        }
-        // Also check old format credit payments
-        if (r.paidAt && r.mode === "credit" && r.paid) {
-          const paidDate = r.paidAt.split("T")[0];
-          if (paidDate === today) {
-            if (r.paidVia === "cash") creditCash += r.amount;
-            else if (r.paidVia === "upi") creditUpi += r.amount;
-            else if (r.paidVia === "cash+upi") {
-              // Split - assume half each if not specified
-              creditCash += Math.floor(r.amount / 2);
-              creditUpi += r.amount - Math.floor(r.amount / 2);
-            }
-          }
-        }
-      });
-    });
-    
-    // Total cash in drawer = direct cash + credit collected via cash
-    const totalCashInDrawer = totalCash + creditCash;
-    const totalUpiCollected = totalUpi + creditUpi;
-    
-    // Update hidden input and display
-    saleInput.value = totalCashInDrawer;
-    if (saleDisplay) {
-      let displayParts = [`₹${totalCashInDrawer.toLocaleString("en-IN")}`];
-      let subParts = [];
-      
-      if (creditCash > 0) subParts.push(`+₹${creditCash} credit`);
-      if (totalUpiCollected > 0) subParts.push(`₹${totalUpiCollected} UPI`);
-      
-      if (subParts.length > 0) {
-        saleDisplay.innerHTML = `${displayParts[0]} <span class="text-xs text-gray-500">(${subParts.join(", ")})</span>`;
-      } else {
-        saleDisplay.textContent = displayParts[0];
-      }
-    }
-    
-    console.log(`✅ Today's sale: Cash ₹${totalCashInDrawer} (Direct: ₹${totalCash}, Credit: ₹${creditCash}) | UPI ₹${totalUpiCollected} (Direct: ₹${totalUpi}, Credit: ₹${creditUpi})`);
-    
-    // Show info about UPI if any
-    if (totalUpiCollected > 0) {
-      const commentsEl = document.getElementById("cashComments");
-      if (commentsEl && !commentsEl.value) {
-        commentsEl.placeholder = `UPI collected: ₹${totalUpiCollected} (not in drawer)`;
-      }
-    }
-    
-    calculateCashTotals();
-  } catch (error) {
-    console.error("Error fetching today's sale:", error);
-  }
-}
-
-// Refresh sale from recharges (button handler)
+// Refresh sale from recharges (button handler - redirects to modal)
 window.refreshSaleFromRecharges = async function() {
-  await autoFetchTodaySale();
-  notifySuccess("Sale updated from today's recharges!");
+  refreshModalSale();
 };
 
 async function loadCashHistory() {
-  const listEl = document.getElementById("cashHistoryTable");
-  if (!listEl) return;
+  const cardsEl = document.getElementById("cashHistoryCards");
+  const emptyEl = document.getElementById("cashEmptyState");
+  if (!cardsEl) return;
   
-  listEl.innerHTML = `<div class="py-4 text-center text-gray-500">Loading...</div>`;
+  cardsEl.innerHTML = `
+    <div class="col-span-full py-8 text-center text-gray-500">
+      <div class="animate-pulse">Loading...</div>
+    </div>
+  `;
   
   try {
     const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().once("value");
     const allData = snapshot.val() || {};
     
-    // Filter by selected month
+    // Filter by selected month and sort by date DESCENDING (recent first)
     cashData = Object.entries(allData)
       .filter(([date]) => date.startsWith(selectedMonth))
       .map(([date, data]) => ({ date, ...data }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => b.date.localeCompare(a.date)); // Recent first
     
     if (cashData.length === 0) {
-      listEl.innerHTML = `<div class="py-4 text-center text-gray-500">No entries for this month</div>`;
+      cardsEl.innerHTML = "";
+      emptyEl?.classList.remove("hidden");
       updateMonthlyStats([]);
       return;
     }
     
-    // Render as list items
-    listEl.innerHTML = cashData.map(entry => {
-      // Build denomination badges (compact)
-      let denomBadges = "";
-      if (entry.denominations) {
-        const badges = [];
-        if (entry.denominations.d500) badges.push(`<span style="color: #00ff88;">5H:${entry.denominations.d500}</span>`);
-        if (entry.denominations.d200) badges.push(`<span style="color: #00f0ff;">2H:${entry.denominations.d200}</span>`);
-        if (entry.denominations.d100) badges.push(`<span style="color: #b829ff;">1H:${entry.denominations.d100}</span>`);
-        if (entry.denominations.d50) badges.push(`<span style="color: #ff6b00;">50:${entry.denominations.d50}</span>`);
-        if (entry.denominations.d20) badges.push(`<span style="color: #ffff00;">20:${entry.denominations.d20}</span>`);
-        if (entry.denominations.d10) badges.push(`<span style="color: #ff0044;">10:${entry.denominations.d10}</span>`);
-        if (entry.denominations.coins) badges.push(`<span style="color: #888;">🪙${entry.denominations.coins}</span>`);
-        denomBadges = badges.length > 0 ? badges.join(" ") : "";
-      }
+    emptyEl?.classList.add("hidden");
+    
+    // Render as cards
+    cardsEl.innerHTML = cashData.map((entry, index) => {
+      const isToday = entry.date === getISTDateString();
+      const hasWithdrawal = entry.withdrawal > 0;
+      const hasExpenses = entry.expenses > 0;
+      const diff = entry.difference || 0;
+      const isBalanced = diff === 0;
+      const isExcess = diff > 0;
+      const isShortage = diff < 0;
       
-      const diffColor = entry.difference > 0 ? "#00ff88" : entry.difference < 0 ? "#ff0044" : "#888";
-      const diffBadge = entry.difference !== 0 
-        ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: ${entry.difference > 0 ? 'rgba(0,255,136,0.2)' : 'rgba(255,0,68,0.2)'}; color: ${diffColor};">${entry.difference > 0 ? '+' : ''}${entry.difference}</span>` 
-        : "";
+      // Card accent color based on status
+      let accentColor = "rgba(0,240,255,0.3)"; // Default cyan
+      if (isToday) accentColor = "rgba(0,255,136,0.5)"; // Green for today
+      else if (isShortage) accentColor = "rgba(255,0,68,0.3)"; // Red for shortage
+      else if (isExcess) accentColor = "rgba(255,200,0,0.3)"; // Yellow for excess
+      
+      // Date formatting
+      const dateObj = new Date(entry.date);
+      const dayName = dateObj.toLocaleDateString("en-IN", { weekday: "short" });
+      const dayNum = dateObj.getDate();
+      const monthName = dateObj.toLocaleDateString("en-IN", { month: "short" });
       
       return `
-        <div class="rounded-lg border border-gray-800/50 mb-2 overflow-hidden" style="background: rgba(0,0,0,0.2);">
-          <div class="flex items-center justify-between py-2 px-3 flex-wrap gap-2">
-            <div class="flex items-center gap-3 flex-wrap">
-              <span class="font-orbitron text-xs font-bold" style="color: #00f0ff;">${formatDateShort(entry.date)}</span>
-              <span class="text-[10px] text-gray-500">Open: <span style="color: #00ff88;">₹${(entry.opening || 0).toLocaleString("en-IN")}</span></span>
-              <span class="text-[10px] text-gray-500">Close: <span style="color: #00ff88;">₹${(entry.actualClosing || entry.closing || 0).toLocaleString("en-IN")}</span></span>
-              ${diffBadge}
+        <div class="group cursor-pointer rounded-xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+          onclick="openEntryDetail('${entry.date}')"
+          style="background: linear-gradient(135deg, rgba(13,31,60,0.9), rgba(10,22,40,0.95)); border: 1px solid ${accentColor};">
+          
+          <!-- Card Header -->
+          <div class="p-4 border-b border-gray-800/50">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="text-center p-2 rounded-lg" style="background: rgba(0,240,255,0.1); min-width: 50px;">
+                  <div class="text-2xl font-orbitron font-bold" style="color: ${isToday ? '#00ff88' : '#00f0ff'};">${dayNum}</div>
+                  <div class="text-[10px] text-gray-500 uppercase">${dayName}</div>
             </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-orbitron text-sm font-bold" style="color: #b829ff;">₹${(entry.sale || 0).toLocaleString("en-IN")}</span>
-              ${entry.withdrawal ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(255,107,0,0.2); color: #ff6b00;">W/D ₹${entry.withdrawal}</span>` : ""}
-              ${entry.expenses ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(255,0,68,0.2); color: #ff0044;">Exp ₹${entry.expenses}</span>` : ""}
-              <button onclick="editCashEntry('${entry.date}')" class="text-cyan-400 hover:text-cyan-300 text-xs p-1">✏️</button>
-            </div>
-          </div>
-          ${denomBadges || entry.comments ? `
-          <div class="px-3 pb-2 text-[10px] border-t border-gray-800/30" style="background: rgba(0,0,0,0.1);">
-            <div class="flex items-center gap-2 flex-wrap pt-1.5">
-              ${denomBadges ? `<span class="text-gray-500">${denomBadges}</span>` : ""}
-              ${entry.comments ? `<span class="text-gray-400 truncate" style="max-width: 200px;">📝 ${entry.comments}</span>` : ""}
+                <div>
+                  ${isToday ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold" style="background: rgba(0,255,136,0.2); color: #00ff88;">TODAY</span>' : ''}
+                  <div class="text-xs text-gray-500 mt-0.5">${monthName} ${dateObj.getFullYear()}</div>
             </div>
           </div>
-          ` : ""}
+              <div class="text-right">
+                <div class="text-xs text-gray-500">Total Sale</div>
+                <div class="text-xl font-orbitron font-bold" style="color: #00ff88;">
+                  ₹${(entry.sale || 0).toLocaleString("en-IN")}
+            </div>
+          </div>
+            </div>
+          </div>
+          
+          <!-- Card Body - Quick Stats -->
+          <div class="p-4 grid grid-cols-3 gap-2 text-center">
+            <div>
+              <div class="text-[10px] text-gray-500 uppercase">Opening</div>
+              <div class="font-orbitron text-sm" style="color: #00f0ff;">₹${(entry.opening || 0).toLocaleString("en-IN")}</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-gray-500 uppercase">Closing</div>
+              <div class="font-orbitron text-sm" style="color: #b829ff;">₹${(entry.actualClosing || entry.closing || 0).toLocaleString("en-IN")}</div>
+            </div>
+            <div>
+              <div class="text-[10px] text-gray-500 uppercase">Status</div>
+              <div class="text-sm font-bold" style="color: ${isBalanced ? '#00ff88' : isExcess ? '#ffff00' : '#ff0044'};">
+                ${isBalanced ? '✓ OK' : isExcess ? `+${diff}` : `${diff}`}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Card Footer - Badges -->
+          <div class="px-4 pb-3 flex items-center gap-2 flex-wrap">
+            ${hasWithdrawal ? `
+              <span class="px-2 py-1 rounded text-[10px]" style="background: rgba(255,107,0,0.15); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);">
+                💸 W/D: ₹${entry.withdrawal}
+              </span>
+            ` : ''}
+            ${hasExpenses ? `
+              <span class="px-2 py-1 rounded text-[10px]" style="background: rgba(255,0,68,0.15); color: #ff0044; border: 1px solid rgba(255,0,68,0.3);">
+                📤 Exp: ₹${entry.expenses}
+              </span>
+            ` : ''}
+            ${entry.comments ? `
+              <span class="px-2 py-1 rounded text-[10px] text-gray-400 truncate" style="background: rgba(100,100,100,0.15); max-width: 120px;" title="${entry.comments}">
+                📝 ${entry.comments}
+              </span>
+            ` : ''}
+            ${!hasWithdrawal && !hasExpenses && !entry.comments ? `
+              <span class="text-[10px] text-gray-600">Click for details</span>
+            ` : ''}
+          </div>
         </div>
       `;
     }).join("");
@@ -737,7 +306,7 @@ async function loadCashHistory() {
     
   } catch (error) {
     console.error("Error loading cash history:", error);
-    listEl.innerHTML = `<div class="py-4 text-center text-red-400">Error loading data</div>`;
+    cardsEl.innerHTML = `<div class="col-span-full py-8 text-center text-red-400">Error loading data</div>`;
   }
 }
 
@@ -760,72 +329,538 @@ function formatDateShort(dateStr) {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-// ==================== EDIT ENTRY ====================
+// ==================== MODAL FUNCTIONS ====================
 
-window.editCashEntry = async function(date) {
-  try {
-    const snapshot = await db.ref(`cash_register/${date}`).once("value");
-    const data = snapshot.val();
-    
-    if (!data) return;
-    
-    // Store the date being edited
-    window.editingDate = date;
-    
-    const openingInput = document.getElementById("openingBalance");
-    const openingIcon = document.getElementById("openingBalanceIcon");
-    const openingHint = document.getElementById("openingBalanceHint");
-    const saleDisplay = document.getElementById("todaySaleDisplay");
-    
-    // Fill form
-    openingInput.value = data.opening || "";
-    // Lock opening balance for editing
-    openingInput.readOnly = true;
-    openingInput.style.opacity = "0.8";
-    openingInput.style.cursor = "not-allowed";
-    openingIcon?.classList.remove("hidden");
-    if (openingHint) openingHint.textContent = "From saved entry";
-    
-    document.getElementById("todaySale").value = data.sale || "";
-    if (saleDisplay) saleDisplay.textContent = `₹${(data.sale || 0).toLocaleString("en-IN")}`;
-    
-    document.getElementById("withdrawalCash").value = data.withdrawalCash || data.withdrawal || "";
-    document.getElementById("withdrawalCoins").value = data.withdrawalCoins || "";
-    document.getElementById("expenses").value = data.expenses || "";
-    document.getElementById("cashComments").value = data.comments || "";
-    
-    // Fill denominations
-    if (data.denominations) {
-      DENOMINATIONS.forEach(d => {
-        const key = d.isCoins ? "coins" : `d${d.value}`;
-        const el = document.getElementById(`denom${d.value}`);
-        if (el) el.value = data.denominations[key] || "";
-      });
+// Open entry detail view
+window.openEntryDetail = async function(date) {
+  const modal = document.getElementById("cashDetailModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalSubtitle = document.getElementById("modalSubtitle");
+  const modalContent = document.getElementById("modalContent");
+  
+  if (!modal) return;
+  
+  // Find entry in cached data
+  const entry = cashData.find(e => e.date === date);
+  if (!entry) return;
+  
+  currentDetailEntry = entry;
+  
+  const dateObj = new Date(date);
+  const isToday = date === getISTDateString();
+  const diff = entry.difference || 0;
+  
+  modalTitle.innerHTML = `📅 ${dateObj.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`;
+  modalSubtitle.textContent = entry.admin ? `Last updated by ${entry.admin}` : "";
+  
+  // Build denomination display
+  let denomHtml = "";
+  if (entry.denominations) {
+    const denomItems = [];
+  DENOMINATIONS.forEach(d => {
+    const key = d.isCoins ? "coins" : `d${d.value}`;
+      const count = entry.denominations[key] || 0;
+      if (count > 0) {
+        const amount = d.isCoins ? count : count * d.value;
+        denomItems.push(`
+          <div class="flex items-center justify-between p-2 rounded-lg" style="background: rgba(0,0,0,0.3);">
+            <span style="color: ${d.color};">${d.label}</span>
+            <span class="text-white font-orbitron">${d.isCoins ? `₹${count}` : `${count} × ₹${d.value} = ₹${amount}`}</span>
+          </div>
+        `);
+      }
+    });
+    if (denomItems.length > 0) {
+      denomHtml = `
+        <div class="mb-6">
+          <h4 class="text-xs text-gray-400 uppercase tracking-wider mb-3">💵 Denomination Breakdown</h4>
+          <div class="grid grid-cols-1 gap-2">
+            ${denomItems.join("")}
+          </div>
+        </div>
+      `;
     }
+  }
+  
+  modalContent.innerHTML = `
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="p-4 rounded-xl text-center" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.2);">
+        <div class="text-[10px] text-gray-500 uppercase">Opening</div>
+        <div class="text-xl font-orbitron font-bold" style="color: #00ff88;">₹${(entry.opening || 0).toLocaleString("en-IN")}</div>
+      </div>
+      <div class="p-4 rounded-xl text-center" style="background: rgba(0,240,255,0.1); border: 1px solid rgba(0,240,255,0.2);">
+        <div class="text-[10px] text-gray-500 uppercase">Sale (Cash)</div>
+        <div class="text-xl font-orbitron font-bold" style="color: #00f0ff;">₹${(entry.sale || 0).toLocaleString("en-IN")}</div>
+      </div>
+      <div class="p-4 rounded-xl text-center" style="background: rgba(184,41,255,0.1); border: 1px solid rgba(184,41,255,0.2);">
+        <div class="text-[10px] text-gray-500 uppercase">Closing</div>
+        <div class="text-xl font-orbitron font-bold" style="color: #b829ff;">₹${(entry.actualClosing || entry.closing || 0).toLocaleString("en-IN")}</div>
+      </div>
+      <div class="p-4 rounded-xl text-center" style="background: ${diff === 0 ? 'rgba(0,255,136,0.1)' : diff > 0 ? 'rgba(255,255,0,0.1)' : 'rgba(255,0,68,0.1)'}; border: 1px solid ${diff === 0 ? 'rgba(0,255,136,0.2)' : diff > 0 ? 'rgba(255,255,0,0.2)' : 'rgba(255,0,68,0.2)'};">
+        <div class="text-[10px] text-gray-500 uppercase">Difference</div>
+        <div class="text-xl font-orbitron font-bold" style="color: ${diff === 0 ? '#00ff88' : diff > 0 ? '#ffff00' : '#ff0044'};">
+          ${diff === 0 ? '✓ Balanced' : (diff > 0 ? '+' : '') + '₹' + diff.toLocaleString("en-IN")}
+        </div>
+      </div>
+    </div>
     
-    // Update date display
-    document.getElementById("todayDate").textContent = new Date(date).toLocaleDateString("en-IN", {
-      weekday: "short",
-      day: "numeric",
-      month: "short"
-    }) + " (Editing)";
+    <!-- Details Grid -->
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+      <div class="p-4 rounded-xl" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+        <h4 class="text-xs text-gray-400 uppercase tracking-wider mb-3">💰 Cash Flow</h4>
+        <div class="space-y-2">
+          <div class="flex justify-between items-center py-2 border-b border-gray-800">
+            <span class="text-gray-400">Opening Balance</span>
+            <span class="font-orbitron" style="color: #00ff88;">+₹${(entry.opening || 0).toLocaleString("en-IN")}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-gray-800">
+            <span class="text-gray-400">Today's Sale</span>
+            <span class="font-orbitron" style="color: #00f0ff;">+₹${(entry.sale || 0).toLocaleString("en-IN")}</span>
+          </div>
+          ${entry.withdrawal ? `
+          <div class="flex justify-between items-center py-2 border-b border-gray-800">
+            <span class="text-gray-400">Withdrawal</span>
+            <span class="font-orbitron" style="color: #ff6b00;">-₹${entry.withdrawal.toLocaleString("en-IN")}</span>
+            ${entry.withdrawalCash && entry.withdrawalCoins ? `<span class="text-xs text-gray-600">(💵${entry.withdrawalCash} + 🪙${entry.withdrawalCoins})</span>` : ''}
+          </div>
+          ` : ''}
+          ${entry.expenses ? `
+          <div class="flex justify-between items-center py-2 border-b border-gray-800">
+            <span class="text-gray-400">Expenses</span>
+            <span class="font-orbitron" style="color: #ff0044;">-₹${entry.expenses.toLocaleString("en-IN")}</span>
+          </div>
+          ` : ''}
+          <div class="flex justify-between items-center py-2 font-bold">
+            <span class="text-white">Expected Closing</span>
+            <span class="font-orbitron" style="color: #00ff88;">₹${(entry.closing || 0).toLocaleString("en-IN")}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 font-bold">
+            <span class="text-white">Actual Closing</span>
+            <span class="font-orbitron" style="color: #b829ff;">₹${(entry.actualClosing || 0).toLocaleString("en-IN")}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div>
+        ${denomHtml || `
+        <div class="p-4 rounded-xl h-full flex items-center justify-center" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+          <p class="text-gray-500 text-sm">No denomination breakdown recorded</p>
+        </div>
+        `}
+      </div>
+    </div>
     
-    // Change save button text
-    const saveBtn = document.querySelector("#cash-register-content button[onclick='saveCashEntry()']");
-    if (saveBtn) {
-      saveBtn.innerHTML = "💾 UPDATE ENTRY";
-      saveBtn.style.background = "linear-gradient(135deg, #00f0ff, #0088cc)";
+    <!-- Comments -->
+    ${entry.comments ? `
+    <div class="p-4 rounded-xl mb-6" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+      <h4 class="text-xs text-gray-400 uppercase tracking-wider mb-2">📝 Comments</h4>
+      <p class="text-white">${entry.comments}</p>
+    </div>
+    ` : ''}
+    
+    <!-- Action Buttons -->
+    <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-800">
+      <button onclick="closeCashModal()" class="px-6 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+        style="background: rgba(100,100,100,0.2);">
+        Close
+      </button>
+      <button onclick="editCashEntryInModal('${date}')" class="px-6 py-2 rounded-lg text-sm font-orbitron font-bold"
+        style="background: linear-gradient(135deg, #00f0ff, #0088cc); color: #000;">
+        ✏️ Edit Entry
+      </button>
+    </div>
+  `;
+  
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+};
+
+// Close modal
+window.closeCashModal = function() {
+  const modal = document.getElementById("cashDetailModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+  currentDetailEntry = null;
+  window.editingDate = null;
+};
+
+// Open new entry modal
+window.openCashEntryModal = async function(dateToEdit = null) {
+  const modal = document.getElementById("cashDetailModal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalSubtitle = document.getElementById("modalSubtitle");
+  const modalContent = document.getElementById("modalContent");
+  
+  if (!modal) return;
+  
+  const isEditing = !!dateToEdit;
+  const targetDate = dateToEdit || getISTDateString();
+  window.editingDate = isEditing ? dateToEdit : null;
+  
+  // Get existing data if editing
+  let existingData = null;
+  if (dateToEdit) {
+    const entry = cashData.find(e => e.date === dateToEdit);
+    existingData = entry || null;
+  }
+  
+  // Check for today's entry
+  if (!isEditing) {
+    const todayEntry = cashData.find(e => e.date === getISTDateString());
+    if (todayEntry) {
+      existingData = todayEntry;
+      window.editingDate = todayEntry.date;
     }
+  }
+  
+  const dateObj = new Date(targetDate);
+  modalTitle.innerHTML = isEditing || existingData 
+    ? `✏️ Edit Entry - ${dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+    : `💰 New Cash Entry`;
+  modalSubtitle.textContent = isEditing || existingData ? "Update the entry details below" : "Enter today's cash register data";
+  
+  // Auto-fetch opening balance
+  let openingBalance = existingData?.opening || 0;
+  let openingLocked = false;
+  let openingHint = "Enter manually";
+  
+  if (!existingData) {
+    // Try to get from previous day
+    const prevEntry = cashData.find(e => e.date < targetDate);
+    if (prevEntry?.actualClosing) {
+      openingBalance = prevEntry.actualClosing;
+      openingLocked = true;
+      openingHint = `From ${formatDateShort(prevEntry.date)}'s closing`;
+    }
+  } else {
+    openingLocked = true;
+    openingHint = "From saved entry";
+  }
+  
+  // Auto-fetch sale for the target date (not just today)
+  let todaySale = existingData?.sale || 0;
+  if (!existingData) {
+    todaySale = await calculateSaleFromRecharges(targetDate);
+  }
+  
+  modalContent.innerHTML = `
+    <form id="cashEntryForm" class="space-y-6">
+      <!-- Basic Info -->
+      <div class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+            Opening Balance ${openingLocked ? '<span class="text-green-400">🔒</span>' : ''}
+          </label>
+          <input type="number" id="modalOpeningBalance" value="${openingBalance}" 
+            ${openingLocked ? 'readonly' : ''}
+            class="neon-input w-full px-4 py-3 rounded-lg text-white text-lg font-orbitron" 
+            style="border-color: rgba(0,255,136,0.3); ${openingLocked ? 'opacity: 0.8; cursor: not-allowed;' : ''}"
+            oninput="calculateModalTotals()"/>
+          <p class="text-xs text-gray-600 mt-1">${openingHint}</p>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+            Today's Sale (Cash) <span class="text-cyan-400">🔒</span>
+            <button type="button" onclick="refreshModalSale()" class="text-cyan-400 hover:text-cyan-300 text-xs">↻</button>
+          </label>
+          <div class="px-4 py-3 rounded-lg font-orbitron text-lg font-bold"
+            style="background: rgba(0,240,255,0.1); border: 1px solid rgba(0,240,255,0.3); color: #00f0ff;">
+            ₹<span id="modalSaleDisplay">${todaySale.toLocaleString("en-IN")}</span>
+          </div>
+          <input type="hidden" id="modalTodaySale" value="${todaySale}"/>
+          <p class="text-xs text-gray-600 mt-1">From recharges (cash only)</p>
+        </div>
+      </div>
+      
+      <!-- Withdrawals & Expenses -->
+      <div class="grid md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 block">💵 Cash Withdrawal</label>
+          <input type="number" id="modalWithdrawalCash" value="${existingData?.withdrawalCash || existingData?.withdrawal || ''}" 
+            placeholder="₹0"
+            class="neon-input w-full px-4 py-3 rounded-lg text-white font-orbitron" 
+            style="border-color: rgba(255,107,0,0.3);"
+            oninput="calculateModalTotals()"/>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 block">🪙 Coins Withdrawal</label>
+          <input type="number" id="modalWithdrawalCoins" value="${existingData?.withdrawalCoins || ''}" 
+            placeholder="₹0"
+            class="neon-input w-full px-4 py-3 rounded-lg text-white font-orbitron" 
+            style="border-color: rgba(255,200,0,0.3);"
+            oninput="calculateModalTotals()"/>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 block">📤 Expenses</label>
+          <input type="number" id="modalExpenses" value="${existingData?.expenses || ''}" 
+            placeholder="₹0"
+            class="neon-input w-full px-4 py-3 rounded-lg text-white font-orbitron" 
+            style="border-color: rgba(255,0,68,0.3);"
+            oninput="calculateModalTotals()"/>
+        </div>
+      </div>
+      
+      <!-- Denomination Breakdown -->
+      <div class="p-4 rounded-xl" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-xs text-gray-400 uppercase tracking-wider">💵 Cash Denomination Count</span>
+          <span id="modalDenomTotal" class="font-orbitron text-sm" style="color: #00f0ff;">Total: ₹0</span>
+        </div>
+        <div class="grid grid-cols-4 md:grid-cols-7 gap-3">
+          ${DENOMINATIONS.map(d => {
+            const key = d.isCoins ? "coins" : `d${d.value}`;
+            const val = existingData?.denominations?.[key] || "";
+            return `
+              <div class="text-center">
+                <label class="text-xs mb-1 block font-orbitron" style="color: ${d.color};">${d.label}</label>
+                <input type="number" id="modalDenom${d.value}" data-value="${d.value}" value="${val}"
+                  placeholder="${d.isCoins ? '₹' : '0'}" 
+                  class="neon-input w-full px-2 py-2 rounded-lg text-white text-center text-sm" 
+                  oninput="calculateModalDenominations()"
+                  title="${d.isCoins ? 'Enter total coin amount in ₹' : `Number of ₹${d.value} notes`}"/>
+              </div>
+            `;
+          }).join("")}
+        </div>
+        <p class="text-xs text-gray-600 mt-2">💡 Enter note counts. For Coins, enter total amount.</p>
+      </div>
+      
+      <!-- Calculated Totals -->
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="p-3 rounded-lg text-center" style="background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.2);">
+          <div class="text-[10px] text-gray-500 uppercase">Expected Closing</div>
+          <div id="modalExpectedClosing" class="text-xl font-orbitron font-bold" style="color: #00ff88;">₹0</div>
+        </div>
+        <div class="p-3 rounded-lg text-center" style="background: rgba(184,41,255,0.1); border: 1px solid rgba(184,41,255,0.2);">
+          <div class="text-[10px] text-gray-500 uppercase">Actual Cash Count</div>
+          <div id="modalActualClosing" class="text-xl font-orbitron font-bold" style="color: #b829ff;">₹0</div>
+        </div>
+        <div id="modalDiffContainer" class="p-3 rounded-lg text-center" style="background: rgba(100,100,100,0.1); border: 1px solid rgba(100,100,100,0.2);">
+          <div class="text-[10px] text-gray-500 uppercase">Difference</div>
+          <div id="modalDifference" class="text-xl font-orbitron font-bold" style="color: #888;">₹0</div>
+        </div>
+      </div>
+      
+      <!-- Comments -->
+      <div>
+        <label class="text-xs text-gray-400 uppercase tracking-wider mb-2 block">📝 Comments</label>
+        <input type="text" id="modalComments" value="${existingData?.comments || ''}" 
+          placeholder="Any notes for today..."
+          class="neon-input w-full px-4 py-3 rounded-lg text-white"/>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-800">
+        <button type="button" onclick="closeCashModal()" class="px-6 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+          style="background: rgba(100,100,100,0.2);">
+          Cancel
+        </button>
+        <button type="submit" class="px-8 py-3 rounded-lg text-sm font-orbitron font-bold"
+          style="background: linear-gradient(135deg, #00ff88, #00cc66); color: #000;">
+          💾 ${isEditing || existingData ? 'UPDATE' : 'SAVE'} ENTRY
+        </button>
+      </div>
+    </form>
+  `;
+  
+  // Setup form submission
+  document.getElementById("cashEntryForm").onsubmit = (e) => {
+    e.preventDefault();
+    saveModalEntry();
+  };
+  
+  // Calculate initial totals
+  calculateModalDenominations();
+  
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+};
+
+// Edit from detail view
+window.editCashEntryInModal = function(date) {
+  openCashEntryModal(date);
+};
+
+// Legacy edit function (redirects to modal)
+window.editCashEntry = function(date) {
+  openCashEntryModal(date);
+};
+
+// Calculate denominations in modal
+window.calculateModalDenominations = function() {
+  let total = 0;
+        DENOMINATIONS.forEach(d => {
+    const input = document.getElementById(`modalDenom${d.value}`);
+    const count = Number(input?.value) || 0;
     
-    calculateDenominations();
+    if (d.isCoins) {
+      total += count;
+    } else {
+      total += count * d.value;
+    }
+  });
+  
+  const totalEl = document.getElementById("modalDenomTotal");
+  if (totalEl) totalEl.textContent = `Total: ₹${total.toLocaleString("en-IN")}`;
+  
+  const actualEl = document.getElementById("modalActualClosing");
+  if (actualEl) actualEl.textContent = `₹${total.toLocaleString("en-IN")}`;
+  
+  window.modalActualCash = total;
+  calculateModalTotals();
+};
+
+// Calculate totals in modal
+window.calculateModalTotals = function() {
+  const opening = Number(document.getElementById("modalOpeningBalance")?.value) || 0;
+  const sale = Number(document.getElementById("modalTodaySale")?.value) || 0;
+  const withdrawalCash = Number(document.getElementById("modalWithdrawalCash")?.value) || 0;
+  const withdrawalCoins = Number(document.getElementById("modalWithdrawalCoins")?.value) || 0;
+  const withdrawal = withdrawalCash + withdrawalCoins;
+  const expenses = Number(document.getElementById("modalExpenses")?.value) || 0;
+  const actual = window.modalActualCash || 0;
+  
+  const expected = opening + sale - withdrawal - expenses;
+  const diff = actual - expected;
+  
+  const expectedEl = document.getElementById("modalExpectedClosing");
+  if (expectedEl) expectedEl.textContent = `₹${expected.toLocaleString("en-IN")}`;
+  
+  const diffEl = document.getElementById("modalDifference");
+  const diffContainer = document.getElementById("modalDiffContainer");
+  
+  if (diffEl && diffContainer && actual > 0) {
+    diffEl.textContent = `${diff >= 0 ? '+' : ''}₹${Math.abs(diff).toLocaleString("en-IN")}`;
     
-    // Scroll to form
-    document.querySelector("#cash-register-content").scrollIntoView({ behavior: "smooth" });
-    
-  } catch (error) {
-    console.error("Error loading entry for edit:", error);
+    if (diff === 0) {
+      diffEl.style.color = "#00ff88";
+      diffContainer.style.background = "rgba(0,255,136,0.1)";
+      diffContainer.style.borderColor = "rgba(0,255,136,0.2)";
+    } else if (diff > 0) {
+      diffEl.style.color = "#ffff00";
+      diffContainer.style.background = "rgba(255,255,0,0.1)";
+      diffContainer.style.borderColor = "rgba(255,255,0,0.2)";
+    } else {
+      diffEl.style.color = "#ff0044";
+      diffContainer.style.background = "rgba(255,0,68,0.1)";
+      diffContainer.style.borderColor = "rgba(255,0,68,0.2)";
+    }
   }
 };
+
+// Helper: Calculate sale from recharges for a specific date
+async function calculateSaleFromRecharges(targetDate) {
+  const dateStr = targetDate || getISTDateString();
+  try {
+    const allRecharges = await SharedCache.getRecharges(db, FB_PATHS.RECHARGES);
+    
+    let totalCash = 0;
+    let creditCash = 0;
+    
+    // Direct recharges for the target date
+    const dateRecharges = allRecharges[dateStr] || {};
+    Object.values(dateRecharges).forEach(r => {
+      if (r.total !== undefined) {
+        totalCash += r.cash || 0;
+      } else if (r.amount !== undefined && r.mode === "cash") {
+        totalCash += r.amount;
+      }
+    });
+    
+    // Credit collections that happened on the target date
+    Object.entries(allRecharges).forEach(([date, dayData]) => {
+      Object.values(dayData).forEach(r => {
+        if (r.lastPaidAt?.split("T")[0] === dateStr) {
+            creditCash += r.lastPaidCash || 0;
+        }
+        if (r.paidAt?.split("T")[0] === dateStr && r.mode === "credit" && r.paid && r.paidVia === "cash") {
+          creditCash += r.amount;
+        }
+      });
+    });
+    
+    return totalCash + creditCash;
+  } catch (error) {
+    console.error("Error calculating sale:", error);
+    return 0;
+  }
+}
+
+// Legacy alias for backwards compatibility
+async function calculateTodaySaleFromRecharges() {
+  return calculateSaleFromRecharges(getISTDateString());
+}
+
+// Refresh sale in modal - uses the editing date or today
+window.refreshModalSale = async function() {
+  const targetDate = window.editingDate || getISTDateString();
+  const sale = await calculateSaleFromRecharges(targetDate);
+  document.getElementById("modalTodaySale").value = sale;
+  document.getElementById("modalSaleDisplay").textContent = sale.toLocaleString("en-IN");
+  calculateModalTotals();
+  
+  const isToday = targetDate === getISTDateString();
+  notifySuccess(isToday ? "Sale updated from today's recharges!" : `Sale updated for ${formatDateShort(targetDate)}!`);
+};
+
+// Save modal entry
+async function saveModalEntry() {
+  if (!canEditData()) {
+    notifyWarning("You have view-only access. Saving is not allowed.");
+      return;
+    }
+    
+  const dateToSave = window.editingDate || getISTDateString();
+  
+  let actualClosing = 0;
+  DENOMINATIONS.forEach(d => {
+    const count = Number(document.getElementById(`modalDenom${d.value}`)?.value) || 0;
+    if (d.isCoins) {
+      actualClosing += count;
+    } else {
+      actualClosing += count * d.value;
+    }
+  });
+  
+  const entry = {
+    date: dateToSave,
+    opening: Number(document.getElementById("modalOpeningBalance")?.value) || 0,
+    sale: Number(document.getElementById("modalTodaySale")?.value) || 0,
+    withdrawalCash: Number(document.getElementById("modalWithdrawalCash")?.value) || 0,
+    withdrawalCoins: Number(document.getElementById("modalWithdrawalCoins")?.value) || 0,
+    withdrawal: (Number(document.getElementById("modalWithdrawalCash")?.value) || 0) + 
+                (Number(document.getElementById("modalWithdrawalCoins")?.value) || 0),
+    expenses: Number(document.getElementById("modalExpenses")?.value) || 0,
+    actualClosing: actualClosing,
+    comments: document.getElementById("modalComments")?.value || "",
+    denominations: {},
+    admin: getAdminName(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  // Collect denominations
+      DENOMINATIONS.forEach(d => {
+        const key = d.isCoins ? "coins" : `d${d.value}`;
+    entry.denominations[key] = Number(document.getElementById(`modalDenom${d.value}`)?.value) || 0;
+  });
+  
+  entry.closing = entry.opening + entry.sale - entry.withdrawal - entry.expenses;
+  entry.difference = entry.actualClosing - entry.closing;
+  
+  try {
+    await db.ref(`cash_register/${dateToSave}`).set(entry);
+    
+    notifySuccess(window.editingDate ? "Entry updated!" : "Entry saved!");
+    closeCashModal();
+    loadCashHistory();
+  } catch (error) {
+    console.error("Error saving:", error);
+    notifyError("Failed to save: " + error.message);
+  }
+}
 
 // ==================== EXPORT ====================
 
