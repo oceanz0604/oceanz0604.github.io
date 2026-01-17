@@ -86,26 +86,10 @@ async function renderHallOfFame(container, leaderboardData, highlightUsername) {
     return;
   }
 
-  // OPTIMIZATION: Only fetch RECENT history entries (last 30 entries) for badges
-  // This reduces data transfer from ~1000s of records to ~30 per user
-  const historyData = await Promise.all(
-    leaderboard.map(async m => {
-      // Fetch only last 30 entries instead of entire history
-      const snapshot = await historyRef.child(m.username)
-        .orderByChild('ID')
-        .limitToLast(30)
-        .once("value");
-      const entries = Object.values(snapshot.val() || {});
-      const spent = entries.reduce((sum, h) => sum + (h.CHARGE < 0 ? -h.CHARGE : 0), 0);
-      const lastDate = entries
-        .map(h => new Date(`${h.DATE}T${h.TIME?.split('.')[0] || '00:00:00'}`))
-        .sort((a, b) => b - a)[0];
-      return { username: m.username, spent, lastDate, streak: calculateStreak(entries) };
-    })
-  );
-
-  const maxSpent = Math.max(...historyData.map(h => h.spent));
+  // OPTIMIZATION: Use pre-computed values from leaderboard data instead of fetching history
+  // The sync script now pre-computes: last_active, streak_days, total_spent
   const maxMinutes = leaderboard[0]?.total_minutes ?? 0;
+  const maxSpent = Math.max(...leaderboard.map(m => m.total_spent || 0));
 
   container.innerHTML = "";
 
@@ -113,7 +97,12 @@ async function renderHallOfFame(container, leaderboardData, highlightUsername) {
     const avatar = getAvatarUrl(m.username);
     const timeInHours = Math.round((m.total_minutes || 0) / 60);
     const since = m.member_since ? new Date(m.member_since).toLocaleDateString("en-IN", { year: 'numeric', month: 'short' }) : "N/A";
-    const { spent, lastDate, streak } = historyData.find(h => h.username === m.username) || {};
+    
+    // Use pre-computed values from sync script
+    const lastDate = m.last_active ? new Date(m.last_active) : null;
+    const streak = m.streak_days || 0;
+    const spent = m.total_spent || 0;
+    
     const isHighlighted = highlightUsername && m.username?.toLowerCase() === highlightUsername.toLowerCase().trim();
 
     const badges = [];
@@ -121,7 +110,7 @@ async function renderHallOfFame(container, leaderboardData, highlightUsername) {
     else if (i === 1) badges.push("🥈 Runner Up");
     else if (i === 2) badges.push("🥉 Third Place");
     if (m.total_minutes === maxMinutes && i > 0) badges.push("👑 Grinder");
-    if (spent === maxSpent) badges.push("🏅 Big Spender");
+    if (spent > 0 && spent === maxSpent) badges.push("🏅 Big Spender");
     if (lastDate) {
       const inactiveDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
       if (inactiveDays > 7) badges.push("🐢 Ghost");
