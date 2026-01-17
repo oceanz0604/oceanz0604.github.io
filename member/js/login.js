@@ -101,13 +101,18 @@ document.getElementById("memberLoginForm")?.addEventListener("submit", function(
       if (storedPassword === enteredPassword) {
         // Build session object from V2 structure
         const sessionData = {
+          ID: profile.ID,  // Required for analytics and sessions lookup
           USERNAME: profile.USERNAME || username,  // Use username from profile (uppercase)
           DISPLAY_NAME: profile.DISPLAY_NAME || profile.USERNAME || username,
           FIRSTNAME: profile.FIRSTNAME || "",
           LASTNAME: profile.LASTNAME || "",
           RECDATE: profile.RECDATE || "",
           BALANCE: memberData.balance?.current_balance || 0,
-          TOTALACTMINUTE: memberData.stats?.total_minutes || 0
+          TOTALACTMINUTE: memberData.stats?.total_minutes || 0,
+          // Include stats for dashboard display
+          stats: memberData.stats || {},
+          ranks: memberData.ranks || {},
+          badges: memberData.badges || {}
         };
         setMemberSession(sessionData);
         window.location.href = "dashboard.html";

@@ -1389,11 +1389,17 @@ def calculate_leaderboards_from_fdb(members, cursor):
             display_name = m.get("DISPLAY_NAME") or m.get("USERNAME") or ""
             username = (m.get("USERNAME") or "").upper()
             
+            # Calculate total_spent for this member
+            total_loaded = float(m.get("TOTALBAKIYE") or 0)
+            current = float(m.get("BAKIYE") or m.get("BALANCE") or 0)
+            spent = total_loaded - current if total_loaded > current else 0
+            
             entry = {
                 "rank": i + 1,
                 "username": display_name,
                 "total_minutes": int(m.get("TOTALACTMINUTE") or 0),
                 "total_hours": round((m.get("TOTALACTMINUTE") or 0) / 60, 1),
+                "total_spent": round(spent, 2),  # Pre-computed for leaderboard display
             }
             if m.get("RECDATE"):
                 entry["member_since"] = m.get("RECDATE")
@@ -1428,10 +1434,7 @@ def calculate_leaderboards_from_fdb(members, cursor):
             if total_minutes >= 10000:  # 166+ hours
                 badges["grinder"] = True
             
-            # Big spender badge
-            total_loaded = float(m.get("TOTALBAKIYE") or 0)
-            current = float(m.get("BAKIYE") or m.get("BALANCE") or 0)
-            spent = total_loaded - current if total_loaded > current else 0
+            # Big spender badge (spent already calculated above)
             if max_spent > 0 and spent >= max_spent * 0.9:
                 badges["big_spender"] = True
             
