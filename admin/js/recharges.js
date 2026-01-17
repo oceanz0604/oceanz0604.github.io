@@ -1947,7 +1947,46 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
     }
   });
   
-  // Second pass: same member, different amount (potential mismatch)
+  // Second pass: SUM MATCH - Admin entry matches SUM of multiple PanCafe entries
+  // Example: Admin has ₹200 for "atodkar", PanCafe has ₹160 + ₹40 for "atodkar"
+  adminEntries.forEach(admin => {
+    if (usedAdminIds.has(admin.id)) return;
+    
+    // Find ALL unused PanCafe entries for the same member
+    const sameMemberEntries = panCafeEntries.filter(pc => 
+      membersMatch(pc.member, admin.member) && 
+      !usedPanCafeIds.has(pc.id)
+    );
+    
+    if (sameMemberEntries.length > 1) {
+      // Calculate sum of all PanCafe entries for this member
+      const panCafeSum = sameMemberEntries.reduce((sum, pc) => sum + pc.amount, 0);
+      
+      // Check if sum matches admin amount (with small tolerance for rounding)
+      if (Math.abs(panCafeSum - admin.amount) <= 1) {
+        // Mark all PanCafe entries as used
+        sameMemberEntries.forEach(pc => usedPanCafeIds.add(pc.id));
+        
+        results.push({
+          status: "matched",
+          matchType: "sum",
+          member: admin.member,
+          adminAmount: admin.amount,
+          panCafeAmount: panCafeSum,
+          panCafeBreakdown: sameMemberEntries.map(pc => pc.amount).join(" + "),
+          panCafeCount: sameMemberEntries.length,
+          adminId: admin.id,
+          panCafeIds: sameMemberEntries.map(pc => pc.id),
+          adminData: admin,
+          panCafeData: sameMemberEntries,
+          note: `Sum match: ${sameMemberEntries.map(pc => "₹" + pc.amount).join(" + ")} = ₹${panCafeSum}`
+        });
+        usedAdminIds.add(admin.id);
+      }
+    }
+  });
+  
+  // Third pass: same member, different amount (potential mismatch)
   adminEntries.forEach(admin => {
     if (usedAdminIds.has(admin.id)) return;
     
@@ -1957,19 +1996,32 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
     );
     
     if (sameMember) {
+      // Check if there are multiple entries that could be summed
+      const allSameMember = panCafeEntries.filter(pc => 
+        membersMatch(pc.member, admin.member) && 
+        !usedPanCafeIds.has(pc.id)
+      );
+      const panCafeSum = allSameMember.reduce((sum, pc) => sum + pc.amount, 0);
+      
       results.push({
         status: "mismatch",
         member: admin.member,
         adminAmount: admin.amount,
         panCafeAmount: sameMember.amount,
-        difference: admin.amount - sameMember.amount,
+        panCafeSum: allSameMember.length > 1 ? panCafeSum : null,
+        panCafeCount: allSameMember.length,
+        difference: admin.amount - panCafeSum,
         adminId: admin.id,
         panCafeId: sameMember.id,
         adminData: admin,
-        panCafeData: sameMember
+        panCafeData: sameMember,
+        note: allSameMember.length > 1 
+          ? `PanCafe has ${allSameMember.length} entries totaling ₹${panCafeSum}` 
+          : null
       });
       usedAdminIds.add(admin.id);
-      usedPanCafeIds.add(sameMember.id);
+      // Mark all same member entries as used
+      allSameMember.forEach(pc => usedPanCafeIds.add(pc.id));
     }
   });
   
@@ -2101,6 +2153,9 @@ function renderSyncResults() {
     let detailsHtml = "";
     
     if (r.status === "matched") {
+      // Check if this is a sum match (multiple PanCafe entries = 1 Admin entry)
+      const isSumMatch = r.matchType === "sum" || r.panCafeCount > 1;
+      
       detailsHtml = `
         <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
           <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
@@ -2109,9 +2164,14 @@ function renderSyncResults() {
             ${r.adminData?.note ? `<div class="text-xs text-gray-500 mt-1">📝 ${r.adminData.note}</div>` : ""}
           </div>
           <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
-            <div class="text-xs text-gray-500 mb-1">PanCafe Entry</div>
-            <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
+            <div class="text-xs text-gray-500 mb-1">PanCafe ${isSumMatch ? `(${r.panCafeCount} entries)` : 'Entry'}</div>
+            <div style="color: #00ff88;">
+              ${isSumMatch && r.panCafeBreakdown 
+                ? `<span class="text-xs">${r.panCafeBreakdown}</span> = ₹${r.panCafeAmount}` 
+                : `₹${r.panCafeAmount}`}
+            </div>
             ${r.panCafeData?.time ? `<div class="text-xs text-gray-500 mt-1">⏰ ${r.panCafeData.time}</div>` : ""}
+            ${isSumMatch ? `<div class="text-xs mt-1" style="color: #b829ff;">🧮 Sum Match</div>` : ""}
           </div>
         </div>
       `;
