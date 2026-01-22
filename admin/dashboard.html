@@ -2285,8 +2285,11 @@
         
         const data = await response.json();
         
+        // Backend writes `last_sync`, not `last_fdb_sync` – support both for safety.
+        const lastFdbSync = data?.last_fdb_sync || data?.last_sync;
+        
         // Update FDB status
-        updateSyncStatusUI('fdb', data?.last_fdb_sync, data?.records_synced);
+        updateSyncStatusUI('fdb', lastFdbSync, data?.records_synced);
         
         // Update Terminals status  
         updateSyncStatusUI('terminals', data?.terminals?.last_sync, null, data?.terminals?.status);
