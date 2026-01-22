@@ -16,6 +16,12 @@ import {
   ROLES 
 } from "./permissions.js";
 
+// Modular SDK wrapper for SharedCache compatibility
+const createDbWrapper = (database) => ({
+  ref: (path) => ref(database, path),
+  get: (dbRef) => get(dbRef)
+});
+
 // ==================== FIREBASE INIT ====================
 
 let fdbApp = getApps().find(app => app.name === FDB_APP_NAME);
@@ -213,8 +219,8 @@ navLinks.forEach(({ el, view }) => {
 
 // ==================== MEMBERS ====================
 
-// Create a db wrapper for SharedCache compatibility
-const fdbDb = { ref: (path) => ref(db, path) };
+// Create a db wrapper for SharedCache compatibility (modular SDK)
+const fdbDb = createDbWrapper(db);
 
 async function loadAllMembers() {
   const container = $("membersList");

@@ -896,9 +896,34 @@
         <div class="absolute inset-0 loading-spinner rounded-full animate-spin"></div>
         <div class="absolute inset-2 loading-spinner rounded-full animate-spin" style="animation-direction: reverse; animation-duration: 0.8s;"></div>
       </div>
-      <p class="text-gray-400 font-orbitron text-sm tracking-wider">INITIALIZING DASHBOARD...</p>
+      <p id="loading-status" class="text-gray-400 font-orbitron text-sm tracking-wider">INITIALIZING DASHBOARD...</p>
+      <p id="loading-error" class="hidden text-red-400 font-orbitron text-xs mt-4"></p>
+      <button id="loading-retry" class="hidden mt-4 px-4 py-2 text-xs font-orbitron rounded-lg" 
+        style="background: rgba(255,0,68,0.2); border: 1px solid rgba(255,0,68,0.5); color: #ff0044;"
+        onclick="window.location.reload()">
+        ⟳ RETRY
+      </button>
     </div>
   </div>
+  
+  <!-- Loading timeout handler -->
+  <script>
+    // Timeout to detect stuck loading
+    setTimeout(() => {
+      const loadingScreen = document.getElementById("loading-screen");
+      const status = document.getElementById("loading-status");
+      const error = document.getElementById("loading-error");
+      const retry = document.getElementById("loading-retry");
+      
+      if (loadingScreen && !loadingScreen.classList.contains("hidden")) {
+        status.textContent = "LOADING TAKING TOO LONG...";
+        error.textContent = "Check your internet connection or try again";
+        error.classList.remove("hidden");
+        retry.classList.remove("hidden");
+        console.error("⏱️ Dashboard loading timeout - auth may have failed silently");
+      }
+    }, 15000); // 15 second timeout
+  </script>
 
   <!-- Main App -->
   <div id="app" class="hidden flex min-h-screen relative z-10">
@@ -1394,54 +1419,82 @@
     import { BOOKING_DB_CONFIG, AUTH_APP_NAME } from "../shared/config.js";
     import { getStaffSession, handleStaffLogin } from "./js/permissions.js";
     
-    const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
-    const auth = firebase.auth(authApp);
+    const loadingStatus = document.getElementById("loading-status");
+    const loadingError = document.getElementById("loading-error");
+    const loadingRetry = document.getElementById("loading-retry");
     
-    // Expose auth globally for logout functionality
-    window.firebaseAuth = auth;
-    
-    auth.onAuthStateChanged(async (user) => {
-      const loadingScreen = document.getElementById("loading-screen");
-      const app = document.getElementById("app");
-      
-      if (user) {
-        // Check if staff session exists
-        let session = getStaffSession();
-        
-        // If no session or session email doesn't match, try to create/refresh it
-        if (!session || session.email?.toLowerCase() !== user.email?.toLowerCase()) {
-          console.log("🔄 Creating/refreshing staff session for:", user.email);
-          try {
-            session = await handleStaffLogin(user.email, user.displayName);
-          } catch (err) {
-            console.error("❌ Failed to create staff session:", err);
-          }
-        }
-        
-        // Final check - if still no session, redirect to login
-        if (!session) {
-          console.error("❌ No staff session available - redirecting to login");
-          window.location.replace("index.html");
-          return;
-        }
-        
-        console.log("✅ Staff session verified:", session.name, "Role:", session.role);
-        
-        // Check if user should be redirected to POS counter
-        if (session.role === "COUNTER") {
-          console.log("🧾 Counter role detected - redirecting to POS interface");
-          window.location.replace("counter.html");
-          return;
-        }
-        
-        loadingScreen.classList.add("hidden");
-        app.classList.remove("hidden");
-        lucide.createIcons();
-      } else {
-        console.log("👋 No user - redirecting to login");
-        window.location.replace("index.html");
+    function showLoadingError(message) {
+      if (loadingStatus) loadingStatus.textContent = "ERROR";
+      if (loadingError) {
+        loadingError.textContent = message;
+        loadingError.classList.remove("hidden");
       }
-    });
+      if (loadingRetry) loadingRetry.classList.remove("hidden");
+    }
+    
+    try {
+      if (loadingStatus) loadingStatus.textContent = "CONNECTING TO FIREBASE...";
+      
+      const authApp = firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
+      const auth = firebase.auth(authApp);
+      
+      // Expose auth globally for logout functionality
+      window.firebaseAuth = auth;
+      
+      if (loadingStatus) loadingStatus.textContent = "CHECKING AUTH...";
+      
+      auth.onAuthStateChanged(async (user) => {
+        const loadingScreen = document.getElementById("loading-screen");
+        const app = document.getElementById("app");
+        
+        if (user) {
+          if (loadingStatus) loadingStatus.textContent = "VERIFYING SESSION...";
+          
+          // Check if staff session exists
+          let session = getStaffSession();
+          
+          // If no session or session email doesn't match, try to create/refresh it
+          if (!session || session.email?.toLowerCase() !== user.email?.toLowerCase()) {
+            console.log("🔄 Creating/refreshing staff session for:", user.email);
+            try {
+              session = await handleStaffLogin(user.email, user.displayName);
+            } catch (err) {
+              console.error("❌ Failed to create staff session:", err);
+              showLoadingError("Failed to create session: " + err.message);
+              return;
+            }
+          }
+          
+          // Final check - if still no session, redirect to login
+          if (!session) {
+            console.error("❌ No staff session available - redirecting to login");
+            window.location.replace("index.html");
+            return;
+          }
+          
+          console.log("✅ Staff session verified:", session.name, "Role:", session.role);
+          
+          // Check if user should be redirected to POS counter
+          if (session.role === "COUNTER") {
+            console.log("🧾 Counter role detected - redirecting to POS interface");
+            window.location.replace("counter.html");
+            return;
+          }
+          
+          if (loadingStatus) loadingStatus.textContent = "LOADING DASHBOARD...";
+          
+          loadingScreen.classList.add("hidden");
+          app.classList.remove("hidden");
+          lucide.createIcons();
+        } else {
+          console.log("👋 No user - redirecting to login");
+          window.location.replace("index.html");
+        }
+      });
+    } catch (err) {
+      console.error("❌ Auth initialization failed:", err);
+      showLoadingError("Firebase init failed: " + err.message);
+    }
     
     document.addEventListener("DOMContentLoaded", () => {
       // Logout is handled by dashboard.js with modal

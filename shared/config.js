@@ -354,17 +354,57 @@ export class DataCache {
 // These caches are shared across ALL admin pages to avoid duplicate downloads
 
 /**
+ * Helper: Fetch data from Firebase (supports both modular and compat SDK)
+ * @param {object} dbWrapper - Object with { ref, get } for modular SDK or compat database
+ * @param {string} path - Firebase path
+ * @returns {Promise<object>} Snapshot data
+ */
+async function fetchFirebaseData(dbWrapper, path) {
+  try {
+    // Check if it's modular SDK style (has get function at wrapper level)
+    if (typeof dbWrapper.get === 'function' && typeof dbWrapper.ref === 'function') {
+      console.log(`🔌 SharedCache: Using modular SDK for path: ${path}`);
+      const dbRef = dbWrapper.ref(path);
+      const snap = await dbWrapper.get(dbRef);
+      return snap.val() || {};
+    }
+    
+    // Compat SDK style - Database object with .ref().once()
+    if (typeof dbWrapper.ref === 'function') {
+      const testRef = dbWrapper.ref(path);
+      if (typeof testRef.once === 'function') {
+        console.log(`🔌 SharedCache: Using compat SDK for path: ${path}`);
+        const snap = await testRef.once("value");
+        return snap.val() || {};
+      }
+    }
+    
+    // Debug info for failed detection
+    console.error("SharedCache: Could not detect SDK type", {
+      hasRef: typeof dbWrapper.ref,
+      hasGet: typeof dbWrapper.get,
+      path
+    });
+    throw new Error("SharedCache: Invalid database wrapper - must have { ref, get } or compat SDK");
+  } catch (error) {
+    console.error(`❌ SharedCache: Failed to fetch ${path}:`, error.message);
+    throw error;
+  }
+}
+
+/**
  * Global shared cache for expensive Firebase data.
  * Shared across all admin pages (dashboard, counter, recharges, analytics).
  * 
- * Usage:
- *   import { SharedCache } from '../shared/config.js';
- *   
- *   // Load members (uses cache if valid)
- *   const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
- *   
- *   // Force refresh
- *   SharedCache.invalidateMembers();
+ * Usage (Modular SDK - Firebase v10+):
+ *   import { getDatabase, ref, get } from "firebase/database";
+ *   const db = getDatabase(app);
+ *   const dbWrapper = { ref: (path) => ref(db, path), get };
+ *   const members = await SharedCache.getMembers(dbWrapper, FB_PATHS.MEMBERS);
+ * 
+ * Usage (Compat SDK):
+ *   const db = firebase.database();
+ *   const members = await SharedCache.getMembers(db, FB_PATHS.MEMBERS);
  */
 export const SharedCache = {
   // Members cache (5 min TTL) - shared across all admin pages
@@ -378,11 +418,11 @@ export const SharedCache = {
   /**
    * Get all members from Firebase with caching.
    * Returns V2 structure: array of { profile, balance, stats, ... }
-   * @param {object} fdbDb - Firebase database reference
+   * @param {object} dbWrapper - Firebase database wrapper { ref, get } or compat db
    * @param {string} path - Firebase path (FB_PATHS.MEMBERS)
    * @returns {Promise<Array>} Array of member objects
    */
-  async getMembers(fdbDb, path = "members") {
+  async getMembers(dbWrapper, path = "members") {
     // Return cached data if valid
     if (this._membersCache.isValid()) {
       console.log("📦 SharedCache: Using cached members data");
@@ -397,9 +437,8 @@ export const SharedCache = {
     
     // Fetch from Firebase
     console.log("🔄 SharedCache: Fetching members from Firebase");
-    this._membersPromise = fdbDb.ref(path).once("value")
-      .then(snap => {
-        const rawData = snap.val() || {};
+    this._membersPromise = fetchFirebaseData(dbWrapper, path)
+      .then(rawData => {
         // Convert V2 structure to array
         const members = Object.entries(rawData).map(([username, memberData]) => {
           const profile = memberData.profile || {};
@@ -414,6 +453,7 @@ export const SharedCache = {
             PHONE: profile.PHONE || "",
             RECDATE: profile.RECDATE || "",
             MEMBERSTATE: profile.MEMBERSTATE || 0,
+            PASSWORD: profile.PASSWORD || "",
             // Include balance and stats for convenience
             balance: memberData.balance || {},
             stats: memberData.stats || {},
@@ -438,11 +478,11 @@ export const SharedCache = {
   
   /**
    * Get all recharges from Firebase with caching.
-   * @param {object} bookingDb - Firebase database reference
+   * @param {object} dbWrapper - Firebase database wrapper { ref, get } or compat db
    * @param {string} path - Firebase path (FB_PATHS.RECHARGES)
    * @returns {Promise<Object>} Recharges data keyed by date
    */
-  async getRecharges(bookingDb, path = "recharges") {
+  async getRecharges(dbWrapper, path = "recharges") {
     // Return cached data if valid
     if (this._rechargesCache.isValid()) {
       console.log("📦 SharedCache: Using cached recharges data");
@@ -457,9 +497,8 @@ export const SharedCache = {
     
     // Fetch from Firebase
     console.log("🔄 SharedCache: Fetching recharges from Firebase");
-    this._rechargesPromise = bookingDb.ref(path).once("value")
-      .then(snap => {
-        const data = snap.val() || {};
+    this._rechargesPromise = fetchFirebaseData(dbWrapper, path)
+      .then(data => {
         this._rechargesCache.set(data);
         this._rechargesPromise = null;
         console.log(`✅ SharedCache: Loaded recharges for ${Object.keys(data).length} dates`);
@@ -494,8 +533,11 @@ export const SharedCache = {
   
   /**
    * Get raw members data (V2 structure as-is from Firebase)
+   * @param {object} dbWrapper - Firebase database wrapper { ref, get } or compat db
+   * @param {string} path - Firebase path (FB_PATHS.MEMBERS)
+   * @returns {Promise<Object>} Raw members data keyed by username
    */
-  async getMembersRaw(fdbDb, path = "members") {
+  async getMembersRaw(dbWrapper, path = "members") {
     if (this._membersCache.isValid()) {
       // Convert back to raw format - this is a bit wasteful but maintains compatibility
       const raw = {};
@@ -511,6 +553,7 @@ export const SharedCache = {
             PHONE: m.PHONE,
             RECDATE: m.RECDATE,
             MEMBERSTATE: m.MEMBERSTATE,
+            PASSWORD: m.PASSWORD,
           },
           balance: m.balance,
           stats: m.stats,
@@ -522,8 +565,7 @@ export const SharedCache = {
     }
     
     // Fetch fresh and return raw format
-    const snap = await fdbDb.ref(path).once("value");
-    const data = snap.val() || {};
+    const data = await fetchFirebaseData(dbWrapper, path);
     
     // Also populate the parsed cache
     const members = Object.entries(data).map(([username, memberData]) => {
@@ -539,6 +581,7 @@ export const SharedCache = {
         PHONE: profile.PHONE || "",
         RECDATE: profile.RECDATE || "",
         MEMBERSTATE: profile.MEMBERSTATE || 0,
+        PASSWORD: profile.PASSWORD || "",
         balance: memberData.balance || {},
         stats: memberData.stats || {},
         ranks: memberData.ranks || {},
