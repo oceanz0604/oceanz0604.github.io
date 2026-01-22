@@ -7,14 +7,56 @@ import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, 
 
 // ==================== FIREBASE INIT (Compat SDK) ====================
 
-let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
-if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+// Wait for firebase global to be available (mobile can be slow to load)
+function waitForFirebase(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof firebase !== 'undefined' && firebase.apps) {
+      resolve();
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof firebase !== 'undefined' && firebase.apps) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Firebase SDK not loaded'));
+      }
+    }, 100);
+  });
+}
 
-let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
-if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+let bookingApp, fdbApp, bookingDb, fdbDb;
+let firebaseReady = false;
 
-const bookingDb = bookingApp.database();
-const fdbDb = fdbApp.database();
+async function initFirebase() {
+  if (firebaseReady) return true;
+  
+  try {
+    await waitForFirebase();
+    
+    bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
+    if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+    
+    fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
+    if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+    
+    bookingDb = bookingApp.database();
+    fdbDb = fdbApp.database();
+    
+    firebaseReady = true;
+    console.log("✅ Analytics: Firebase initialized");
+    return true;
+  } catch (error) {
+    console.error("❌ Analytics: Firebase init failed:", error);
+    return false;
+  }
+}
+
+// Try to init immediately (will work on desktop)
+initFirebase();
 
 // ==================== STATE ====================
 
@@ -61,9 +103,10 @@ export async function loadAnalytics() {
   try {
     console.log("📊 Loading analytics data (with caching)...");
     
-    // Verify databases are initialized
-    if (!bookingDb || !fdbDb) {
-      throw new Error("Firebase databases not initialized");
+    // Ensure Firebase is initialized (important for mobile)
+    const fbReady = await initFirebase();
+    if (!fbReady || !bookingDb || !fdbDb) {
+      throw new Error("Firebase databases not initialized - please refresh the page");
     }
     
     // Fetch data in parallel with caching and timeout
