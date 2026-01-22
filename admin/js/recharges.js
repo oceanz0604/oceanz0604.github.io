@@ -331,13 +331,22 @@ elements.memberInput?.addEventListener("input", () => {
 
 async function loadDay() {
   // Ensure Firebase is ready (important for mobile)
-  await initFirebaseForRecharges();
+  const ready = await initFirebaseForRecharges();
   
-  if (!rechargeDb) {
+  if (!ready || !rechargeDb) {
     console.error("❌ rechargeDb not initialized");
+    // Show error in UI
+    if (elements.listEl) {
+      elements.listEl.innerHTML = `
+        <tr><td colspan="8" class="px-4 py-8 text-center">
+          <span class="text-red-400 font-orbitron">❌ Database connection failed</span>
+          <br><span class="text-xs text-gray-500 mt-2">Please refresh the page</span>
+        </td></tr>`;
+    }
     return;
   }
   
+  console.log(`📡 Loading recharges for ${selectedDate}...`);
   const ref = rechargeDb.ref(`recharges/${selectedDate}`);
   ref.off();
   ref.on("value", snap => {
@@ -781,7 +790,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-loadDay();
+// Initial load with retry on mobile
+(async function initialLoad() {
+  try {
+    // Wait for Firebase to be ready
+    const ready = await initFirebaseForRecharges();
+    if (ready) {
+      console.log("🔄 Starting initial loadDay...");
+      loadDay();
+    } else {
+      console.warn("⚠️ Firebase not ready, retrying in 2s...");
+      setTimeout(() => loadDay(), 2000);
+    }
+  } catch (e) {
+    console.error("Initial load error:", e);
+    setTimeout(() => loadDay(), 2000);
+  }
+})();
 
 // ==================== ADD RECHARGE MODAL ====================
 
@@ -1732,6 +1757,12 @@ async function runSync() {
   errorEl?.classList.add("hidden");
   
   try {
+    // Ensure Firebase is ready
+    await initFirebaseForRecharges();
+    if (!fdbDb || !rechargeDb) {
+      throw new Error("Firebase not initialized");
+    }
+    
     // Get admin recharge entries for selected date
     const adminEntries = state.map(r => ({
       id: r.id,
@@ -1807,12 +1838,30 @@ async function runSync() {
 
 // Fetch guest sessions from Firebase for a specific date
 async function fetchGuestSessionsForDate(date) {
+  // Ensure Firebase is ready
+  await initFirebaseForRecharges();
+  if (!fdbDb) {
+    console.error("❌ fdbDb not initialized for guest sessions fetch");
+    return [];
+  }
+  
+  // Helper: fetch with timeout
+  const fetchWithTimeout = (ref, timeoutMs = 10000) => {
+    return Promise.race([
+      ref.once("value"),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+  };
+  
   try {
     const sessions = [];
     
     // PRIMARY: Fetch from new guest-sessions/{date} path (from messages.msg parsing)
     try {
-      const guestSessionsSnap = await fdbDb.ref(`${FB_PATHS.GUEST_SESSIONS}/${date}`).once("value");
+      console.log(`🔍 Fetching guest sessions for ${date}...`);
+      const guestSessionsSnap = await fetchWithTimeout(fdbDb.ref(`${FB_PATHS.GUEST_SESSIONS}/${date}`));
       const guestSessionsData = guestSessionsSnap.val() || {};
       
       console.log(`🔍 Guest sessions from messages.msg (${date}):`, Object.keys(guestSessionsData).length, "entries");
@@ -1841,7 +1890,7 @@ async function fetchGuestSessionsForDate(date) {
     
     // FALLBACK: If no data from messages.msg, try sessions-by-member/guest
     if (sessions.length === 0) {
-      const guestSnap = await fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`).once("value");
+      const guestSnap = await fetchWithTimeout(fdbDb.ref(`${FB_PATHS.SESSIONS_BY_MEMBER}/guest`));
       const guestData = guestSnap.val() || {};
       
       console.log("🔍 Fallback: Guest sessions from sessions-by-member/guest");
@@ -1885,9 +1934,27 @@ async function fetchPanCafeEntriesForDate(date) {
   // This is MUCH more efficient - downloads only entries for the specific date
   // Instead of downloading entire history for ALL users
   
+  // Ensure Firebase is ready
+  await initFirebaseForRecharges();
+  if (!fdbDb) {
+    console.error("❌ fdbDb not initialized for PanCafe fetch");
+    return [];
+  }
+  
+  // Helper: fetch with timeout
+  const fetchWithTimeout = (ref, timeoutMs = 15000) => {
+    return Promise.race([
+      ref.once("value"),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+  };
+  
   try {
     // Try using pre-indexed history-by-date path first
-    const byDateSnap = await fdbDb.ref(`${FB_PATHS.HISTORY_BY_DATE}/${date}`).once("value");
+    console.log(`🔍 Fetching history-by-date for ${date}...`);
+    const byDateSnap = await fetchWithTimeout(fdbDb.ref(`${FB_PATHS.HISTORY_BY_DATE}/${date}`));
     const byDateData = byDateSnap.val();
     
     if (byDateData) {
@@ -1909,45 +1976,16 @@ async function fetchPanCafeEntriesForDate(date) {
       console.log(`✅ Loaded ${entries.length} PanCafe entries from history-by-date index`);
       return entries;
     }
-  } catch (e) {
-    console.log("history-by-date index not available, falling back to full scan");
-  }
-  
-  // Fallback: Scan history (but this is expensive - ideally should not be needed)
-  // Consider adding history-by-date index in sync script if this fallback is used often
-  console.warn("⚠️ Using expensive full history scan - consider adding history-by-date index");
-  const historySnap = await fdbDb.ref(FB_PATHS.HISTORY).once("value");
-  const historyData = historySnap.val() || {};
-  
-  const entries = [];
-  
-  // Iterate through all users' history
-  Object.entries(historyData).forEach(([username, records]) => {
-    if (!records) return;
     
-    Object.entries(records).forEach(([recordId, record]) => {
-      // Check if the record date matches selected date
-      const recordDate = record.DATE; // Format: YYYY-MM-DD
-      
-      if (recordDate === date) {
-        // Only include recharges (positive CHARGE amounts)
-        const charge = Number(record.CHARGE) || 0;
-        if (charge > 0) {
-          entries.push({
-            id: recordId,
-            member: username.toUpperCase().trim(),
-            amount: charge,
-            balance: record.BALANCE,
-            time: record.TIME,
-            date: record.DATE,
-            raw: record
-          });
-        }
-      }
-    });
-  });
-  
-  return entries;
+    // No data in history-by-date index
+    console.log(`📭 No history-by-date data for ${date}`);
+    return [];
+    
+  } catch (e) {
+    console.warn("⚠️ history-by-date fetch failed:", e.message);
+    // Don't fallback to full scan - it's too slow
+    return [];
+  }
 }
 
 // Normalize terminal/member names for comparison

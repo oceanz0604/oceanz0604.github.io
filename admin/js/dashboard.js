@@ -381,6 +381,17 @@ function startDataSync() {
   
   console.log("🔄 Setting up Firebase listeners...");
   
+  // Verify database is ready
+  if (!db || !terminalsRef || !sessionsRef) {
+    console.error("❌ Firebase database not ready - refs:", { db: !!db, terminalsRef: !!terminalsRef, sessionsRef: !!sessionsRef });
+    // Retry after delay
+    setTimeout(() => {
+      console.log("🔄 Retrying startDataSync...");
+      startDataSync();
+    }, 2000);
+    return;
+  }
+  
   // Clean up any existing listeners first
   if (terminalsListener) {
     terminalsListener();
@@ -391,15 +402,24 @@ function startDataSync() {
     sessionsListener = null;
   }
   
-  // Set up real-time listeners (Firebase handles updates automatically)
-  terminalsListener = onValue(terminalsRef, snap => {
-    console.log("📡 Terminal update received");
-    renderTerminals(snap.val() || {});
-  });
-  sessionsListener = onValue(sessionsRef, parseActiveSessions);
-  
-  isListenerActive = true;
-  console.log("✅ Firebase listeners active (single instance)");
+  try {
+    // Set up real-time listeners (Firebase handles updates automatically)
+    terminalsListener = onValue(terminalsRef, snap => {
+      console.log("📡 Terminal update received");
+      renderTerminals(snap.val() || {});
+    }, (error) => {
+      console.error("❌ Terminal listener error:", error);
+    });
+    
+    sessionsListener = onValue(sessionsRef, parseActiveSessions, (error) => {
+      console.error("❌ Sessions listener error:", error);
+    });
+    
+    isListenerActive = true;
+    console.log("✅ Firebase listeners active (single instance)");
+  } catch (error) {
+    console.error("❌ Failed to set up Firebase listeners:", error);
+  }
   
   // NOTE: No setInterval needed! Firebase pushes updates automatically.
   // The old setInterval was creating 120+ duplicate listeners per hour!
