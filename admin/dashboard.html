@@ -1242,6 +1242,7 @@
                 <table class="w-full text-sm recharge-table" style="width: 100% !important;">
                   <thead class="bg-gray-900/50">
                     <tr class="text-left">
+                      <th class="px-2 py-3 font-orbitron text-xs uppercase tracking-wider text-center" style="color: var(--neon-red); width: 40px;">#</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-purple);">Time</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-cyan);">Member</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amt</th>
@@ -2280,13 +2281,17 @@
     // Fetch last sync times from Firebase
     async function fetchLastSyncTimes() {
       try {
+        console.log('📡 Fetching sync metadata from:', FDB_SYNC_META_URL);
         const response = await fetch(FDB_SYNC_META_URL);
-        if (!response.ok) throw new Error('Failed to fetch');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
+        console.log('📦 Sync metadata received:', data);
         
         // Backend writes `last_sync`, not `last_fdb_sync` – support both for safety.
         const lastFdbSync = data?.last_fdb_sync || data?.last_sync;
+        console.log('⏰ FDB last sync:', lastFdbSync);
+        console.log('⏰ Terminals last sync:', data?.terminals?.last_sync);
         
         // Update FDB status
         updateSyncStatusUI('fdb', lastFdbSync, data?.records_synced);
@@ -2295,10 +2300,10 @@
         updateSyncStatusUI('terminals', data?.terminals?.last_sync, null, data?.terminals?.status);
         
       } catch (error) {
-        console.log('Could not fetch sync metadata:', error);
+        console.error('❌ Could not fetch sync metadata:', error);
         ['fdb', 'terminals'].forEach(type => {
           const el = document.getElementById(`${type}LastSync`);
-          if (el) el.textContent = 'No data';
+          if (el) el.textContent = 'Error loading';
         });
       }
     }
@@ -2647,6 +2652,28 @@
         checkSyncService();
       }
     }, 15000); // Every 15 seconds
+    
+    // Initial fetch on page load to update sidebar status indicator
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const response = await fetch(FDB_SYNC_META_URL);
+        if (response.ok) {
+          const data = await response.json();
+          const lastSync = data?.last_fdb_sync || data?.last_sync;
+          const statusDot = document.getElementById('syncStatusDot');
+          
+          if (lastSync && statusDot) {
+            const isRecent = isWithinMinutes(lastSync, 60);
+            statusDot.className = isRecent 
+              ? 'ml-auto w-2 h-2 rounded-full bg-green-500' 
+              : 'ml-auto w-2 h-2 rounded-full bg-yellow-500';
+            console.log('📊 Initial sync status:', isRecent ? 'Recent' : 'Stale', '-', lastSync);
+          }
+        }
+      } catch (e) {
+        console.log('Could not fetch initial sync status');
+      }
+    });
   </script>
 </body>
 </html>

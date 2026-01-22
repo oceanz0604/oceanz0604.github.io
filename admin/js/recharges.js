@@ -21,15 +21,56 @@ import { getStaffSession, canEditData } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
 
-// Initialize both Firebase apps
-let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
-if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+// Wait for firebase global to be available (mobile can be slow to load)
+function waitForFirebase(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof firebase !== 'undefined' && firebase.apps) {
+      resolve();
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof firebase !== 'undefined' && firebase.apps) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Firebase SDK not loaded'));
+      }
+    }, 100);
+  });
+}
 
-let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
-if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+let bookingApp, fdbApp, rechargeDb, fdbDb;
+let firebaseReady = false;
 
-const rechargeDb = bookingApp.database();
-const fdbDb = fdbApp.database();
+async function initFirebaseForRecharges() {
+  if (firebaseReady) return true;
+  
+  try {
+    await waitForFirebase();
+    
+    bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
+    if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+    
+    fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
+    if (!fdbApp) fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+    
+    rechargeDb = bookingApp.database();
+    fdbDb = fdbApp.database();
+    
+    firebaseReady = true;
+    console.log("✅ Recharges: Firebase initialized");
+    return true;
+  } catch (error) {
+    console.error("❌ Recharges: Firebase init failed:", error);
+    return false;
+  }
+}
+
+// Try to init immediately (will work on desktop)
+initFirebaseForRecharges();
 
 // ==================== STATE ====================
 
@@ -226,19 +267,38 @@ if (elements.datePicker) {
 // ==================== MEMBER AUTOCOMPLETE ====================
 
 // Load members from Firebase using SharedCache (shared across all admin pages)
-SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS).then(members => {
-  allMembers = members.map(m => ({
-    USERNAME: m.USERNAME,
-    DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
-    FIRSTNAME: m.FIRSTNAME || "",
-    LASTNAME: m.LASTNAME || "",
-    BALANCE: m.balance?.current_balance || 0
-  }));
-  console.log(`✅ Loaded ${allMembers.length} members (SharedCache)`);
-}).catch(err => {
-  console.error("Failed to load members:", err);
-  allMembers = [];
-});
+// Wrapped in async function to ensure Firebase is ready (important for mobile)
+async function loadMembersForRecharges() {
+  try {
+    await initFirebaseForRecharges();
+    if (!fdbDb) {
+      console.error("❌ fdbDb not ready");
+      return;
+    }
+    
+    const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+    allMembers = members.map(m => ({
+      USERNAME: m.USERNAME,
+      DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
+      FIRSTNAME: m.FIRSTNAME || "",
+      LASTNAME: m.LASTNAME || "",
+      BALANCE: m.balance?.current_balance || 0
+    }));
+    
+    // Update member search if initialized
+    if (memberSearch) {
+      memberSearch.setMembers(allMembers);
+    }
+    
+    console.log(`✅ Loaded ${allMembers.length} members (SharedCache)`);
+  } catch (err) {
+    console.error("Failed to load members:", err);
+    allMembers = [];
+  }
+}
+
+// Start loading members (will wait for Firebase to be ready)
+loadMembersForRecharges();
 
 elements.memberInput?.addEventListener("input", () => {
   const q = elements.memberInput.value.toLowerCase();
@@ -269,7 +329,15 @@ elements.memberInput?.addEventListener("input", () => {
 
 // ==================== LOAD DATA ====================
 
-function loadDay() {
+async function loadDay() {
+  // Ensure Firebase is ready (important for mobile)
+  await initFirebaseForRecharges();
+  
+  if (!rechargeDb) {
+    console.error("❌ rechargeDb not initialized");
+    return;
+  }
+  
   const ref = rechargeDb.ref(`recharges/${selectedDate}`);
   ref.off();
   ref.on("value", snap => {
@@ -954,8 +1022,10 @@ function render() {
     if (noResultsEl) noResultsEl.classList.add("hidden");
   }
 
-  // Render table rows
+  // Render table rows (with descending serial numbers)
+  const totalEntries = filteredState.length;
   filteredState.forEach((r, index) => {
+    const serialNum = totalEntries - index; // Descending: 10, 9, 8, ... 1
     const row = document.createElement("tr");
     row.className = "hover:bg-gray-800/30 transition-colors";
     
@@ -1075,6 +1145,9 @@ function render() {
       : (r.mode === "credit" && !r.paid ? r.amount : 0);
 
     row.innerHTML = `
+      <td class="px-2 py-3 text-center">
+        <span class="font-orbitron text-xs font-bold" style="color: var(--neon-red); opacity: 0.7;">${serialNum}</span>
+      </td>
       <td class="px-4 py-3">
         <div class="text-white font-medium">${timeStr}</div>
         <div class="text-xs text-gray-500">${dateStr}</div>

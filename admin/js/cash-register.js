@@ -18,10 +18,52 @@ import { getStaffSession, canEditData } from "./permissions.js";
 
 // ==================== FIREBASE INIT ====================
 
-let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
-if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+// Wait for firebase global to be available (mobile can be slow to load)
+function waitForFirebase(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof firebase !== 'undefined' && firebase.apps) {
+      resolve();
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof firebase !== 'undefined' && firebase.apps) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Firebase SDK not loaded'));
+      }
+    }, 100);
+  });
+}
 
-const db = bookingApp.database();
+let bookingApp, db;
+let firebaseReady = false;
+
+async function initFirebaseForCashRegister() {
+  if (firebaseReady) return true;
+  
+  try {
+    await waitForFirebase();
+    
+    bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
+    if (!bookingApp) bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+    
+    db = bookingApp.database();
+    
+    firebaseReady = true;
+    console.log("✅ Cash Register: Firebase initialized");
+    return true;
+  } catch (error) {
+    console.error("❌ Cash Register: Firebase init failed:", error);
+    return false;
+  }
+}
+
+// Try to init immediately (will work on desktop)
+initFirebaseForCashRegister();
 
 // ==================== STATE ====================
 
@@ -192,6 +234,12 @@ async function loadCashHistory() {
   `;
   
   try {
+    // Ensure Firebase is ready (important for mobile)
+    await initFirebaseForCashRegister();
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+    
     const snapshot = await db.ref(FB_PATHS.CASH_REGISTER).orderByKey().once("value");
     const allData = snapshot.val() || {};
     

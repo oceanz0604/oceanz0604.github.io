@@ -21,13 +21,55 @@ import { MemberSearch } from "../../shared/member-search.js";
 
 // ==================== FIREBASE INIT ====================
 
-let authApp = firebase.apps.find(a => a.name === AUTH_APP_NAME) || firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
-let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME) || firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
-let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME) || firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+// Wait for firebase global to be available (mobile can be slow to load)
+function waitForFirebase(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof firebase !== 'undefined' && firebase.apps) {
+      resolve();
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof firebase !== 'undefined' && firebase.apps) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Firebase SDK not loaded'));
+      }
+    }, 100);
+  });
+}
 
-const auth = authApp.auth();
-const bookingDb = bookingApp.database();
-const fdbDb = fdbApp.database();
+let authApp, bookingApp, fdbApp, auth, bookingDb, fdbDb;
+let firebaseReady = false;
+
+async function initFirebase() {
+  if (firebaseReady) return true;
+  
+  try {
+    await waitForFirebase();
+    
+    authApp = firebase.apps.find(a => a.name === AUTH_APP_NAME) || firebase.initializeApp(BOOKING_DB_CONFIG, AUTH_APP_NAME);
+    bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME) || firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
+    fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME) || firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+    
+    auth = authApp.auth();
+    bookingDb = bookingApp.database();
+    fdbDb = fdbApp.database();
+    
+    firebaseReady = true;
+    console.log("✅ Counter: Firebase initialized");
+    return true;
+  } catch (error) {
+    console.error("❌ Counter: Firebase init failed:", error);
+    return false;
+  }
+}
+
+// Try to init immediately (will work on desktop)
+initFirebase();
 
 // ==================== STATE ====================
 
@@ -95,6 +137,12 @@ async function init(session) {
   // Start clock
   updateDateTime();
   setInterval(updateDateTime, 60000);
+  
+  // Ensure Firebase is ready (important for mobile)
+  const fbReady = await initFirebase();
+  if (!fbReady) {
+    console.error("❌ Firebase not ready - some features may not work");
+  }
   
   // Load members and setup search
   await loadMembers();
