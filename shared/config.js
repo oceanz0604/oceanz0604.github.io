@@ -249,14 +249,31 @@ export function getShortTerminalName(name) {
  * Guest sessions don't have member accounts in PanCafe.
  * @param {string} name - Terminal name
  * @returns {boolean} True if it's a guest terminal
+ * 
+ * Valid guest terminals: CT1-CT7, T1-T7, PS, XBOX
  */
 export function isGuestTerminal(name) {
   if (!name) return false;
   
-  const short = getShortTerminalName(name);
-  const guestPrefixes = ["CT", "T", "PS", "XBOX"];
+  const upper = name.toUpperCase().trim();
   
-  return guestPrefixes.some(p => short.startsWith(p) || short === p);
+  // Check for exact matches first
+  if (upper === "PS" || upper === "XBOX" || upper === "XBOX ONE X" || upper === "PLAYSTATION") {
+    return true;
+  }
+  
+  // Check for CT-ROOM-X or CTX format (CT1-CT7)
+  if (/^CT-?ROOM-?\d+$/i.test(upper) || /^CT\d+$/i.test(upper)) {
+    return true;
+  }
+  
+  // Check for T-ROOM-X or TX format (T1-T7) - but NOT names like "TATYAINCHU"
+  // Must be exactly "T" followed by a number, or "T-ROOM-" followed by a number
+  if (/^T-?ROOM-?\d+$/i.test(upper) || /^T\d+$/i.test(upper)) {
+    return true;
+  }
+  
+  return false;
 }
 
 // ==================== OPTIMIZED PATHS (V2) ====================
