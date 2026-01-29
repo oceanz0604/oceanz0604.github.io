@@ -2152,6 +2152,13 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
   });
   
   // ========== SECOND PASS: Guest session matching ==========
+  console.log("🎮 Guest sessions available for matching:", guestSessions.map(gs => ({
+    terminal: gs.terminal,
+    terminalShort: gs.terminalShort,
+    price: gs.price,
+    source: gs.source
+  })));
+  
   adminEntries.forEach(admin => {
     if (usedAdminIds.has(admin.id)) return;
     
@@ -2161,13 +2168,37 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
     // Try to find a matching guest session from Firebase
     const normalizedMember = normalizeTerminalName(admin.member) || admin.member;
     const shortName = getShortTerminalName(admin.member);
+    const upperMember = admin.member?.toUpperCase().trim();
     
-    const matchingGuestSession = guestSessions.find(gs => 
-      !usedGuestIds.has(gs.id) &&
-      (gs.terminal === normalizedMember || 
-       gs.terminalShort === shortName ||
-       gs.terminal?.toUpperCase() === admin.member?.toUpperCase())
-    );
+    console.log(`🎮 Looking for guest match: "${admin.member}" -> normalized: "${normalizedMember}", short: "${shortName}"`);
+    
+    const matchingGuestSession = guestSessions.find(gs => {
+      if (usedGuestIds.has(gs.id)) return false;
+      
+      const gsTerminalUpper = gs.terminal?.toUpperCase().trim();
+      const gsShortUpper = gs.terminalShort?.toUpperCase().trim();
+      
+      // Try multiple matching strategies
+      const matches = 
+        gs.terminal === normalizedMember ||
+        gs.terminalShort === shortName ||
+        gsTerminalUpper === upperMember ||
+        gsShortUpper === upperMember ||
+        gsTerminalUpper === normalizedMember?.toUpperCase() ||
+        gsShortUpper === shortName?.toUpperCase() ||
+        // Also try matching PS/PLAYSTATION variants
+        (upperMember === "PS" && (gsTerminalUpper === "PLAYSTATION" || gsTerminalUpper === "PS5")) ||
+        (gsTerminalUpper === "PS" && (upperMember === "PLAYSTATION" || upperMember === "PS5")) ||
+        // Xbox variants
+        (upperMember === "XBOX" && gsTerminalUpper?.includes("XBOX")) ||
+        (gsTerminalUpper === "XBOX" && upperMember?.includes("XBOX"));
+      
+      if (matches) {
+        console.log(`🎮 ✅ Found match: "${admin.member}" matches session terminal "${gs.terminal}"`);
+      }
+      
+      return matches;
+    });
     
     if (matchingGuestSession) {
       results.push({
@@ -2184,6 +2215,7 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
       usedAdminIds.add(admin.id);
       usedGuestIds.add(matchingGuestSession.id);
     } else {
+      console.log(`🎮 ❌ No match found for guest terminal: "${admin.member}"`);
       // Guest session without Firebase verification
       results.push({
         status: "guest-session",
