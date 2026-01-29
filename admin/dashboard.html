@@ -116,6 +116,28 @@
       text-shadow: 0 0 10px var(--neon-red);
     }
 
+    /* Finance Filter Tabs */
+    .fin-filter-tab {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+    .fin-filter-tab:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .fin-filter-tab.active {
+      background: rgba(255, 0, 68, 0.15);
+      border-color: var(--neon-red);
+      color: var(--neon-red);
+    }
+    
+    /* Finance Category Buttons */
+    .fin-cat-btn.selected {
+      border-color: var(--neon-cyan) !important;
+      background: rgba(0, 240, 255, 0.1) !important;
+    }
+
     /* Neon Card */
     .neon-card {
       background: var(--card-bg);
@@ -1021,7 +1043,7 @@
           <i data-lucide="banknote" class="w-5 h-5"></i>
           <span class="font-medium">Cash Register</span>
         </a>
-        <a id="nav-finance" href="finance.html" data-permission="finance" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+        <a id="nav-finance" href="#" data-permission="finance" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="indian-rupee" class="w-5 h-5"></i>
           <span class="font-medium">Finance</span>
         </a>
@@ -1407,6 +1429,286 @@
               <div id="adminMonthlyLeaderboard" class="space-y-3">
                 <p class="text-gray-500 text-center">Select a month to view leaderboard...</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Finance Section -->
+        <div id="finance-section" class="hidden">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-green);">
+                <i data-lucide="indian-rupee" class="w-7 h-7"></i> FINANCE DASHBOARD
+              </h2>
+              <p class="text-sm text-gray-500 mt-1">Revenue, Expenses & Financial Analysis</p>
+            </div>
+            
+            <!-- Period Selector -->
+            <div class="flex items-center gap-2">
+              <div class="flex rounded-lg overflow-hidden border border-gray-700">
+                <button id="finPeriodMonth" onclick="setFinancePeriod('month')" class="px-4 py-2 text-sm font-orbitron bg-red-500/20 text-red-400 border-r border-gray-700">Month</button>
+                <button id="finPeriodYear" onclick="setFinancePeriod('year')" class="px-4 py-2 text-sm font-orbitron text-gray-400 hover:bg-gray-800">Year</button>
+              </div>
+              <div class="flex items-center gap-1 bg-black/30 border border-gray-700 rounded-lg px-2">
+                <button onclick="changeFinancePeriod(-1)" class="p-2 hover:bg-gray-800 rounded transition-colors">
+                  <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </button>
+                <span id="finCurrentPeriod" class="font-orbitron text-sm min-w-[120px] text-center" style="color: var(--neon-cyan);">January 2026</span>
+                <button onclick="changeFinancePeriod(1)" class="p-2 hover:bg-gray-800 rounded transition-colors">
+                  <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary Cards -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-green);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 255, 136, 0.2);">
+                  <i data-lucide="trending-up" class="w-4 h-4" style="color: var(--neon-green);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Revenue</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finRevenue" style="color: var(--neon-green);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finRevenueChange">-</div>
+            </div>
+            
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-red);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(255, 0, 68, 0.2);">
+                  <i data-lucide="trending-down" class="w-4 h-4" style="color: var(--neon-red);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Expenses</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finExpenses" style="color: var(--neon-red);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finExpenseChange">-</div>
+            </div>
+            
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-cyan);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 240, 255, 0.2);">
+                  <i data-lucide="wallet" class="w-4 h-4" style="color: var(--neon-cyan);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Profit</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finProfit" style="color: var(--neon-cyan);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finProfitChange">-</div>
+            </div>
+            
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-purple);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(184, 41, 255, 0.2);">
+                  <i data-lucide="clock" class="w-4 h-4" style="color: var(--neon-purple);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Usage</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finMinutes" style="color: var(--neon-purple);">0h</div>
+              <div class="text-xs text-gray-500 mt-1" id="finSessions">0 sessions</div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="neon-card rounded-xl p-4">
+              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">REVENUE TREND</h3>
+              <div style="height: 250px;">
+                <canvas id="finRevenueChart"></canvas>
+              </div>
+            </div>
+            <div class="neon-card rounded-xl p-4">
+              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">EXPENSE BREAKDOWN</h3>
+              <div style="height: 250px;">
+                <canvas id="finExpenseChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expenses Management -->
+          <div class="neon-card rounded-xl p-4 mb-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 class="font-orbitron text-sm font-semibold" style="color: var(--neon-cyan);">EXPENSES</h3>
+                <p class="text-xs text-gray-500">Manage daily expenses</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="finAddExpenseBtn" onclick="openFinanceExpenseModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm flex items-center gap-2 transition-all" style="background: rgba(0, 255, 136, 0.2); border: 1px solid var(--neon-green); color: var(--neon-green);">
+                  <i data-lucide="plus" class="w-4 h-4"></i>
+                  <span>Add Expense</span>
+                </button>
+                <button onclick="exportFinanceExpenses()" class="px-3 py-2 rounded-lg text-sm flex items-center gap-2 border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Category Filters -->
+            <div class="flex flex-wrap gap-2 mb-4">
+              <button class="fin-filter-tab active px-3 py-1.5 rounded-lg text-xs" data-category="all" onclick="filterFinanceExpenses('all')">All</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="rent" onclick="filterFinanceExpenses('rent')">🏠 Rent</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="electricity" onclick="filterFinanceExpenses('electricity')">⚡ Electricity</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="internet" onclick="filterFinanceExpenses('internet')">🌐 Internet</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="salary" onclick="filterFinanceExpenses('salary')">👥 Salary</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="maintenance" onclick="filterFinanceExpenses('maintenance')">🔧 Maint.</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="supplies" onclick="filterFinanceExpenses('supplies')">📦 Supplies</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="equipment" onclick="filterFinanceExpenses('equipment')">🖥️ Equip.</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="other" onclick="filterFinanceExpenses('other')">📋 Other</button>
+            </div>
+
+            <!-- Expenses Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-800">
+                    <th class="pb-3 font-medium">Date</th>
+                    <th class="pb-3 font-medium">Category</th>
+                    <th class="pb-3 font-medium">Description</th>
+                    <th class="pb-3 font-medium text-right">Amount</th>
+                    <th class="pb-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="finExpensesList" class="divide-y divide-gray-800">
+                  <tr><td colspan="5" class="py-8 text-center text-gray-500">Loading expenses...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div id="finExpensesEmpty" class="hidden text-center py-8">
+              <i data-lucide="receipt" class="w-12 h-12 mx-auto mb-2 text-gray-600"></i>
+              <p class="text-gray-500">No expenses for this period</p>
+            </div>
+          </div>
+
+          <!-- Payment & Stats -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="neon-card rounded-xl p-4">
+              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">PAYMENT BREAKDOWN</h3>
+              <div class="grid grid-cols-3 gap-3">
+                <div class="bg-black/30 rounded-lg p-3 text-center border border-gray-800">
+                  <div class="text-lg mb-1">💵</div>
+                  <div class="font-orbitron text-lg font-bold" id="finCash" style="color: var(--neon-cyan);">₹0</div>
+                  <div class="text-xs text-gray-500">Cash</div>
+                </div>
+                <div class="bg-black/30 rounded-lg p-3 text-center border border-gray-800">
+                  <div class="text-lg mb-1">📱</div>
+                  <div class="font-orbitron text-lg font-bold" id="finUpi" style="color: var(--neon-purple);">₹0</div>
+                  <div class="text-xs text-gray-500">UPI</div>
+                </div>
+                <div class="bg-black/30 rounded-lg p-3 text-center border border-gray-800">
+                  <div class="text-lg mb-1">🔖</div>
+                  <div class="font-orbitron text-lg font-bold" id="finCredit" style="color: var(--neon-orange);">₹0</div>
+                  <div class="text-xs text-gray-500">Credit</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="neon-card rounded-xl p-4">
+              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">MEMBER STATS</h3>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="bg-black/30 rounded-lg p-3 border border-gray-800">
+                  <div class="text-xs text-gray-500 uppercase">Active Members</div>
+                  <div class="font-orbitron text-xl font-bold mt-1" id="finActiveMembers" style="color: var(--neon-green);">0</div>
+                </div>
+                <div class="bg-black/30 rounded-lg p-3 border border-gray-800">
+                  <div class="text-xs text-gray-500 uppercase">New This Period</div>
+                  <div class="font-orbitron text-xl font-bold mt-1" id="finNewMembers" style="color: var(--neon-cyan);">0</div>
+                </div>
+                <div class="bg-black/30 rounded-lg p-3 border border-gray-800">
+                  <div class="text-xs text-gray-500 uppercase">Total Sessions</div>
+                  <div class="font-orbitron text-xl font-bold mt-1" id="finTotalSessions" style="color: var(--neon-purple);">0</div>
+                </div>
+                <div class="bg-black/30 rounded-lg p-3 border border-gray-800">
+                  <div class="text-xs text-gray-500 uppercase">Avg Session</div>
+                  <div class="font-orbitron text-xl font-bold mt-1" id="finAvgSession" style="color: var(--neon-yellow);">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Finance Expense Modal -->
+        <div id="finExpenseModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
+          <div class="neon-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+              <h3 id="finExpenseModalTitle" class="font-orbitron text-lg" style="color: var(--neon-cyan);">ADD EXPENSE</h3>
+              <button onclick="closeFinanceExpenseModal()" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+            <form id="finExpenseForm" class="p-4 space-y-4" onsubmit="saveFinanceExpense(event)">
+              <input type="hidden" id="finExpenseId" value="">
+              
+              <div>
+                <label class="text-xs text-gray-400 uppercase block mb-2">Category</label>
+                <div class="grid grid-cols-4 gap-2" id="finCategoryGrid">
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="rent" onclick="selectFinanceCategory('rent')">
+                    <div class="text-xl">🏠</div><div class="text-xs text-gray-500">Rent</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="electricity" onclick="selectFinanceCategory('electricity')">
+                    <div class="text-xl">⚡</div><div class="text-xs text-gray-500">Elec.</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="internet" onclick="selectFinanceCategory('internet')">
+                    <div class="text-xl">🌐</div><div class="text-xs text-gray-500">Net</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="salary" onclick="selectFinanceCategory('salary')">
+                    <div class="text-xl">👥</div><div class="text-xs text-gray-500">Salary</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="maintenance" onclick="selectFinanceCategory('maintenance')">
+                    <div class="text-xl">🔧</div><div class="text-xs text-gray-500">Maint.</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="supplies" onclick="selectFinanceCategory('supplies')">
+                    <div class="text-xl">📦</div><div class="text-xs text-gray-500">Supply</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="equipment" onclick="selectFinanceCategory('equipment')">
+                    <div class="text-xl">🖥️</div><div class="text-xs text-gray-500">Equip.</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="other" onclick="selectFinanceCategory('other')">
+                    <div class="text-xl">📋</div><div class="text-xs text-gray-500">Other</div>
+                  </button>
+                </div>
+                <input type="hidden" id="finExpenseCategory" required>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs text-gray-400 uppercase block mb-2">Amount (₹)</label>
+                  <input type="number" id="finExpenseAmount" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="0" min="1" required>
+                </div>
+                <div>
+                  <label class="text-xs text-gray-400 uppercase block mb-2">Date</label>
+                  <input type="date" id="finExpenseDate" class="neon-input w-full px-3 py-2 rounded-lg" required>
+                </div>
+              </div>
+              
+              <div>
+                <label class="text-xs text-gray-400 uppercase block mb-2">Description</label>
+                <textarea id="finExpenseDesc" class="neon-input w-full px-3 py-2 rounded-lg" rows="2" placeholder="Brief description" required></textarea>
+              </div>
+              
+              <div>
+                <label class="text-xs text-gray-400 uppercase block mb-2">Vendor (Optional)</label>
+                <input type="text" id="finExpenseVendor" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="Vendor name">
+              </div>
+              
+              <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeFinanceExpenseModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
+                <button type="submit" id="finSaveExpenseBtn" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(0,255,136,0.2); border: 1px solid var(--neon-green); color: var(--neon-green);">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Finance Delete Modal -->
+        <div id="finDeleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
+          <div class="neon-card rounded-2xl w-full max-w-sm p-6 text-center">
+            <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style="background: rgba(255,0,68,0.2);">
+              <i data-lucide="trash-2" class="w-7 h-7" style="color: var(--neon-red);"></i>
+            </div>
+            <h3 class="font-orbitron text-lg mb-2" style="color: var(--neon-red);">Delete Expense?</h3>
+            <p class="text-gray-400 text-sm mb-6">This action cannot be undone.</p>
+            <div class="flex gap-3">
+              <button onclick="closeFinanceDeleteModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
+              <button onclick="confirmFinanceDelete()" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(255,0,68,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);">Delete</button>
             </div>
           </div>
         </div>
@@ -2148,6 +2450,7 @@
   <script type="module" src="js/analytics.js"></script>
   <script type="module" src="js/staff.js"></script>
   <script type="module" src="js/cash-register.js"></script>
+  <script type="module" src="js/finance.js"></script>
   
   <!-- Leaderboard handlers -->
   <script type="module">

@@ -102,7 +102,7 @@ export const MODULE_NAV_MAP = {
   staff: { name: "Staff", icon: "shield-check", view: "staff" },
   cash_register: { name: "Cash Register", icon: "banknote", view: "cash" },
   leaderboard: { name: "Leaderboards", icon: "trophy", view: "leaderboard" },
-  finance: { name: "Finance", icon: "indian-rupee", view: "finance", redirect: "finance.html" },
+  finance: { name: "Finance", icon: "indian-rupee", view: "finance" },
   counter: { name: "POS Counter", icon: "receipt", view: "counter", redirect: "counter.html" }
 };
 

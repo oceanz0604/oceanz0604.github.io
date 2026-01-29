@@ -1,5 +1,5 @@
 /**
- * OceanZ Gaming Cafe - Finance Dashboard
+ * OceanZ Gaming Cafe - Finance Dashboard (Integrated)
  * Expense management, revenue tracking, and financial analysis
  */
 
@@ -10,7 +10,6 @@ import {
   FDB_APP_NAME,
   FB_PATHS,
   getISTDate,
-  formatToIST,
   SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, hasPermission, canEditData } from "./permissions.js";
@@ -30,16 +29,20 @@ const EXPENSE_CATEGORIES = [
 
 // ==================== STATE ====================
 
-let selectedMonth = new Date(); // Current month being viewed
-let expenses = [];
-let recharges = {};
-let members = [];
-let dailySummaries = {}; // Daily summary data from FDB
-let currentFilter = "all";
-let editingExpenseId = null;
-let deleteExpenseData = null;
-let revenueChart = null;
-let expenseChart = null;
+let financeState = {
+  period: "month", // "month" or "year"
+  selectedDate: new Date(),
+  expenses: [],
+  recharges: {},
+  members: [],
+  dailySummaries: {},
+  currentFilter: "all",
+  editingExpenseId: null,
+  deleteExpenseData: null,
+  revenueChart: null,
+  expenseChart: null,
+  initialized: false
+};
 
 // Firebase instances
 let bookingDb = null;
@@ -47,14 +50,12 @@ let fdbDb = null;
 
 // ==================== FIREBASE INIT ====================
 
-// Wait for firebase global to be available (mobile can be slow to load)
 function waitForFirebase(timeout = 5000) {
   return new Promise((resolve, reject) => {
     if (typeof firebase !== 'undefined' && firebase.apps) {
       resolve();
       return;
     }
-    
     const startTime = Date.now();
     const checkInterval = setInterval(() => {
       if (typeof firebase !== 'undefined' && firebase.apps) {
@@ -68,29 +69,23 @@ function waitForFirebase(timeout = 5000) {
   });
 }
 
-async function initFirebase() {
+async function initFinanceFirebase() {
   try {
-    // Wait for Firebase SDK to load
     await waitForFirebase();
-    console.log("🔥 Firebase SDK loaded");
-
-    // Initialize booking database (for expenses, recharges)
+    
     let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
     if (!bookingApp) {
       bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
     }
     bookingDb = bookingApp.database();
-    console.log("✅ Booking DB initialized");
 
-    // Initialize FDB database (for members, sessions, daily-summary)
     let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
     if (!fdbApp) {
       fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
     }
     fdbDb = fdbApp.database();
-    console.log("✅ FDB initialized");
 
-    console.log("✅ Finance: Firebase fully initialized");
+    console.log("✅ Finance: Firebase initialized");
     return true;
   } catch (error) {
     console.error("❌ Finance: Firebase init failed:", error);
@@ -98,75 +93,58 @@ async function initFirebase() {
   }
 }
 
-// ==================== PERMISSION CHECK ====================
+// ==================== MAIN ENTRY POINT ====================
 
-function checkPermissions() {
-  const session = getStaffSession();
-  if (!session) {
-    window.location.href = "login.html";
-    return false;
-  }
-
-  if (!hasPermission("finance")) {
-    showToast("Access denied. You don't have permission to view this page.", "error");
-    setTimeout(() => {
-      window.location.href = "dashboard.html";
-    }, 2000);
-    return false;
-  }
-
-  // Disable add/edit buttons for view-only users
-  if (!canEditData()) {
-    const addBtn = document.getElementById("addExpenseBtn");
-    if (addBtn) {
-      addBtn.disabled = true;
-      addBtn.title = "View-only access";
-    }
-  }
-
-  return true;
-}
-
-// ==================== INITIALIZATION ====================
-
-async function init() {
+async function loadFinanceDashboard() {
+  console.log("📊 Loading Finance Dashboard...");
+  
   try {
-    // Check permissions first
-    if (!checkPermissions()) return;
-
-    // Initialize Firebase
-    const fbInit = await initFirebase();
-    if (!fbInit) {
-      document.getElementById("loading-status").textContent = "Failed to connect to database";
-      return;
+    // Initialize Firebase if not done
+    if (!bookingDb || !fdbDb) {
+      await initFinanceFirebase();
     }
 
-    // Set initial month
-    selectedMonth = getISTDate();
-    updateMonthDisplay();
+    // Set initial date
+    financeState.selectedDate = getISTDate();
+    
+    // Check edit permissions
+    if (!canEditData()) {
+      const addBtn = document.getElementById("finAddExpenseBtn");
+      if (addBtn) {
+        addBtn.disabled = true;
+        addBtn.title = "View-only access";
+        addBtn.style.opacity = "0.5";
+      }
+    }
 
-    // Load all data
-    await loadAllData();
-
-    // Hide loading, show app
-    document.getElementById("loading-screen").classList.add("hidden");
-    document.getElementById("app").classList.remove("hidden");
-
-    // Initialize Lucide icons
-    lucide.createIcons();
-
+    // Update period display
+    updatePeriodDisplay();
+    
     // Set default date for expense form
-    document.getElementById("expenseDate").value = formatDateForInput(getISTDate());
+    const dateInput = document.getElementById("finExpenseDate");
+    if (dateInput) {
+      dateInput.value = formatDateForInput(getISTDate());
+    }
 
+    // Load data
+    await loadFinanceData();
+    
+    // Refresh icons
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
+    
+    financeState.initialized = true;
+    console.log("✅ Finance Dashboard loaded");
+    
   } catch (error) {
-    console.error("Finance init error:", error);
-    document.getElementById("loading-status").textContent = "Error loading dashboard";
+    console.error("❌ Finance Dashboard error:", error);
   }
 }
 
 // ==================== DATA LOADING ====================
 
-async function loadAllData() {
+async function loadFinanceData() {
   try {
     await Promise.all([
       loadExpenses(),
@@ -175,113 +153,91 @@ async function loadAllData() {
       loadDailySummaries()
     ]);
 
-    // Calculate and display summaries
-    calculateMonthlySummary();
+    calculateSummary();
     renderExpenses();
     renderCharts();
-
+    
   } catch (error) {
-    console.error("Error loading data:", error);
-    showToast("Failed to load some data", "error");
+    console.error("Error loading finance data:", error);
   }
 }
 
 async function loadExpenses() {
-  const monthKey = getMonthKey(selectedMonth);
-  const startDate = `${monthKey}-01`;
-  const endDate = `${monthKey}-31`;
-
+  const { startDate, endDate } = getDateRange();
+  
   try {
-    // Load all expenses for the month
     const expensesRef = bookingDb.ref(FB_PATHS.EXPENSES);
     const snapshot = await expensesRef.once("value");
     const allExpenses = snapshot.val() || {};
 
-    expenses = [];
+    financeState.expenses = [];
     
-    // Filter expenses for selected month
     Object.entries(allExpenses).forEach(([date, dayExpenses]) => {
       if (date >= startDate && date <= endDate) {
         Object.entries(dayExpenses).forEach(([id, expense]) => {
-          expenses.push({
-            id,
-            date,
-            ...expense
-          });
+          financeState.expenses.push({ id, date, ...expense });
         });
       }
     });
 
-    // Sort by date descending
-    expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    console.log(`✅ Loaded ${expenses.length} expenses for ${monthKey}`);
+    financeState.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+    console.log(`✅ Loaded ${financeState.expenses.length} expenses`);
   } catch (error) {
     console.error("Error loading expenses:", error);
-    expenses = [];
+    financeState.expenses = [];
   }
 }
 
 async function loadRecharges() {
   try {
-    // Use SharedCache to get recharges
-    recharges = await SharedCache.getRecharges(bookingDb, FB_PATHS.RECHARGES);
-    console.log(`✅ Loaded recharges data`);
+    financeState.recharges = await SharedCache.getRecharges(bookingDb, FB_PATHS.RECHARGES);
+    console.log(`✅ Loaded recharges`);
   } catch (error) {
     console.error("Error loading recharges:", error);
-    recharges = {};
+    financeState.recharges = {};
   }
 }
 
 async function loadMembers() {
   try {
-    members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
-    console.log(`✅ Loaded ${members.length} members`);
+    financeState.members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+    console.log(`✅ Loaded ${financeState.members.length} members`);
   } catch (error) {
     console.error("Error loading members:", error);
-    members = [];
+    financeState.members = [];
   }
 }
 
 async function loadDailySummaries() {
-  const monthKey = getMonthKey(selectedMonth);
-  const startDate = `${monthKey}-01`;
-  const endDate = `${monthKey}-31`;
+  const { startDate, endDate } = getDateRange();
 
   try {
-    // Fetch all daily summaries
     const summaryRef = fdbDb.ref(FB_PATHS.DAILY_SUMMARY);
     const snapshot = await summaryRef.once("value");
     const allSummaries = snapshot.val() || {};
 
-    dailySummaries = {};
-    
-    // Filter summaries for selected month
+    financeState.dailySummaries = {};
     Object.entries(allSummaries).forEach(([date, summary]) => {
       if (date >= startDate && date <= endDate) {
-        dailySummaries[date] = summary;
+        financeState.dailySummaries[date] = summary;
       }
     });
 
-    console.log(`✅ Loaded ${Object.keys(dailySummaries).length} daily summaries for ${monthKey}`);
+    console.log(`✅ Loaded ${Object.keys(financeState.dailySummaries).length} daily summaries`);
   } catch (error) {
     console.error("Error loading daily summaries:", error);
-    dailySummaries = {};
+    financeState.dailySummaries = {};
   }
 }
 
-// ==================== MONTHLY SUMMARY ====================
+// ==================== CALCULATIONS ====================
 
-function calculateMonthlySummary() {
-  const monthKey = getMonthKey(selectedMonth);
-  const startDate = `${monthKey}-01`;
-  const endDate = `${monthKey}-31`;
+function calculateSummary() {
+  const { startDate, endDate } = getDateRange();
+  const { recharges, expenses, members, dailySummaries } = financeState;
 
-  // Calculate revenue from recharges
-  let totalRevenue = 0;
-  let cashTotal = 0;
-  let upiTotal = 0;
-  let creditTotal = 0;
+  // Revenue from recharges
+  let totalRevenue = 0, cashTotal = 0, upiTotal = 0, creditTotal = 0;
 
   Object.entries(recharges).forEach(([date, dayData]) => {
     if (date >= startDate && date <= endDate) {
@@ -301,238 +257,219 @@ function calculateMonthlySummary() {
     }
   });
 
-  // Calculate expenses by category
+  // Expenses
   let totalExpenses = 0;
-  const expensesByCategory = {};
-  EXPENSE_CATEGORIES.forEach(cat => {
-    expensesByCategory[cat.id] = 0;
-  });
-
   expenses.forEach(exp => {
     totalExpenses += exp.amount || 0;
-    if (expensesByCategory[exp.category] !== undefined) {
-      expensesByCategory[exp.category] += exp.amount || 0;
-    }
   });
 
-  // Calculate profit
   const profit = totalRevenue - totalExpenses;
 
-  // Calculate member stats
-  const monthStart = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1);
+  // Usage stats from daily summaries
+  let totalMinutes = 0, totalSessions = 0;
+  Object.values(dailySummaries).forEach(summary => {
+    if (summary.total_minutes) totalMinutes += summary.total_minutes;
+    else if (summary.totals?.minutes) totalMinutes += summary.totals.minutes;
+    else if (summary.by_member) {
+      Object.values(summary.by_member).forEach(m => {
+        totalMinutes += m.minutes || m.total_minutes || 0;
+        totalSessions += m.sessions || m.session_count || 1;
+      });
+    }
+    if (summary.total_sessions) totalSessions += summary.total_sessions;
+    else if (summary.totals?.sessions) totalSessions += summary.totals.sessions;
+    else if (summary.session_count) totalSessions += summary.session_count;
+  });
+
+  // Member stats
+  const periodStart = new Date(startDate);
   const activeMembers = members.filter(m => {
     const lastActive = m.stats?.last_active;
     if (!lastActive) return false;
-    return new Date(lastActive) >= monthStart;
+    return new Date(lastActive) >= periodStart;
   }).length;
 
+  const periodKey = financeState.period === "year" 
+    ? startDate.substring(0, 4) 
+    : startDate.substring(0, 7);
+    
   const newMembers = members.filter(m => {
     const regDate = m.RECDATE;
     if (!regDate) return false;
-    const regMonth = regDate.substring(0, 7);
-    return regMonth === monthKey;
+    if (financeState.period === "year") {
+      return regDate.substring(0, 4) === periodKey;
+    }
+    return regDate.substring(0, 7) === periodKey;
   }).length;
 
   // Update UI
-  document.getElementById("totalRevenue").textContent = `₹${formatNumber(totalRevenue)}`;
-  document.getElementById("totalExpenses").textContent = `₹${formatNumber(totalExpenses)}`;
-  document.getElementById("totalProfit").textContent = `₹${formatNumber(profit)}`;
+  const $ = id => document.getElementById(id);
+  $("finRevenue").textContent = `₹${formatNumber(totalRevenue)}`;
+  $("finExpenses").textContent = `₹${formatNumber(totalExpenses)}`;
+  $("finProfit").textContent = `₹${formatNumber(profit)}`;
   
-  // Update profit color based on positive/negative
-  const profitEl = document.getElementById("totalProfit");
-  if (profit < 0) {
-    profitEl.style.color = "var(--neon-red)";
-  } else {
-    profitEl.style.color = "var(--neon-cyan)";
-  }
+  const profitEl = $("finProfit");
+  profitEl.style.color = profit < 0 ? "var(--neon-red)" : "var(--neon-cyan)";
 
-  // Calculate total minutes from daily summaries (also updates sessions stats)
-  const totalMinutes = calculateTotalMinutes();
   const hours = Math.floor(totalMinutes / 60);
-  document.getElementById("totalMinutes").textContent = `${formatNumber(hours)}h`;
+  $("finMinutes").textContent = `${formatNumber(hours)}h`;
+  $("finSessions").textContent = `${formatNumber(totalSessions)} sessions`;
 
-  // Payment breakdown
-  document.getElementById("cashTotal").textContent = `₹${formatNumber(cashTotal)}`;
-  document.getElementById("upiTotal").textContent = `₹${formatNumber(upiTotal)}`;
-  document.getElementById("creditTotal").textContent = `₹${formatNumber(creditTotal)}`;
+  $("finCash").textContent = `₹${formatNumber(cashTotal)}`;
+  $("finUpi").textContent = `₹${formatNumber(upiTotal)}`;
+  $("finCredit").textContent = `₹${formatNumber(creditTotal)}`;
 
-  // Member stats (sessions stats are updated by calculateTotalMinutes)
-  document.getElementById("activeMembers").textContent = activeMembers;
-  document.getElementById("newMembers").textContent = newMembers;
-
-  // Calculate month-over-month changes
-  calculateMoMChanges(totalRevenue, totalExpenses, profit);
-
-  return { totalRevenue, totalExpenses, profit, expensesByCategory, cashTotal, upiTotal, creditTotal };
-}
-
-function calculateTotalMinutes() {
-  // Calculate total minutes from daily summaries
-  let totalMinutes = 0;
-  let totalSessions = 0;
-
-  Object.values(dailySummaries).forEach(summary => {
-    // Check for different data structures
-    if (summary.total_minutes !== undefined) {
-      totalMinutes += summary.total_minutes || 0;
-    } else if (summary.totals?.minutes !== undefined) {
-      totalMinutes += summary.totals.minutes || 0;
-    } else if (summary.by_member) {
-      // Sum up from individual members
-      Object.values(summary.by_member).forEach(member => {
-        totalMinutes += member.minutes || member.total_minutes || 0;
-        totalSessions += member.sessions || member.session_count || 1;
-      });
-    }
-
-    // Count sessions
-    if (summary.total_sessions !== undefined) {
-      totalSessions += summary.total_sessions || 0;
-    } else if (summary.totals?.sessions !== undefined) {
-      totalSessions += summary.totals.sessions || 0;
-    } else if (summary.session_count !== undefined) {
-      totalSessions += summary.session_count || 0;
-    }
-  });
-
-  // Update total sessions in UI
-  document.getElementById("totalSessions").textContent = formatNumber(totalSessions);
+  $("finActiveMembers").textContent = activeMembers;
+  $("finNewMembers").textContent = newMembers;
+  $("finTotalSessions").textContent = formatNumber(totalSessions);
   
-  // Calculate average session length
   if (totalSessions > 0) {
-    const avgMinutes = Math.round(totalMinutes / totalSessions);
-    const avgHours = Math.floor(avgMinutes / 60);
-    const avgMins = avgMinutes % 60;
-    document.getElementById("avgSession").textContent = avgHours > 0 ? `${avgHours}h ${avgMins}m` : `${avgMins}m`;
+    const avgMins = Math.round(totalMinutes / totalSessions);
+    const avgH = Math.floor(avgMins / 60);
+    const avgM = avgMins % 60;
+    $("finAvgSession").textContent = avgH > 0 ? `${avgH}h ${avgM}m` : `${avgM}m`;
+  } else {
+    $("finAvgSession").textContent = "-";
   }
-
-  return totalMinutes;
 }
 
-async function calculateMoMChanges(currentRevenue, currentExpenses, currentProfit) {
-  // Get previous month data
-  const prevMonth = new Date(selectedMonth);
-  prevMonth.setMonth(prevMonth.getMonth() - 1);
-  const prevMonthKey = getMonthKey(prevMonth);
-  const startDate = `${prevMonthKey}-01`;
-  const endDate = `${prevMonthKey}-31`;
+// ==================== PERIOD MANAGEMENT ====================
 
-  let prevRevenue = 0;
-  Object.entries(recharges).forEach(([date, dayData]) => {
-    if (date >= startDate && date <= endDate) {
-      Object.values(dayData).forEach(r => {
-        prevRevenue += (r.total || r.amount || 0) + (r.free || 0);
-      });
-    }
-  });
-
-  // Update change indicators
-  updateChangeIndicator("revenueChange", currentRevenue, prevRevenue);
-  // For expenses and profit, we'd need to load previous month's expenses
-  // For now, hide the change indicators
-  document.getElementById("expenseChange").style.display = "none";
-  document.getElementById("profitChange").style.display = "none";
-}
-
-function updateChangeIndicator(elementId, current, previous) {
-  const el = document.getElementById(elementId);
-  if (!el || previous === 0) {
-    el.style.display = "none";
-    return;
-  }
-
-  const change = ((current - previous) / previous) * 100;
-  const isPositive = change >= 0;
+function setFinancePeriod(period) {
+  financeState.period = period;
   
-  el.className = `summary-change ${isPositive ? "positive" : "negative"}`;
-  el.innerHTML = `
-    <i data-lucide="${isPositive ? "trending-up" : "trending-down"}" class="w-3 h-3"></i>
-    <span>${isPositive ? "+" : ""}${change.toFixed(1)}%</span>
-  `;
-  el.style.display = "inline-flex";
-  lucide.createIcons();
+  // Update buttons
+  const monthBtn = document.getElementById("finPeriodMonth");
+  const yearBtn = document.getElementById("finPeriodYear");
+  
+  if (period === "month") {
+    monthBtn.classList.add("bg-red-500/20", "text-red-400");
+    monthBtn.classList.remove("text-gray-400");
+    yearBtn.classList.remove("bg-red-500/20", "text-red-400");
+    yearBtn.classList.add("text-gray-400");
+  } else {
+    yearBtn.classList.add("bg-red-500/20", "text-red-400");
+    yearBtn.classList.remove("text-gray-400");
+    monthBtn.classList.remove("bg-red-500/20", "text-red-400");
+    monthBtn.classList.add("text-gray-400");
+  }
+  
+  updatePeriodDisplay();
+  loadFinanceData();
+}
+
+function changeFinancePeriod(delta) {
+  if (financeState.period === "month") {
+    financeState.selectedDate.setMonth(financeState.selectedDate.getMonth() + delta);
+  } else {
+    financeState.selectedDate.setFullYear(financeState.selectedDate.getFullYear() + delta);
+  }
+  updatePeriodDisplay();
+  loadFinanceData();
+}
+
+function updatePeriodDisplay() {
+  const el = document.getElementById("finCurrentPeriod");
+  if (!el) return;
+  
+  if (financeState.period === "month") {
+    el.textContent = financeState.selectedDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  } else {
+    el.textContent = financeState.selectedDate.getFullYear().toString();
+  }
+}
+
+function getDateRange() {
+  const date = financeState.selectedDate;
+  let startDate, endDate;
+  
+  if (financeState.period === "month") {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    startDate = `${year}-${month}-01`;
+    endDate = `${year}-${month}-31`;
+  } else {
+    const year = date.getFullYear();
+    startDate = `${year}-01-01`;
+    endDate = `${year}-12-31`;
+  }
+  
+  return { startDate, endDate };
 }
 
 // ==================== EXPENSE CRUD ====================
 
-function openExpenseModal(expenseId = null) {
+function openFinanceExpenseModal(expenseId = null) {
   if (!canEditData()) {
-    showToast("You don't have permission to add/edit expenses", "error");
+    showFinanceToast("You don't have permission to add/edit expenses", "error");
     return;
   }
 
-  editingExpenseId = expenseId;
-  const modal = document.getElementById("expenseModal");
-  const title = document.getElementById("expenseModalTitle");
-  const form = document.getElementById("expenseForm");
+  financeState.editingExpenseId = expenseId;
+  const modal = document.getElementById("finExpenseModal");
+  const title = document.getElementById("finExpenseModalTitle");
+  const form = document.getElementById("finExpenseForm");
 
-  // Reset form
   form.reset();
-  document.querySelectorAll(".category-option").forEach(opt => opt.classList.remove("selected"));
-  document.getElementById("expenseCategory").value = "";
+  document.querySelectorAll(".fin-cat-btn").forEach(btn => btn.classList.remove("selected"));
+  document.getElementById("finExpenseCategory").value = "";
 
   if (expenseId) {
-    // Edit mode
     title.textContent = "EDIT EXPENSE";
-    const expense = expenses.find(e => e.id === expenseId);
+    const expense = financeState.expenses.find(e => e.id === expenseId);
     if (expense) {
-      document.getElementById("expenseId").value = expenseId;
-      document.getElementById("expenseAmount").value = expense.amount;
-      document.getElementById("expenseDate").value = expense.date;
-      document.getElementById("expenseDescription").value = expense.description || "";
-      document.getElementById("expenseVendor").value = expense.vendor || "";
-      document.getElementById("expenseRecurring").checked = expense.is_recurring || false;
-      selectCategory(expense.category);
+      document.getElementById("finExpenseId").value = expenseId;
+      document.getElementById("finExpenseAmount").value = expense.amount;
+      document.getElementById("finExpenseDate").value = expense.date;
+      document.getElementById("finExpenseDesc").value = expense.description || "";
+      document.getElementById("finExpenseVendor").value = expense.vendor || "";
+      selectFinanceCategory(expense.category);
     }
   } else {
-    // Add mode
     title.textContent = "ADD EXPENSE";
-    document.getElementById("expenseDate").value = formatDateForInput(getISTDate());
+    document.getElementById("finExpenseDate").value = formatDateForInput(getISTDate());
   }
 
   modal.classList.remove("hidden");
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function closeExpenseModal() {
-  document.getElementById("expenseModal").classList.add("hidden");
-  editingExpenseId = null;
+function closeFinanceExpenseModal() {
+  document.getElementById("finExpenseModal").classList.add("hidden");
+  financeState.editingExpenseId = null;
 }
 
-function selectCategory(categoryId) {
-  document.querySelectorAll(".category-option").forEach(opt => {
-    opt.classList.toggle("selected", opt.dataset.category === categoryId);
+function selectFinanceCategory(categoryId) {
+  document.querySelectorAll(".fin-cat-btn").forEach(btn => {
+    btn.classList.toggle("selected", btn.dataset.cat === categoryId);
   });
-  document.getElementById("expenseCategory").value = categoryId;
+  document.getElementById("finExpenseCategory").value = categoryId;
 }
 
-async function saveExpense(event) {
+async function saveFinanceExpense(event) {
   event.preventDefault();
 
   if (!canEditData()) {
-    showToast("You don't have permission to save expenses", "error");
+    showFinanceToast("You don't have permission to save expenses", "error");
     return;
   }
 
-  const category = document.getElementById("expenseCategory").value;
-  const amount = parseFloat(document.getElementById("expenseAmount").value);
-  const date = document.getElementById("expenseDate").value;
-  const description = document.getElementById("expenseDescription").value.trim();
-  const vendor = document.getElementById("expenseVendor").value.trim();
-  const isRecurring = document.getElementById("expenseRecurring").checked;
+  const category = document.getElementById("finExpenseCategory").value;
+  const amount = parseFloat(document.getElementById("finExpenseAmount").value);
+  const date = document.getElementById("finExpenseDate").value;
+  const description = document.getElementById("finExpenseDesc").value.trim();
+  const vendor = document.getElementById("finExpenseVendor").value.trim();
 
   if (!category) {
-    showToast("Please select a category", "error");
+    showFinanceToast("Please select a category", "error");
     return;
   }
-
   if (!amount || amount <= 0) {
-    showToast("Please enter a valid amount", "error");
+    showFinanceToast("Please enter a valid amount", "error");
     return;
   }
-
   if (!date) {
-    showToast("Please select a date", "error");
+    showFinanceToast("Please select a date", "error");
     return;
   }
 
@@ -542,168 +479,134 @@ async function saveExpense(event) {
     amount,
     description,
     vendor,
-    is_recurring: isRecurring,
     admin: session?.name || session?.email?.split("@")[0] || "Admin",
     updatedAt: new Date().toISOString()
   };
 
   try {
-    const saveBtn = document.getElementById("saveExpenseBtn");
+    const saveBtn = document.getElementById("finSaveExpenseBtn");
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
 
-    // Ensure Firebase is initialized
-    if (!bookingDb) {
-      console.error("Firebase booking database not initialized");
-      await initFirebase();
-      if (!bookingDb) {
-        throw new Error("Could not initialize Firebase");
-      }
-    }
-
-    console.log("📝 Saving expense:", { category, amount, date, editingExpenseId });
-
-    if (editingExpenseId) {
-      // Update existing expense
-      const existingExpense = expenses.find(e => e.id === editingExpenseId);
-      if (!existingExpense) {
-        throw new Error("Could not find expense to edit");
-      }
-      const updatePath = `${FB_PATHS.EXPENSES}/${existingExpense.date}/${editingExpenseId}`;
-      console.log("📝 Updating at path:", updatePath);
-      await bookingDb.ref(updatePath).update(expenseData);
-      showToast("Expense updated successfully", "success");
+    if (financeState.editingExpenseId) {
+      const existingExpense = financeState.expenses.find(e => e.id === financeState.editingExpenseId);
+      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${existingExpense.date}/${financeState.editingExpenseId}`).update(expenseData);
+      showFinanceToast("Expense updated", "success");
     } else {
-      // Create new expense
       expenseData.createdAt = new Date().toISOString();
-      const newPath = `${FB_PATHS.EXPENSES}/${date}`;
-      console.log("📝 Creating at path:", newPath, expenseData);
-      const newRef = await bookingDb.ref(newPath).push(expenseData);
-      console.log("✅ Expense created with ID:", newRef.key);
-      showToast("Expense added successfully", "success");
+      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}`).push(expenseData);
+      showFinanceToast("Expense added", "success");
     }
 
-    closeExpenseModal();
+    closeFinanceExpenseModal();
     await loadExpenses();
-    calculateMonthlySummary();
+    calculateSummary();
     renderExpenses();
     renderCharts();
 
   } catch (error) {
-    console.error("❌ Error saving expense:", error);
-    console.error("Error details:", error.message, error.code);
-    showToast(`Failed to save expense: ${error.message || "Unknown error"}`, "error");
+    console.error("Error saving expense:", error);
+    showFinanceToast("Failed to save expense", "error");
   } finally {
-    const saveBtn = document.getElementById("saveExpenseBtn");
+    const saveBtn = document.getElementById("finSaveExpenseBtn");
     saveBtn.disabled = false;
-    saveBtn.textContent = "Save Expense";
+    saveBtn.textContent = "Save";
   }
 }
 
-function openDeleteModal(expenseId, date) {
+function openFinanceDeleteModal(expenseId, date) {
   if (!canEditData()) {
-    showToast("You don't have permission to delete expenses", "error");
+    showFinanceToast("You don't have permission to delete expenses", "error");
     return;
   }
-
-  deleteExpenseData = { id: expenseId, date };
-  document.getElementById("deleteModal").classList.remove("hidden");
-  lucide.createIcons();
+  financeState.deleteExpenseData = { id: expenseId, date };
+  document.getElementById("finDeleteModal").classList.remove("hidden");
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function closeDeleteModal() {
-  document.getElementById("deleteModal").classList.add("hidden");
-  deleteExpenseData = null;
+function closeFinanceDeleteModal() {
+  document.getElementById("finDeleteModal").classList.add("hidden");
+  financeState.deleteExpenseData = null;
 }
 
-async function confirmDeleteExpense() {
-  if (!deleteExpenseData || !canEditData()) return;
+async function confirmFinanceDelete() {
+  if (!financeState.deleteExpenseData || !canEditData()) return;
 
   try {
-    await bookingDb.ref(`${FB_PATHS.EXPENSES}/${deleteExpenseData.date}/${deleteExpenseData.id}`).remove();
-    showToast("Expense deleted successfully", "success");
+    await bookingDb.ref(`${FB_PATHS.EXPENSES}/${financeState.deleteExpenseData.date}/${financeState.deleteExpenseData.id}`).remove();
+    showFinanceToast("Expense deleted", "success");
     
-    closeDeleteModal();
+    closeFinanceDeleteModal();
     await loadExpenses();
-    calculateMonthlySummary();
+    calculateSummary();
     renderExpenses();
     renderCharts();
-
   } catch (error) {
     console.error("Error deleting expense:", error);
-    showToast("Failed to delete expense", "error");
+    showFinanceToast("Failed to delete expense", "error");
   }
 }
 
 // ==================== RENDER FUNCTIONS ====================
 
 function renderExpenses() {
-  const tbody = document.getElementById("expensesList");
-  const emptyState = document.getElementById("expensesEmpty");
+  const tbody = document.getElementById("finExpensesList");
+  const emptyState = document.getElementById("finExpensesEmpty");
+  if (!tbody) return;
 
-  // Filter expenses
-  const filteredExpenses = currentFilter === "all" 
-    ? expenses 
-    : expenses.filter(e => e.category === currentFilter);
+  const filtered = financeState.currentFilter === "all" 
+    ? financeState.expenses 
+    : financeState.expenses.filter(e => e.category === financeState.currentFilter);
 
-  if (filteredExpenses.length === 0) {
+  if (filtered.length === 0) {
     tbody.innerHTML = "";
-    emptyState.classList.remove("hidden");
+    emptyState?.classList.remove("hidden");
     return;
   }
 
-  emptyState.classList.add("hidden");
+  emptyState?.classList.add("hidden");
   const canEdit = canEditData();
 
-  tbody.innerHTML = filteredExpenses.map(expense => {
-    const category = EXPENSE_CATEGORIES.find(c => c.id === expense.category) || EXPENSE_CATEGORIES[7];
-    const dateObj = new Date(expense.date);
-    const dateStr = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  tbody.innerHTML = filtered.map(exp => {
+    const cat = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES[7];
+    const dateStr = new Date(exp.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
     return `
-      <tr>
-        <td>
-          <div class="text-white font-medium">${dateStr}</div>
-          <div class="text-xs text-gray-500">${expense.admin || "Admin"}</div>
+      <tr class="hover:bg-white/5">
+        <td class="py-3">
+          <div class="text-white">${dateStr}</div>
+          <div class="text-xs text-gray-500">${exp.admin || "Admin"}</div>
         </td>
-        <td>
-          <span class="category-badge ${expense.category}">
-            <span>${category.icon}</span>
-            <span>${category.name}</span>
+        <td class="py-3">
+          <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs" style="background: ${cat.color}20; color: ${cat.color};">
+            ${cat.icon} ${cat.name}
           </span>
-          ${expense.is_recurring ? '<span class="ml-2 text-xs" style="color: var(--neon-purple);">🔄</span>' : ''}
         </td>
-        <td>
-          <div class="text-white">${expense.description || "-"}</div>
+        <td class="py-3 text-gray-300">${exp.description || "-"}</td>
+        <td class="py-3 text-right">
+          <span class="font-orbitron font-bold" style="color: var(--neon-red);">₹${formatNumber(exp.amount)}</span>
         </td>
-        <td class="hide-mobile text-gray-400">${expense.vendor || "-"}</td>
-        <td class="text-right">
-          <span class="font-orbitron font-bold" style="color: var(--neon-red);">₹${formatNumber(expense.amount)}</span>
-        </td>
-        <td class="text-right">
+        <td class="py-3 text-right">
           ${canEdit ? `
-            <div class="flex gap-1 justify-end">
-              <button onclick="openExpenseModal('${expense.id}')" class="p-2 rounded-lg hover:bg-cyan-500/20 transition-colors" style="color: var(--neon-cyan);" title="Edit">
-                <i data-lucide="pencil" class="w-4 h-4"></i>
-              </button>
-              <button onclick="openDeleteModal('${expense.id}', '${expense.date}')" class="p-2 rounded-lg hover:bg-red-500/20 transition-colors" style="color: var(--neon-red);" title="Delete">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-              </button>
-            </div>
+            <button onclick="openFinanceExpenseModal('${exp.id}')" class="p-1.5 rounded hover:bg-cyan-500/20 transition-colors" style="color: var(--neon-cyan);">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
+            </button>
+            <button onclick="openFinanceDeleteModal('${exp.id}', '${exp.date}')" class="p-1.5 rounded hover:bg-red-500/20 transition-colors" style="color: var(--neon-red);">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
           ` : '-'}
         </td>
       </tr>
     `;
   }).join("");
 
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function filterExpenses(category) {
-  currentFilter = category;
+function filterFinanceExpenses(category) {
+  financeState.currentFilter = category;
   
-  // Update tab styles
-  document.querySelectorAll(".filter-tab").forEach(tab => {
+  document.querySelectorAll(".fin-filter-tab").forEach(tab => {
     tab.classList.toggle("active", tab.dataset.category === category);
   });
 
@@ -718,38 +621,60 @@ function renderCharts() {
 }
 
 function renderRevenueChart() {
-  const ctx = document.getElementById("revenueTrendChart").getContext("2d");
-  
-  // Get last 6 months of revenue data
+  const ctx = document.getElementById("finRevenueChart")?.getContext("2d");
+  if (!ctx) return;
+
   const labels = [];
   const data = [];
-  
-  for (let i = 5; i >= 0; i--) {
-    const month = new Date(selectedMonth);
-    month.setMonth(month.getMonth() - i);
-    const monthKey = getMonthKey(month);
-    const startDate = `${monthKey}-01`;
-    const endDate = `${monthKey}-31`;
+  const { recharges } = financeState;
 
-    labels.push(month.toLocaleDateString("en-IN", { month: "short" }));
+  if (financeState.period === "month") {
+    // Last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const month = new Date(financeState.selectedDate);
+      month.setMonth(month.getMonth() - i);
+      const year = month.getFullYear();
+      const m = String(month.getMonth() + 1).padStart(2, "0");
+      const start = `${year}-${m}-01`;
+      const end = `${year}-${m}-31`;
 
-    let monthRevenue = 0;
-    Object.entries(recharges).forEach(([date, dayData]) => {
-      if (date >= startDate && date <= endDate) {
-        Object.values(dayData).forEach(r => {
-          monthRevenue += (r.total || r.amount || 0) + (r.free || 0);
-        });
-      }
-    });
-    data.push(monthRevenue);
+      labels.push(month.toLocaleDateString("en-IN", { month: "short" }));
+
+      let revenue = 0;
+      Object.entries(recharges).forEach(([date, dayData]) => {
+        if (date >= start && date <= end) {
+          Object.values(dayData).forEach(r => {
+            revenue += (r.total || r.amount || 0) + (r.free || 0);
+          });
+        }
+      });
+      data.push(revenue);
+    }
+  } else {
+    // Last 12 months of the year
+    const year = financeState.selectedDate.getFullYear();
+    for (let m = 1; m <= 12; m++) {
+      const monthStr = String(m).padStart(2, "0");
+      const start = `${year}-${monthStr}-01`;
+      const end = `${year}-${monthStr}-31`;
+      
+      labels.push(new Date(year, m - 1).toLocaleDateString("en-IN", { month: "short" }));
+
+      let revenue = 0;
+      Object.entries(recharges).forEach(([date, dayData]) => {
+        if (date >= start && date <= end) {
+          Object.values(dayData).forEach(r => {
+            revenue += (r.total || r.amount || 0) + (r.free || 0);
+          });
+        }
+      });
+      data.push(revenue);
+    }
   }
 
-  // Destroy existing chart
-  if (revenueChart) {
-    revenueChart.destroy();
-  }
+  if (financeState.revenueChart) financeState.revenueChart.destroy();
 
-  revenueChart = new Chart(ctx, {
+  financeState.revenueChart = new Chart(ctx, {
     type: "line",
     data: {
       labels,
@@ -761,9 +686,7 @@ function renderRevenueChart() {
         fill: true,
         tension: 0.4,
         pointBackgroundColor: "#00ff88",
-        pointBorderColor: "#00ff88",
-        pointRadius: 4,
-        pointHoverRadius: 6
+        pointRadius: 3
       }]
     },
     options: {
@@ -773,24 +696,14 @@ function renderRevenueChart() {
         legend: { display: false },
         tooltip: {
           backgroundColor: "rgba(0, 0, 0, 0.8)",
-          titleFont: { family: "Orbitron" },
-          bodyFont: { family: "Rajdhani" },
-          callbacks: {
-            label: ctx => `₹${formatNumber(ctx.parsed.y)}`
-          }
+          callbacks: { label: ctx => `₹${formatNumber(ctx.parsed.y)}` }
         }
       },
       scales: {
-        x: {
-          grid: { color: "rgba(255, 255, 255, 0.05)" },
-          ticks: { color: "#888" }
-        },
-        y: {
-          grid: { color: "rgba(255, 255, 255, 0.05)" },
-          ticks: {
-            color: "#888",
-            callback: value => `₹${formatNumber(value)}`
-          }
+        x: { grid: { color: "rgba(255,255,255,0.05)" }, ticks: { color: "#888" } },
+        y: { 
+          grid: { color: "rgba(255,255,255,0.05)" }, 
+          ticks: { color: "#888", callback: v => `₹${formatNumber(v)}` }
         }
       }
     }
@@ -798,55 +711,42 @@ function renderRevenueChart() {
 }
 
 function renderExpenseChart() {
-  const ctx = document.getElementById("expenseBreakdownChart").getContext("2d");
+  const ctx = document.getElementById("finExpenseChart")?.getContext("2d");
+  if (!ctx) return;
 
-  // Calculate expenses by category
   const categoryTotals = {};
-  EXPENSE_CATEGORIES.forEach(cat => {
-    categoryTotals[cat.id] = 0;
-  });
-
-  expenses.forEach(exp => {
+  EXPENSE_CATEGORIES.forEach(c => { categoryTotals[c.id] = 0; });
+  financeState.expenses.forEach(exp => {
     if (categoryTotals[exp.category] !== undefined) {
       categoryTotals[exp.category] += exp.amount || 0;
     }
   });
 
-  // Filter out zero values
-  const activeCategories = EXPENSE_CATEGORIES.filter(cat => categoryTotals[cat.id] > 0);
+  const active = EXPENSE_CATEGORIES.filter(c => categoryTotals[c.id] > 0);
   
-  if (activeCategories.length === 0) {
-    // Show empty state
-    if (expenseChart) {
-      expenseChart.destroy();
-      expenseChart = null;
-    }
+  if (financeState.expenseChart) financeState.expenseChart.destroy();
+
+  if (active.length === 0) {
     ctx.canvas.parentElement.innerHTML = `
       <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">EXPENSE BREAKDOWN</h3>
-      <div class="flex items-center justify-center h-64 text-gray-500">
+      <div class="flex items-center justify-center h-48 text-gray-500">
         <div class="text-center">
-          <i data-lucide="pie-chart" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
-          <p>No expenses this month</p>
+          <i data-lucide="pie-chart" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
+          <p>No expenses this period</p>
         </div>
       </div>
     `;
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     return;
   }
 
-  // Destroy existing chart
-  if (expenseChart) {
-    expenseChart.destroy();
-  }
-
-  expenseChart = new Chart(ctx, {
+  financeState.expenseChart = new Chart(ctx, {
     type: "doughnut",
     data: {
-      labels: activeCategories.map(cat => cat.name),
+      labels: active.map(c => c.name),
       datasets: [{
-        data: activeCategories.map(cat => categoryTotals[cat.id]),
-        backgroundColor: activeCategories.map(cat => cat.color),
-        borderColor: "transparent",
+        data: active.map(c => categoryTotals[c.id]),
+        backgroundColor: active.map(c => c.color),
         borderWidth: 0
       }]
     },
@@ -856,20 +756,11 @@ function renderExpenseChart() {
       plugins: {
         legend: {
           position: "right",
-          labels: {
-            color: "#888",
-            font: { family: "Rajdhani", size: 12 },
-            padding: 15,
-            usePointStyle: true
-          }
+          labels: { color: "#888", font: { size: 11 }, padding: 10, usePointStyle: true }
         },
         tooltip: {
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          titleFont: { family: "Orbitron" },
-          bodyFont: { family: "Rajdhani" },
-          callbacks: {
-            label: ctx => `₹${formatNumber(ctx.parsed)}`
-          }
+          backgroundColor: "rgba(0,0,0,0.8)",
+          callbacks: { label: ctx => `₹${formatNumber(ctx.parsed)}` }
         }
       },
       cutout: "60%"
@@ -877,59 +768,36 @@ function renderExpenseChart() {
   });
 }
 
-// ==================== MONTH NAVIGATION ====================
+// ==================== EXPORT ====================
 
-function changeMonth(delta) {
-  selectedMonth.setMonth(selectedMonth.getMonth() + delta);
-  updateMonthDisplay();
-  loadAllData();
-}
-
-function updateMonthDisplay() {
-  const monthStr = selectedMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-  document.getElementById("currentMonth").textContent = monthStr;
-}
-
-// ==================== EXPORT FUNCTIONS ====================
-
-function exportExpenses() {
-  if (expenses.length === 0) {
-    showToast("No expenses to export", "error");
+function exportFinanceExpenses() {
+  if (financeState.expenses.length === 0) {
+    showFinanceToast("No expenses to export", "error");
     return;
   }
 
-  const monthKey = getMonthKey(selectedMonth);
-  const monthName = selectedMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-
-  // Create PDF using jsPDF
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const periodLabel = financeState.period === "month" 
+    ? financeState.selectedDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" })
+    : financeState.selectedDate.getFullYear().toString();
 
-  // Header
   doc.setFontSize(18);
   doc.setTextColor(255, 0, 68);
   doc.text("OceanZ Gaming Cafe", 14, 20);
   
   doc.setFontSize(14);
   doc.setTextColor(100);
-  doc.text(`Expense Report - ${monthName}`, 14, 30);
+  doc.text(`Expense Report - ${periodLabel}`, 14, 30);
 
-  // Summary
-  const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const total = financeState.expenses.reduce((s, e) => s + (e.amount || 0), 0);
   doc.setFontSize(12);
   doc.setTextColor(0);
-  doc.text(`Total Expenses: Rs.${formatNumber(totalExpenses)}`, 14, 45);
+  doc.text(`Total Expenses: Rs.${formatNumber(total)}`, 14, 45);
 
-  // Table
-  const tableData = expenses.map(exp => {
-    const category = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || { name: "Other" };
-    return [
-      exp.date,
-      category.name,
-      exp.description || "-",
-      exp.vendor || "-",
-      `Rs.${formatNumber(exp.amount)}`
-    ];
+  const tableData = financeState.expenses.map(exp => {
+    const cat = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || { name: "Other" };
+    return [exp.date, cat.name, exp.description || "-", exp.vendor || "-", `Rs.${formatNumber(exp.amount)}`];
   });
 
   doc.autoTable({
@@ -937,33 +805,17 @@ function exportExpenses() {
     head: [["Date", "Category", "Description", "Vendor", "Amount"]],
     body: tableData,
     theme: "striped",
-    headStyles: {
-      fillColor: [255, 0, 68],
-      textColor: [255, 255, 255],
-      fontStyle: "bold"
-    },
-    styles: {
-      fontSize: 10
-    }
+    headStyles: { fillColor: [255, 0, 68], textColor: [255, 255, 255] }
   });
 
-  doc.save(`expenses-${monthKey}.pdf`);
-  showToast("Expense report exported", "success");
+  doc.save(`expenses-${periodLabel.replace(/\s+/g, "-")}.pdf`);
+  showFinanceToast("Report exported", "success");
 }
 
-// ==================== UTILITY FUNCTIONS ====================
-
-function getMonthKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-}
+// ==================== UTILITIES ====================
 
 function formatDateForInput(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatNumber(num) {
@@ -971,47 +823,33 @@ function formatNumber(num) {
   return Math.round(num).toLocaleString("en-IN");
 }
 
-function showToast(message, type = "info") {
-  const container = document.getElementById("toastContainer");
+function showFinanceToast(message, type = "info") {
+  // Use existing toast system if available
+  if (typeof window.showToast === 'function') {
+    window.showToast(message, type);
+    return;
+  }
+  
+  // Fallback toast
   const toast = document.createElement("div");
-  
-  const colors = {
-    success: { bg: "rgba(0, 255, 136, 0.9)", icon: "check-circle" },
-    error: { bg: "rgba(255, 0, 68, 0.9)", icon: "alert-circle" },
-    info: { bg: "rgba(0, 240, 255, 0.9)", icon: "info" }
-  };
-  
-  const style = colors[type] || colors.info;
-  
-  toast.className = "flex items-center gap-3 px-4 py-3 rounded-lg text-white text-sm font-medium shadow-lg";
-  toast.style.cssText = `background: ${style.bg}; animation: slideIn 0.3s ease;`;
-  toast.innerHTML = `
-    <i data-lucide="${style.icon}" class="w-5 h-5"></i>
-    <span>${message}</span>
-  `;
-  
-  container.appendChild(toast);
-  lucide.createIcons();
-  
-  setTimeout(() => {
-    toast.style.animation = "slideOut 0.3s ease forwards";
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  toast.className = "fixed bottom-4 right-4 z-50 px-4 py-3 rounded-lg text-white text-sm font-medium shadow-lg";
+  toast.style.background = type === "error" ? "rgba(255,0,68,0.9)" : type === "success" ? "rgba(0,255,136,0.9)" : "rgba(0,240,255,0.9)";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 // ==================== GLOBAL EXPORTS ====================
 
-window.changeMonth = changeMonth;
-window.openExpenseModal = openExpenseModal;
-window.closeExpenseModal = closeExpenseModal;
-window.selectCategory = selectCategory;
-window.saveExpense = saveExpense;
-window.openDeleteModal = openDeleteModal;
-window.closeDeleteModal = closeDeleteModal;
-window.confirmDeleteExpense = confirmDeleteExpense;
-window.filterExpenses = filterExpenses;
-window.exportExpenses = exportExpenses;
-
-// ==================== INITIALIZE ====================
-
-document.addEventListener("DOMContentLoaded", init);
+window.loadFinanceDashboard = loadFinanceDashboard;
+window.setFinancePeriod = setFinancePeriod;
+window.changeFinancePeriod = changeFinancePeriod;
+window.openFinanceExpenseModal = openFinanceExpenseModal;
+window.closeFinanceExpenseModal = closeFinanceExpenseModal;
+window.selectFinanceCategory = selectFinanceCategory;
+window.saveFinanceExpense = saveFinanceExpense;
+window.openFinanceDeleteModal = openFinanceDeleteModal;
+window.closeFinanceDeleteModal = closeFinanceDeleteModal;
+window.confirmFinanceDelete = confirmFinanceDelete;
+window.filterFinanceExpenses = filterFinanceExpenses;
+window.exportFinanceExpenses = exportFinanceExpenses;

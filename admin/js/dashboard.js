@@ -50,6 +50,7 @@ const elements = {
   navStaff: $("nav-staff"),
   navCash: $("nav-cash"),
   navLeaderboard: $("nav-leaderboard"),
+  navFinance: $("nav-finance"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
@@ -57,7 +58,8 @@ const elements = {
   analyticsSection: $("analytics-section"),
   staffSection: $("staff-section"),
   cashSection: $("cash-section"),
-  leaderboardSection: $("leaderboard-section")
+  leaderboardSection: $("leaderboard-section"),
+  financeSection: $("finance-section")
 };
 
 // ==================== STATE ====================
@@ -123,7 +125,8 @@ function switchView(view) {
     "bookings": "bookings",
     "recharges": "recharges",
     "analytics": "analytics",
-    "staff": "staff"
+    "staff": "staff",
+    "finance": "finance"
   };
   const permissionKey = permissionMap[view] || view;
   
@@ -142,7 +145,8 @@ function switchView(view) {
     elements.analyticsSection,
     elements.staffSection,
     elements.cashSection,
-    elements.leaderboardSection
+    elements.leaderboardSection,
+    elements.financeSection
   ];
 
   const navs = [
@@ -153,7 +157,8 @@ function switchView(view) {
     elements.navAnalytics,
     elements.navStaff,
     elements.navCash,
-    elements.navLeaderboard
+    elements.navLeaderboard,
+    elements.navFinance
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -170,7 +175,8 @@ function switchView(view) {
     analytics: { section: elements.analyticsSection, nav: elements.navAnalytics, onShow: () => window.loadAnalytics?.() },
     staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() },
     cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() },
-    leaderboard: { section: elements.leaderboardSection, nav: elements.navLeaderboard, onShow: () => window.initLeaderboards?.() }
+    leaderboard: { section: elements.leaderboardSection, nav: elements.navLeaderboard, onShow: () => window.initLeaderboards?.() },
+    finance: { section: elements.financeSection, nav: elements.navFinance, onShow: () => window.loadFinanceDashboard?.() }
   };
 
   const config = viewMap[view];
@@ -207,7 +213,8 @@ const navLinks = [
   { el: elements.navAnalytics, view: "analytics" },
   { el: elements.navStaff, view: "staff" },
   { el: elements.navCash, view: "cash" },
-  { el: elements.navLeaderboard, view: "leaderboard" }
+  { el: elements.navLeaderboard, view: "leaderboard" },
+  { el: elements.navFinance, view: "finance" }
 ];
 
 navLinks.forEach(({ el, view }) => {
