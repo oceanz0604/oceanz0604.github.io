@@ -236,34 +236,65 @@ function calculateSummary() {
   const { startDate, endDate } = getDateRange();
   const { recharges, expenses, members, dailySummaries } = financeState;
 
-  // Revenue from recharges (excluding offers/free, excluding credit)
-  // Only count actual cash and UPI payments as revenue
+  // Revenue from recharges (excluding offers/free)
+  // Count: direct cash, direct UPI, and credit collections (cash/UPI from collected credits)
   let totalRevenue = 0, cashTotal = 0, upiTotal = 0;
 
+  // First pass: count direct cash and UPI payments (not credit given, not free)
   Object.entries(recharges).forEach(([date, dayData]) => {
     if (date >= startDate && date <= endDate) {
       Object.values(dayData).forEach(r => {
         if (r.total !== undefined) {
-          // Only count cash + upi as revenue (not credit, not free/offers)
-          const cashAmount = r.cash || 0;
-          const upiAmount = r.upi || 0;
-          totalRevenue += cashAmount + upiAmount;
-          cashTotal += cashAmount;
-          upiTotal += upiAmount;
-        } else if (r.amount !== undefined) {
-          // Skip credit payments for revenue
-          if (r.mode === "cash") {
-            totalRevenue += r.amount || 0;
-            cashTotal += r.amount || 0;
-          } else if (r.mode === "upi") {
-            totalRevenue += r.amount || 0;
-            upiTotal += r.amount || 0;
-          }
-          // Credit payments are NOT counted as revenue
+          // New split payment format - count direct cash and UPI only
+          cashTotal += r.cash || 0;
+          upiTotal += r.upi || 0;
+        } else if (r.amount !== undefined && r.mode !== "credit") {
+          // Old single-mode format - count cash and UPI (not credit given)
+          if (r.mode === "cash") cashTotal += r.amount || 0;
+          else if (r.mode === "upi") upiTotal += r.amount || 0;
         }
       });
     }
   });
+
+  // Second pass: count credit COLLECTIONS (cash/UPI received when credit is paid)
+  // Scan ALL recharges to find credit payments that occurred within our date range
+  Object.entries(recharges).forEach(([transactionDate, dayData]) => {
+    Object.values(dayData).forEach(r => {
+      // NEW FORMAT: creditPayments history with dates as keys
+      if (r.creditPayments) {
+        Object.entries(r.creditPayments).forEach(([paymentDate, payment]) => {
+          // Only count if the payment was made within our period
+          if (paymentDate >= startDate && paymentDate <= endDate) {
+            cashTotal += payment.cash || 0;
+            upiTotal += payment.upi || 0;
+          }
+        });
+      }
+      // OLDER FORMAT: lastPaidCash/lastPaidUpi with lastPaidAt timestamp
+      else if (r.lastPaidAt && (r.lastPaidCash || r.lastPaidUpi)) {
+        const paidDate = r.lastPaidAt.split("T")[0];
+        if (paidDate >= startDate && paidDate <= endDate) {
+          cashTotal += r.lastPaidCash || 0;
+          upiTotal += r.lastPaidUpi || 0;
+        }
+      }
+      // LEGACY FORMAT: paidAt with paidVia
+      else if (r.paidAt && r.paidVia && r.mode === "credit") {
+        const paidDate = r.paidAt.split("T")[0];
+        if (paidDate >= startDate && paidDate <= endDate) {
+          if (r.paidVia === "cash" || r.paidVia.includes("cash")) {
+            cashTotal += r.amount || 0;
+          } else if (r.paidVia === "upi") {
+            upiTotal += r.amount || 0;
+          }
+        }
+      }
+    });
+  });
+
+  // Total revenue = all cash collected + all UPI collected
+  totalRevenue = cashTotal + upiTotal;
 
   // Expenses
   let totalExpenses = 0;
