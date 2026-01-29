@@ -110,7 +110,12 @@ export const FB_PATHS = {
   CASH_REGISTER: "cash_register",             // /cash_register/{YYYY-MM-DD}
   RECHARGE_AUDIT: "recharge_audit",           // /recharge_audit/{audit_id}
   STAFF: "staff",                             // /staff/{staff_id}
-  ACTIVITY_LOG: "activity_log"                // /activity_log/{log_id}
+  ACTIVITY_LOG: "activity_log",               // /activity_log/{log_id}
+  
+  // Finance Dashboard (Expenses & Summaries)
+  EXPENSES: "expenses",                       // /expenses/{YYYY-MM-DD}/{expense_id}
+  EXPENSE_AUDIT: "expense_audit",             // /expense_audit/{audit_id}
+  FINANCE_MONTHLY: "finance_monthly"          // /finance_monthly/{YYYY-MM} - cached monthly summaries
 };
 
 // ==================== APP CONSTANTS ====================

@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>OceanZ - Finance Dashboard</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="description" content="OceanZ Gaming Cafe Finance Dashboard - Expenses, Revenue, and Financial Analysis"/>
+  <meta name="theme-color" content="#ff0044"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="OceanZ Finance"/>
+  <link rel="manifest" href="manifest.webmanifest"/>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/admin-icon.svg"/>
+  <link rel="apple-touch-icon" href="../assets/icons/admin-icon.svg"/>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/common.css">
+  <link rel="stylesheet" href="../assets/css/admin.css">
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  
+  <style>
+    /* Finance Page Specific Styles */
+    :root {
+      --expense-rent: #ff6b6b;
+      --expense-electricity: #ffd93d;
+      --expense-internet: #6bcb77;
+      --expense-salary: #4d96ff;
+      --expense-maintenance: #ff922b;
+      --expense-supplies: #845ef7;
+      --expense-equipment: #20c997;
+      --expense-other: #868e96;
+    }
+
+    .finance-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    /* Summary Cards */
+    .summary-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .summary-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--card-accent, var(--neon-red)), transparent);
+    }
+
+    .summary-card.revenue { --card-accent: var(--neon-green); }
+    .summary-card.expenses { --card-accent: var(--neon-red); }
+    .summary-card.profit { --card-accent: var(--neon-cyan); }
+    .summary-card.minutes { --card-accent: var(--neon-purple); }
+
+    .summary-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .summary-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+    }
+
+    .summary-change.positive {
+      background: rgba(0, 255, 136, 0.15);
+      color: var(--neon-green);
+    }
+
+    .summary-change.negative {
+      background: rgba(255, 0, 68, 0.15);
+      color: var(--neon-red);
+    }
+
+    /* Chart Cards */
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+    }
+
+    .chart-card canvas {
+      max-height: 300px;
+    }
+
+    /* Expense Table */
+    .expense-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    .expense-table th {
+      background: rgba(255, 0, 68, 0.1);
+      padding: 1rem;
+      text-align: left;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--neon-red);
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .expense-table td {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: middle;
+    }
+
+    .expense-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Category Badge */
+    .category-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .category-badge.rent { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+    .category-badge.electricity { background: rgba(255, 217, 61, 0.2); color: #ffd93d; }
+    .category-badge.internet { background: rgba(107, 203, 119, 0.2); color: #6bcb77; }
+    .category-badge.salary { background: rgba(77, 150, 255, 0.2); color: #4d96ff; }
+    .category-badge.maintenance { background: rgba(255, 146, 43, 0.2); color: #ff922b; }
+    .category-badge.supplies { background: rgba(132, 94, 247, 0.2); color: #845ef7; }
+    .category-badge.equipment { background: rgba(32, 201, 151, 0.2); color: #20c997; }
+    .category-badge.other { background: rgba(134, 142, 150, 0.2); color: #868e96; }
+
+    /* Month Selector */
+    .month-selector {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .month-selector button {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .month-selector button:hover {
+      background: rgba(255, 0, 68, 0.1);
+      border-color: rgba(255, 0, 68, 0.3);
+      color: var(--neon-red);
+    }
+
+    .month-selector .current-month {
+      font-family: 'Orbitron', monospace;
+      font-weight: 600;
+      min-width: 140px;
+      text-align: center;
+      color: var(--neon-cyan);
+    }
+
+    /* Payment Breakdown */
+    .payment-stat {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .payment-stat .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.75rem;
+      font-size: 1.25rem;
+    }
+
+    .payment-stat.cash .icon { background: rgba(0, 240, 255, 0.2); }
+    .payment-stat.upi .icon { background: rgba(184, 41, 255, 0.2); }
+    .payment-stat.credit .icon { background: rgba(255, 107, 0, 0.2); }
+
+    /* Add Expense Button */
+    .add-expense-btn {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 240, 255, 0.2));
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      font-family: 'Orbitron', monospace;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .add-expense-btn:hover {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 240, 255, 0.3));
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .add-expense-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Filter Tabs */
+    .filter-tabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-tab {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .filter-tab:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .filter-tab.active {
+      background: rgba(255, 0, 68, 0.15);
+      border-color: var(--neon-red);
+      color: var(--neon-red);
+    }
+
+    /* Modal */
+    .expense-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+    }
+
+    .expense-modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .expense-modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .expense-modal-body {
+      padding: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: var(--neon-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Category Select Grid */
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+    }
+
+    .category-option {
+      padding: 0.75rem 0.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.2);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .category-option:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .category-option.selected {
+      border-color: var(--neon-cyan);
+      background: rgba(0, 240, 255, 0.1);
+    }
+
+    .category-option .icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .category-option .name {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .stat-item {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+
+    .stat-item .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-item .value {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .summary-card {
+        padding: 1rem;
+      }
+
+      .summary-value {
+        font-size: 1.5rem;
+      }
+
+      .category-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .expense-table {
+        font-size: 0.8rem;
+      }
+
+      .expense-table th,
+      .expense-table td {
+        padding: 0.75rem 0.5rem;
+      }
+
+      .hide-mobile {
+        display: none !important;
+      }
+    }
+
+    /* Loading State */
+    .loading-skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Back Button */
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .back-btn:hover {
+      background: rgba(255, 0, 68, 0.1);
+      border-color: rgba(255, 0, 68, 0.3);
+      color: var(--neon-red);
+    }
+  </style>
+</head>
+<body class="bg-black text-white min-h-screen">
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-black">
+    <div class="text-center">
+      <div class="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+      <p id="loading-status" class="font-orbitron text-gray-400">LOADING FINANCE DASHBOARD...</p>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="app" class="hidden">
+    <div class="finance-container py-6">
+      
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div class="flex items-center gap-4">
+          <a href="dashboard.html" class="back-btn">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span>Back</span>
+          </a>
+          <div>
+            <h1 class="font-orbitron text-2xl md:text-3xl font-bold" style="color: var(--neon-red);">
+              FINANCE DASHBOARD
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">Revenue, Expenses & Financial Analysis</p>
+          </div>
+        </div>
+        
+        <!-- Month Selector -->
+        <div class="month-selector">
+          <button onclick="changeMonth(-1)" title="Previous Month">
+            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+          </button>
+          <span id="currentMonth" class="current-month">January 2026</span>
+          <button onclick="changeMonth(1)" title="Next Month">
+            <i data-lucide="chevron-right" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <!-- Revenue Card -->
+        <div class="summary-card revenue">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(0, 255, 136, 0.2);">
+              <i data-lucide="trending-up" class="w-5 h-5" style="color: var(--neon-green);"></i>
+            </div>
+            <span class="text-xs text-gray-400 uppercase tracking-wide">Revenue</span>
+          </div>
+          <div class="summary-value" id="totalRevenue" style="color: var(--neon-green);">-</div>
+          <div class="flex items-center gap-2 mt-2">
+            <span id="revenueChange" class="summary-change positive">
+              <i data-lucide="trending-up" class="w-3 h-3"></i>
+              <span>-</span>
+            </span>
+            <span class="text-xs text-gray-500">vs last month</span>
+          </div>
+        </div>
+
+        <!-- Expenses Card -->
+        <div class="summary-card expenses">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(255, 0, 68, 0.2);">
+              <i data-lucide="trending-down" class="w-5 h-5" style="color: var(--neon-red);"></i>
+            </div>
+            <span class="text-xs text-gray-400 uppercase tracking-wide">Expenses</span>
+          </div>
+          <div class="summary-value" id="totalExpenses" style="color: var(--neon-red);">-</div>
+          <div class="flex items-center gap-2 mt-2">
+            <span id="expenseChange" class="summary-change negative">
+              <i data-lucide="trending-up" class="w-3 h-3"></i>
+              <span>-</span>
+            </span>
+            <span class="text-xs text-gray-500">vs last month</span>
+          </div>
+        </div>
+
+        <!-- Profit Card -->
+        <div class="summary-card profit">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(0, 240, 255, 0.2);">
+              <i data-lucide="wallet" class="w-5 h-5" style="color: var(--neon-cyan);"></i>
+            </div>
+            <span class="text-xs text-gray-400 uppercase tracking-wide">Profit</span>
+          </div>
+          <div class="summary-value" id="totalProfit" style="color: var(--neon-cyan);">-</div>
+          <div class="flex items-center gap-2 mt-2">
+            <span id="profitChange" class="summary-change positive">
+              <i data-lucide="trending-up" class="w-3 h-3"></i>
+              <span>-</span>
+            </span>
+            <span class="text-xs text-gray-500">vs last month</span>
+          </div>
+        </div>
+
+        <!-- PanCafe Minutes Card -->
+        <div class="summary-card minutes">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: rgba(184, 41, 255, 0.2);">
+              <i data-lucide="clock" class="w-5 h-5" style="color: var(--neon-purple);"></i>
+            </div>
+            <span class="text-xs text-gray-400 uppercase tracking-wide">Usage</span>
+          </div>
+          <div class="summary-value" id="totalMinutes" style="color: var(--neon-purple);">-</div>
+          <div class="flex items-center gap-2 mt-2">
+            <span class="text-xs text-gray-500">Total hours this month</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Revenue Trend Chart -->
+        <div class="chart-card">
+          <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">REVENUE TREND</h3>
+          <canvas id="revenueTrendChart"></canvas>
+        </div>
+
+        <!-- Expense Breakdown Chart -->
+        <div class="chart-card">
+          <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">EXPENSE BREAKDOWN</h3>
+          <canvas id="expenseBreakdownChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Expenses Section -->
+      <div class="chart-card mb-8">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 class="font-orbitron text-sm font-semibold" style="color: var(--neon-cyan);">EXPENSES</h3>
+            <p class="text-xs text-gray-500 mt-1">Manage daily expenses and track spending</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="addExpenseBtn" onclick="openExpenseModal()" class="add-expense-btn">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Add Expense</span>
+            </button>
+            <button onclick="exportExpenses()" class="back-btn">
+              <i data-lucide="download" class="w-4 h-4"></i>
+              <span class="hidden md:inline">Export</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category Filters -->
+        <div class="filter-tabs mb-4">
+          <button class="filter-tab active" data-category="all" onclick="filterExpenses('all')">All</button>
+          <button class="filter-tab" data-category="rent" onclick="filterExpenses('rent')">Rent</button>
+          <button class="filter-tab" data-category="electricity" onclick="filterExpenses('electricity')">Electricity</button>
+          <button class="filter-tab" data-category="internet" onclick="filterExpenses('internet')">Internet</button>
+          <button class="filter-tab" data-category="salary" onclick="filterExpenses('salary')">Salary</button>
+          <button class="filter-tab" data-category="maintenance" onclick="filterExpenses('maintenance')">Maintenance</button>
+          <button class="filter-tab" data-category="supplies" onclick="filterExpenses('supplies')">Supplies</button>
+          <button class="filter-tab" data-category="equipment" onclick="filterExpenses('equipment')">Equipment</button>
+          <button class="filter-tab" data-category="other" onclick="filterExpenses('other')">Other</button>
+        </div>
+
+        <!-- Expenses Table -->
+        <div class="overflow-x-auto">
+          <table class="expense-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th class="hide-mobile">Vendor</th>
+                <th class="text-right">Amount</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expensesList">
+              <tr>
+                <td colspan="6" class="text-center py-8 text-gray-500">
+                  <div class="loading-skeleton h-8 w-48 mx-auto"></div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State -->
+        <div id="expensesEmpty" class="hidden text-center py-12">
+          <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background: rgba(255, 0, 68, 0.1);">
+            <i data-lucide="receipt" class="w-8 h-8" style="color: var(--neon-red);"></i>
+          </div>
+          <p class="text-gray-400 mb-2">No expenses recorded</p>
+          <p class="text-sm text-gray-600">Click "Add Expense" to record your first expense</p>
+        </div>
+      </div>
+
+      <!-- Bottom Section: Payment Breakdown & Member Stats -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Payment Breakdown -->
+        <div class="chart-card">
+          <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">PAYMENT BREAKDOWN</h3>
+          <div class="grid grid-cols-3 gap-4">
+            <div class="payment-stat cash">
+              <div class="icon">💵</div>
+              <div class="font-orbitron text-lg font-bold" id="cashTotal" style="color: var(--neon-cyan);">-</div>
+              <div class="text-xs text-gray-500 mt-1">Cash</div>
+            </div>
+            <div class="payment-stat upi">
+              <div class="icon">📱</div>
+              <div class="font-orbitron text-lg font-bold" id="upiTotal" style="color: var(--neon-purple);">-</div>
+              <div class="text-xs text-gray-500 mt-1">UPI</div>
+            </div>
+            <div class="payment-stat credit">
+              <div class="icon">🔖</div>
+              <div class="font-orbitron text-lg font-bold" id="creditTotal" style="color: var(--neon-orange);">-</div>
+              <div class="text-xs text-gray-500 mt-1">Credit</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Member Stats -->
+        <div class="chart-card">
+          <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">MEMBER STATS</h3>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="label">Active Members</div>
+              <div class="value" id="activeMembers" style="color: var(--neon-green);">-</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">New This Month</div>
+              <div class="value" id="newMembers" style="color: var(--neon-cyan);">-</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">Total Sessions</div>
+              <div class="value" id="totalSessions" style="color: var(--neon-purple);">-</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">Avg Session</div>
+              <div class="value" id="avgSession" style="color: var(--neon-yellow);">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Add/Edit Expense Modal -->
+  <div id="expenseModal" class="expense-modal hidden">
+    <div class="expense-modal-content">
+      <div class="expense-modal-header">
+        <h3 id="expenseModalTitle" class="font-orbitron text-lg font-semibold" style="color: var(--neon-cyan);">
+          ADD EXPENSE
+        </h3>
+        <button onclick="closeExpenseModal()" class="text-gray-400 hover:text-white transition-colors">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+      <div class="expense-modal-body">
+        <form id="expenseForm" onsubmit="saveExpense(event)">
+          <input type="hidden" id="expenseId" value="">
+          
+          <!-- Category Selection -->
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <div class="category-grid" id="categoryGrid">
+              <div class="category-option" data-category="rent" onclick="selectCategory('rent')">
+                <div class="icon">🏠</div>
+                <div class="name">Rent</div>
+              </div>
+              <div class="category-option" data-category="electricity" onclick="selectCategory('electricity')">
+                <div class="icon">⚡</div>
+                <div class="name">Electricity</div>
+              </div>
+              <div class="category-option" data-category="internet" onclick="selectCategory('internet')">
+                <div class="icon">🌐</div>
+                <div class="name">Internet</div>
+              </div>
+              <div class="category-option" data-category="salary" onclick="selectCategory('salary')">
+                <div class="icon">👥</div>
+                <div class="name">Salary</div>
+              </div>
+              <div class="category-option" data-category="maintenance" onclick="selectCategory('maintenance')">
+                <div class="icon">🔧</div>
+                <div class="name">Maintenance</div>
+              </div>
+              <div class="category-option" data-category="supplies" onclick="selectCategory('supplies')">
+                <div class="icon">📦</div>
+                <div class="name">Supplies</div>
+              </div>
+              <div class="category-option" data-category="equipment" onclick="selectCategory('equipment')">
+                <div class="icon">🖥️</div>
+                <div class="name">Equipment</div>
+              </div>
+              <div class="category-option" data-category="other" onclick="selectCategory('other')">
+                <div class="icon">📋</div>
+                <div class="name">Other</div>
+              </div>
+            </div>
+            <input type="hidden" id="expenseCategory" required>
+          </div>
+
+          <!-- Amount -->
+          <div class="form-group">
+            <label class="form-label" for="expenseAmount">Amount (₹)</label>
+            <input type="number" id="expenseAmount" class="form-input" placeholder="Enter amount" min="1" required>
+          </div>
+
+          <!-- Date -->
+          <div class="form-group">
+            <label class="form-label" for="expenseDate">Date</label>
+            <input type="date" id="expenseDate" class="form-input" required>
+          </div>
+
+          <!-- Description -->
+          <div class="form-group">
+            <label class="form-label" for="expenseDescription">Description</label>
+            <textarea id="expenseDescription" class="form-textarea" placeholder="Brief description of the expense" required></textarea>
+          </div>
+
+          <!-- Vendor (Optional) -->
+          <div class="form-group">
+            <label class="form-label" for="expenseVendor">Vendor (Optional)</label>
+            <input type="text" id="expenseVendor" class="form-input" placeholder="Vendor or payee name">
+          </div>
+
+          <!-- Recurring -->
+          <div class="form-group">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" id="expenseRecurring" class="w-5 h-5 rounded border-gray-600 bg-transparent">
+              <span class="text-sm">This is a recurring expense</span>
+            </label>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="flex gap-3 mt-6">
+            <button type="button" onclick="closeExpenseModal()" class="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+              Cancel
+            </button>
+            <button type="submit" id="saveExpenseBtn" class="flex-1 py-3 rounded-xl font-semibold transition-all" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 240, 255, 0.3)); border: 1px solid var(--neon-green); color: var(--neon-green);">
+              Save Expense
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="expense-modal hidden">
+    <div class="expense-modal-content" style="max-width: 400px;">
+      <div class="expense-modal-header">
+        <h3 class="font-orbitron text-lg font-semibold" style="color: var(--neon-red);">
+          DELETE EXPENSE
+        </h3>
+        <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white transition-colors">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+      <div class="expense-modal-body text-center">
+        <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style="background: rgba(255, 0, 68, 0.2);">
+          <i data-lucide="trash-2" class="w-8 h-8" style="color: var(--neon-red);"></i>
+        </div>
+        <p class="text-gray-300 mb-2">Are you sure you want to delete this expense?</p>
+        <p class="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
+        <div class="flex gap-3">
+          <button onclick="closeDeleteModal()" class="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 hover:bg-gray-800 transition-colors">
+            Cancel
+          </button>
+          <button onclick="confirmDeleteExpense()" class="flex-1 py-3 rounded-xl font-semibold transition-all" style="background: rgba(255, 0, 68, 0.3); border: 1px solid var(--neon-red); color: var(--neon-red);">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- Scripts -->
+  <script type="module" src="js/finance.js"></script>
+</body>
+</html>
