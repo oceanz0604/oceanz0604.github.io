@@ -550,16 +550,16 @@ async function confirmFinanceDelete() {
 // ==================== RENDER FUNCTIONS ====================
 
 function renderExpenses() {
-  const tbody = document.getElementById("finExpensesList");
+  const container = document.getElementById("finExpensesList");
   const emptyState = document.getElementById("finExpensesEmpty");
-  if (!tbody) return;
+  if (!container) return;
 
   const filtered = financeState.currentFilter === "all" 
     ? financeState.expenses 
     : financeState.expenses.filter(e => e.category === financeState.currentFilter);
 
   if (filtered.length === 0) {
-    tbody.innerHTML = "";
+    container.innerHTML = "";
     emptyState?.classList.remove("hidden");
     return;
   }
@@ -567,38 +567,43 @@ function renderExpenses() {
   emptyState?.classList.add("hidden");
   const canEdit = canEditData();
 
-  tbody.innerHTML = filtered.map(exp => {
+  // Generate expense items (works on both mobile and desktop)
+  const expenseItems = filtered.map(exp => {
     const cat = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES[7];
     const dateStr = new Date(exp.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    const actions = canEdit ? `
+      <button onclick="openFinanceExpenseModal('${exp.id}')" class="p-2 rounded-lg hover:bg-cyan-500/20 transition-colors" style="color: var(--neon-cyan);">
+        <i data-lucide="pencil" class="w-4 h-4"></i>
+      </button>
+      <button onclick="openFinanceDeleteModal('${exp.id}', '${exp.date}')" class="p-2 rounded-lg hover:bg-red-500/20 transition-colors" style="color: var(--neon-red);">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+      </button>
+    ` : '';
 
     return `
-      <tr class="hover:bg-white/5">
-        <td class="py-3">
-          <div class="text-white">${dateStr}</div>
-          <div class="text-xs text-gray-500">${exp.admin || "Admin"}</div>
-        </td>
-        <td class="py-3">
+      <div class="expense-item flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-black/20 border border-gray-800 hover:border-gray-700 transition-colors">
+        <div class="flex items-center justify-between md:w-24 md:flex-shrink-0">
+          <div>
+            <div class="text-white font-medium">${dateStr}</div>
+            <div class="text-xs text-gray-500">${exp.admin || "Admin"}</div>
+          </div>
+          <div class="flex md:hidden">${actions}</div>
+        </div>
+        <div class="md:w-32 md:flex-shrink-0">
           <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs" style="background: ${cat.color}20; color: ${cat.color};">
             ${cat.icon} ${cat.name}
           </span>
-        </td>
-        <td class="py-3 text-gray-300">${exp.description || "-"}</td>
-        <td class="py-3 text-right">
-          <span class="font-orbitron font-bold" style="color: var(--neon-red);">₹${formatNumber(exp.amount)}</span>
-        </td>
-        <td class="py-3 text-right">
-          ${canEdit ? `
-            <button onclick="openFinanceExpenseModal('${exp.id}')" class="p-1.5 rounded hover:bg-cyan-500/20 transition-colors" style="color: var(--neon-cyan);">
-              <i data-lucide="pencil" class="w-4 h-4"></i>
-            </button>
-            <button onclick="openFinanceDeleteModal('${exp.id}', '${exp.date}')" class="p-1.5 rounded hover:bg-red-500/20 transition-colors" style="color: var(--neon-red);">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-          ` : '-'}
-        </td>
-      </tr>
+        </div>
+        <div class="flex-1 text-gray-300 text-sm">${exp.description || "-"}</div>
+        <div class="flex items-center justify-between md:justify-end gap-4">
+          <span class="font-orbitron font-bold text-lg" style="color: var(--neon-red);">₹${formatNumber(exp.amount)}</span>
+          <div class="hidden md:flex">${actions}</div>
+        </div>
+      </div>
     `;
   }).join("");
+
+  container.innerHTML = expenseItems;
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }

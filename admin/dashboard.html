@@ -1555,29 +1555,9 @@
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="other" onclick="filterFinanceExpenses('other')">📋 Other</button>
             </div>
 
-            <!-- Expenses Table -->
-            <div class="w-full">
-              <table class="w-full text-sm" style="table-layout: fixed;">
-                <colgroup>
-                  <col style="width: 12%;">
-                  <col style="width: 18%;">
-                  <col style="width: 40%;">
-                  <col style="width: 15%;">
-                  <col style="width: 15%;">
-                </colgroup>
-                <thead>
-                  <tr class="text-left text-xs text-gray-500 uppercase border-b border-gray-800">
-                    <th class="pb-3 font-medium">Date</th>
-                    <th class="pb-3 font-medium">Category</th>
-                    <th class="pb-3 font-medium">Description</th>
-                    <th class="pb-3 font-medium text-right">Amount</th>
-                    <th class="pb-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="finExpensesList" class="divide-y divide-gray-800">
-                  <tr><td colspan="5" class="py-8 text-center text-gray-500">Loading expenses...</td></tr>
-                </tbody>
-              </table>
+            <!-- Expenses List (responsive: cards on mobile, table on desktop) -->
+            <div id="finExpensesList" class="space-y-3 md:space-y-0">
+              <div class="text-center py-8 text-gray-500">Loading expenses...</div>
             </div>
             
             <div id="finExpensesEmpty" class="hidden text-center py-8">
