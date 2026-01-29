@@ -236,22 +236,30 @@ function calculateSummary() {
   const { startDate, endDate } = getDateRange();
   const { recharges, expenses, members, dailySummaries } = financeState;
 
-  // Revenue from recharges
-  let totalRevenue = 0, cashTotal = 0, upiTotal = 0, creditTotal = 0;
+  // Revenue from recharges (excluding offers/free, excluding credit)
+  // Only count actual cash and UPI payments as revenue
+  let totalRevenue = 0, cashTotal = 0, upiTotal = 0;
 
   Object.entries(recharges).forEach(([date, dayData]) => {
     if (date >= startDate && date <= endDate) {
       Object.values(dayData).forEach(r => {
         if (r.total !== undefined) {
-          totalRevenue += (r.total || 0) + (r.free || 0);
-          cashTotal += r.cash || 0;
-          upiTotal += r.upi || 0;
-          creditTotal += r.credit || 0;
+          // Only count cash + upi as revenue (not credit, not free/offers)
+          const cashAmount = r.cash || 0;
+          const upiAmount = r.upi || 0;
+          totalRevenue += cashAmount + upiAmount;
+          cashTotal += cashAmount;
+          upiTotal += upiAmount;
         } else if (r.amount !== undefined) {
-          totalRevenue += r.amount || 0;
-          if (r.mode === "cash") cashTotal += r.amount;
-          else if (r.mode === "upi") upiTotal += r.amount;
-          else if (r.mode === "credit") creditTotal += r.amount;
+          // Skip credit payments for revenue
+          if (r.mode === "cash") {
+            totalRevenue += r.amount || 0;
+            cashTotal += r.amount || 0;
+          } else if (r.mode === "upi") {
+            totalRevenue += r.amount || 0;
+            upiTotal += r.amount || 0;
+          }
+          // Credit payments are NOT counted as revenue
         }
       });
     }
@@ -317,7 +325,6 @@ function calculateSummary() {
 
   $("finCash").textContent = `₹${formatNumber(cashTotal)}`;
   $("finUpi").textContent = `₹${formatNumber(upiTotal)}`;
-  $("finCredit").textContent = `₹${formatNumber(creditTotal)}`;
 
   $("finActiveMembers").textContent = activeMembers;
   $("finNewMembers").textContent = newMembers;
