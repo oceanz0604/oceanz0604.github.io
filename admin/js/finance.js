@@ -400,6 +400,8 @@ function getDateRange() {
 // ==================== EXPENSE CRUD ====================
 
 function openFinanceExpenseModal(expenseId = null) {
+  console.log("📝 openFinanceExpenseModal called with:", expenseId);
+  
   if (!canEditData()) {
     showFinanceToast("You don't have permission to add/edit expenses", "error");
     return;
@@ -410,6 +412,11 @@ function openFinanceExpenseModal(expenseId = null) {
   const title = document.getElementById("finExpenseModalTitle");
   const form = document.getElementById("finExpenseForm");
 
+  if (!modal || !title || !form) {
+    console.error("❌ Modal elements not found:", { modal: !!modal, title: !!title, form: !!form });
+    return;
+  }
+
   form.reset();
   document.querySelectorAll(".fin-cat-btn").forEach(btn => btn.classList.remove("selected"));
   document.getElementById("finExpenseCategory").value = "";
@@ -417,6 +424,7 @@ function openFinanceExpenseModal(expenseId = null) {
   if (expenseId) {
     title.textContent = "EDIT EXPENSE";
     const expense = financeState.expenses.find(e => e.id === expenseId);
+    console.log("📝 Found expense for edit:", expense);
     if (expense) {
       document.getElementById("finExpenseId").value = expenseId;
       document.getElementById("finExpenseAmount").value = expense.amount;
@@ -424,6 +432,10 @@ function openFinanceExpenseModal(expenseId = null) {
       document.getElementById("finExpenseDesc").value = expense.description || "";
       document.getElementById("finExpenseVendor").value = expense.vendor || "";
       selectFinanceCategory(expense.category);
+    } else {
+      console.error("❌ Expense not found in state:", expenseId);
+      showFinanceToast("Expense not found", "error");
+      return;
     }
   } else {
     title.textContent = "ADD EXPENSE";
@@ -488,13 +500,35 @@ async function saveFinanceExpense(event) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
 
+    console.log("💾 Saving expense:", { editingId: financeState.editingExpenseId, date, category, amount });
+
     if (financeState.editingExpenseId) {
+      // Updating existing expense
       const existingExpense = financeState.expenses.find(e => e.id === financeState.editingExpenseId);
-      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${existingExpense.date}/${financeState.editingExpenseId}`).update(expenseData);
+      console.log("📝 Found existing expense:", existingExpense);
+      
+      if (!existingExpense) {
+        throw new Error("Could not find expense to update");
+      }
+
+      // If date changed, we need to move the expense
+      if (existingExpense.date !== date) {
+        console.log("📅 Date changed, moving expense from", existingExpense.date, "to", date);
+        // Delete from old location
+        await bookingDb.ref(`${FB_PATHS.EXPENSES}/${existingExpense.date}/${financeState.editingExpenseId}`).remove();
+        // Create at new location with same ID
+        expenseData.createdAt = existingExpense.createdAt || new Date().toISOString();
+        await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}/${financeState.editingExpenseId}`).set(expenseData);
+      } else {
+        // Same date, just update
+        await bookingDb.ref(`${FB_PATHS.EXPENSES}/${existingExpense.date}/${financeState.editingExpenseId}`).update(expenseData);
+      }
       showFinanceToast("Expense updated", "success");
     } else {
+      // Creating new expense
       expenseData.createdAt = new Date().toISOString();
-      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}`).push(expenseData);
+      const newRef = await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}`).push(expenseData);
+      console.log("✅ Created expense with ID:", newRef.key);
       showFinanceToast("Expense added", "success");
     }
 
@@ -505,8 +539,8 @@ async function saveFinanceExpense(event) {
     renderCharts();
 
   } catch (error) {
-    console.error("Error saving expense:", error);
-    showFinanceToast("Failed to save expense", "error");
+    console.error("❌ Error saving expense:", error);
+    showFinanceToast(`Failed: ${error.message || "Unknown error"}`, "error");
   } finally {
     const saveBtn = document.getElementById("finSaveExpenseBtn");
     saveBtn.disabled = false;
@@ -515,12 +549,20 @@ async function saveFinanceExpense(event) {
 }
 
 function openFinanceDeleteModal(expenseId, date) {
+  console.log("🗑️ openFinanceDeleteModal called:", { expenseId, date });
+  
   if (!canEditData()) {
     showFinanceToast("You don't have permission to delete expenses", "error");
     return;
   }
+  
   financeState.deleteExpenseData = { id: expenseId, date };
-  document.getElementById("finDeleteModal").classList.remove("hidden");
+  const modal = document.getElementById("finDeleteModal");
+  if (!modal) {
+    console.error("❌ Delete modal not found");
+    return;
+  }
+  modal.classList.remove("hidden");
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -530,10 +572,17 @@ function closeFinanceDeleteModal() {
 }
 
 async function confirmFinanceDelete() {
-  if (!financeState.deleteExpenseData || !canEditData()) return;
+  if (!financeState.deleteExpenseData || !canEditData()) {
+    console.log("❌ Delete blocked:", { data: financeState.deleteExpenseData, canEdit: canEditData() });
+    return;
+  }
 
   try {
-    await bookingDb.ref(`${FB_PATHS.EXPENSES}/${financeState.deleteExpenseData.date}/${financeState.deleteExpenseData.id}`).remove();
+    const { id, date } = financeState.deleteExpenseData;
+    console.log("🗑️ Deleting expense:", { id, date });
+    
+    await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}/${id}`).remove();
+    console.log("✅ Expense deleted successfully");
     showFinanceToast("Expense deleted", "success");
     
     closeFinanceDeleteModal();
@@ -542,8 +591,8 @@ async function confirmFinanceDelete() {
     renderExpenses();
     renderCharts();
   } catch (error) {
-    console.error("Error deleting expense:", error);
-    showFinanceToast("Failed to delete expense", "error");
+    console.error("❌ Error deleting expense:", error);
+    showFinanceToast(`Failed: ${error.message || "Unknown error"}`, "error");
   }
 }
 
