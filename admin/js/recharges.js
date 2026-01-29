@@ -1965,8 +1965,8 @@ async function fetchGuestSessionsForDate(date) {
 }
 
 async function fetchPanCafeEntriesForDate(date) {
-  // Use daily-summary which has per-member aggregates for the day
-  // This gives us member name and total recharge amount per member per day
+  // Use daily-summary which has per-member TOTALS for the day
+  // We return ONE entry per member with their daily total
   
   // Ensure Firebase is ready
   await initFirebaseForRecharges();
@@ -1997,41 +1997,21 @@ async function fetchPanCafeEntriesForDate(date) {
         const amount = Number(data.amount) || 0;
         const count = Number(data.count) || 1;
         if (amount > 0) {
-          // If there are multiple transactions, create separate entries for better matching
-          // Each entry represents the daily total divided by count (approximate per-transaction amount)
-          if (count > 1) {
-            // Create individual approximate entries for better sum-matching
-            const avgAmount = Math.round(amount / count);
-            for (let i = 0; i < count; i++) {
-              const entryAmount = (i === count - 1) ? (amount - avgAmount * (count - 1)) : avgAmount;
-              entries.push({
-                id: `${member}_${i}`,
-                member: member.toUpperCase().trim(),
-                amount: entryAmount,
-                count: 1,
-                time: "",
-                date: date,
-                totalForDay: amount,
-                transactionCount: count,
-                raw: data
-              });
-            }
-          } else {
-            entries.push({
-              id: `${member}_0`,
-              member: member.toUpperCase().trim(),
-              amount: amount,
-              count: count,
-              time: "",
-              date: date,
-              totalForDay: amount,
-              transactionCount: count,
-              raw: data
-            });
-          }
+          // Return ONE entry per member with their DAILY TOTAL
+          // We'll aggregate admin entries per member to compare totals
+          entries.push({
+            id: `${member}_daily`,
+            member: member.toUpperCase().trim(),
+            amount: amount,  // This is the TOTAL for the day
+            transactionCount: count,
+            time: "",
+            date: date,
+            isDailyTotal: true,
+            raw: data
+          });
         }
       });
-      console.log(`✅ Loaded ${entries.length} PanCafe entries from daily-summary`);
+      console.log(`✅ Loaded ${entries.length} PanCafe daily totals from daily-summary`);
       return entries;
     }
     
@@ -2091,109 +2071,87 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
   const usedPanCafeIds = new Set();
   const usedGuestIds = new Set();
   
-  // First pass: exact matches (member + amount)
+  // ========== AGGREGATE ADMIN ENTRIES BY MEMBER ==========
+  // Since PanCafe data is daily totals per member, we need to aggregate admin entries too
+  const adminByMember = {};
   adminEntries.forEach(admin => {
-    const matchingPanCafe = panCafeEntries.find(pc => 
-      membersMatch(pc.member, admin.member) && 
-      pc.amount === admin.amount && 
-      !usedPanCafeIds.has(pc.id)
-    );
-    
-    if (matchingPanCafe) {
-      results.push({
-        status: "matched",
+    const memberKey = admin.member.toUpperCase().trim();
+    if (!adminByMember[memberKey]) {
+      adminByMember[memberKey] = {
         member: admin.member,
-        adminAmount: admin.amount,
-        panCafeAmount: matchingPanCafe.amount,
-        adminId: admin.id,
-        panCafeId: matchingPanCafe.id,
-        adminData: admin,
-        panCafeData: matchingPanCafe
-      });
-      usedAdminIds.add(admin.id);
-      usedPanCafeIds.add(matchingPanCafe.id);
+        totalAmount: 0,
+        entries: [],
+        ids: []
+      };
     }
+    adminByMember[memberKey].totalAmount += admin.amount;
+    adminByMember[memberKey].entries.push(admin);
+    adminByMember[memberKey].ids.push(admin.id);
   });
   
-  // Second pass: SUM MATCH - Admin entry matches SUM of multiple PanCafe entries
-  // Example: Admin has ₹200 for "atodkar", PanCafe has ₹160 + ₹40 for "atodkar"
-  adminEntries.forEach(admin => {
-    if (usedAdminIds.has(admin.id)) return;
+  console.log("📊 Admin totals by member:", Object.entries(adminByMember).map(([m, d]) => `${m}: ₹${d.totalAmount} (${d.entries.length} entries)`));
+  console.log("📊 PanCafe totals by member:", panCafeEntries.map(pc => `${pc.member}: ₹${pc.amount} (${pc.transactionCount || 1} txns)`));
+  
+  // ========== FIRST PASS: Match daily totals per member ==========
+  Object.entries(adminByMember).forEach(([memberKey, adminData]) => {
+    // Skip guest terminals for now (handled separately)
+    if (isGuestTerminal(adminData.member)) return;
     
-    // Find ALL unused PanCafe entries for the same member
-    const sameMemberEntries = panCafeEntries.filter(pc => 
-      membersMatch(pc.member, admin.member) && 
+    // Find PanCafe entry for this member
+    const panCafeEntry = panCafeEntries.find(pc => 
+      membersMatch(pc.member, memberKey) && 
       !usedPanCafeIds.has(pc.id)
     );
     
-    if (sameMemberEntries.length > 1) {
-      // Calculate sum of all PanCafe entries for this member
-      const panCafeSum = sameMemberEntries.reduce((sum, pc) => sum + pc.amount, 0);
+    if (panCafeEntry) {
+      const adminTotal = adminData.totalAmount;
+      const panCafeTotal = panCafeEntry.amount;
+      const difference = adminTotal - panCafeTotal;
       
-      // Check if sum matches admin amount (with small tolerance for rounding)
-      if (Math.abs(panCafeSum - admin.amount) <= 1) {
-        // Mark all PanCafe entries as used
-        sameMemberEntries.forEach(pc => usedPanCafeIds.add(pc.id));
-        
+      // Check if totals match (within ₹1 tolerance for rounding)
+      if (Math.abs(difference) <= 1) {
+        // MATCHED - daily totals are equal
         results.push({
           status: "matched",
-          matchType: "sum",
-          member: admin.member,
-          adminAmount: admin.amount,
-          panCafeAmount: panCafeSum,
-          panCafeBreakdown: sameMemberEntries.map(pc => pc.amount).join(" + "),
-          panCafeCount: sameMemberEntries.length,
-          adminId: admin.id,
-          panCafeIds: sameMemberEntries.map(pc => pc.id),
-          adminData: admin,
-          panCafeData: sameMemberEntries,
-          note: `Sum match: ${sameMemberEntries.map(pc => "₹" + pc.amount).join(" + ")} = ₹${panCafeSum}`
+          matchType: "daily-total",
+          member: adminData.member,
+          adminAmount: adminTotal,
+          panCafeAmount: panCafeTotal,
+          adminEntryCount: adminData.entries.length,
+          panCafeEntryCount: panCafeEntry.transactionCount || 1,
+          adminIds: adminData.ids,
+          panCafeId: panCafeEntry.id,
+          adminData: adminData.entries,
+          panCafeData: panCafeEntry,
+          note: adminData.entries.length > 1 
+            ? `Admin: ${adminData.entries.map(e => "₹" + e.amount).join(" + ")} = ₹${adminTotal}`
+            : null
         });
-        usedAdminIds.add(admin.id);
+      } else {
+        // MISMATCH - same member but different totals
+        results.push({
+          status: "mismatch",
+          member: adminData.member,
+          adminAmount: adminTotal,
+          panCafeAmount: panCafeTotal,
+          difference: difference,
+          adminEntryCount: adminData.entries.length,
+          panCafeEntryCount: panCafeEntry.transactionCount || 1,
+          adminIds: adminData.ids,
+          panCafeId: panCafeEntry.id,
+          adminData: adminData.entries,
+          panCafeData: panCafeEntry,
+          note: `Admin total: ₹${adminTotal} (${adminData.entries.length} entries) | PanCafe total: ₹${panCafeTotal} (${panCafeEntry.transactionCount || 1} txns)`
+        });
       }
-    }
-  });
-  
-  // Third pass: same member, different amount (potential mismatch)
-  adminEntries.forEach(admin => {
-    if (usedAdminIds.has(admin.id)) return;
-    
-    const sameMember = panCafeEntries.find(pc => 
-      membersMatch(pc.member, admin.member) && 
-      !usedPanCafeIds.has(pc.id)
-    );
-    
-    if (sameMember) {
-      // Check if there are multiple entries that could be summed
-      const allSameMember = panCafeEntries.filter(pc => 
-        membersMatch(pc.member, admin.member) && 
-        !usedPanCafeIds.has(pc.id)
-      );
-      const panCafeSum = allSameMember.reduce((sum, pc) => sum + pc.amount, 0);
       
-      results.push({
-        status: "mismatch",
-        member: admin.member,
-        adminAmount: admin.amount,
-        panCafeAmount: sameMember.amount,
-        panCafeSum: allSameMember.length > 1 ? panCafeSum : null,
-        panCafeCount: allSameMember.length,
-        difference: admin.amount - panCafeSum,
-        adminId: admin.id,
-        panCafeId: sameMember.id,
-        adminData: admin,
-        panCafeData: sameMember,
-        note: allSameMember.length > 1 
-          ? `PanCafe has ${allSameMember.length} entries totaling ₹${panCafeSum}` 
-          : null
-      });
-      usedAdminIds.add(admin.id);
-      // Mark all same member entries as used
-      allSameMember.forEach(pc => usedPanCafeIds.add(pc.id));
+      // Mark as used
+      adminData.ids.forEach(id => usedAdminIds.add(id));
+      usedPanCafeIds.add(panCafeEntry.id);
     }
   });
   
-  // Third pass: guest session matching with Firebase data
+  // ========== SECOND PASS: Guest session matching ==========
   adminEntries.forEach(admin => {
     if (usedAdminIds.has(admin.id)) return;
     
@@ -2239,7 +2197,7 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
     }
   });
   
-  // Fourth pass: admin-only entries (not found in PanCafe and not guests)
+  // ========== THIRD PASS: Admin-only entries ==========
   adminEntries.forEach(admin => {
     if (usedAdminIds.has(admin.id)) return;
     
@@ -2253,7 +2211,7 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
     });
   });
   
-  // Fifth pass: pancafe-only entries (not found in Admin)
+  // ========== FOURTH PASS: PanCafe-only entries ==========
   panCafeEntries.forEach(pc => {
     if (usedPanCafeIds.has(pc.id)) return;
     
@@ -2261,13 +2219,19 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
       status: "pancafe-only",
       member: pc.member,
       panCafeAmount: pc.amount,
+      panCafeEntryCount: pc.transactionCount || 1,
       panCafeId: pc.id,
       panCafeData: pc
     });
   });
   
-  // Sort by member name
-  results.sort((a, b) => a.member.localeCompare(b.member));
+  // Sort by status priority, then member name
+  const statusOrder = { "matched": 0, "guest-verified": 1, "mismatch": 2, "admin-only": 3, "guest-session": 4, "pancafe-only": 5 };
+  results.sort((a, b) => {
+    const orderDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+    if (orderDiff !== 0) return orderDiff;
+    return a.member.localeCompare(b.member);
+  });
   
   return results;
 }
@@ -2321,25 +2285,21 @@ function renderSyncResults() {
     let detailsHtml = "";
     
     if (r.status === "matched") {
-      // Check if this is a sum match (multiple PanCafe entries = 1 Admin entry)
-      const isSumMatch = r.matchType === "sum" || r.panCafeCount > 1;
+      // Show daily total comparison
+      const adminEntryCount = r.adminEntryCount || 1;
+      const panCafeEntryCount = r.panCafeEntryCount || 1;
       
       detailsHtml = `
         <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
           <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
-            <div class="text-xs text-gray-500 mb-1">Admin Entry</div>
+            <div class="text-xs text-gray-500 mb-1">Admin (${adminEntryCount} ${adminEntryCount > 1 ? 'entries' : 'entry'})</div>
             <div style="color: #00f0ff;">₹${r.adminAmount}</div>
-            ${r.adminData?.note ? `<div class="text-xs text-gray-500 mt-1">📝 ${r.adminData.note}</div>` : ""}
+            ${r.note ? `<div class="text-xs text-gray-400 mt-1">${r.note}</div>` : ""}
           </div>
           <div class="p-2 rounded" style="background: rgba(0,0,0,0.3);">
-            <div class="text-xs text-gray-500 mb-1">PanCafe ${isSumMatch ? `(${r.panCafeCount} entries)` : 'Entry'}</div>
-            <div style="color: #00ff88;">
-              ${isSumMatch && r.panCafeBreakdown 
-                ? `<span class="text-xs">${r.panCafeBreakdown}</span> = ₹${r.panCafeAmount}` 
-                : `₹${r.panCafeAmount}`}
-            </div>
-            ${r.panCafeData?.time ? `<div class="text-xs text-gray-500 mt-1">⏰ ${r.panCafeData.time}</div>` : ""}
-            ${isSumMatch ? `<div class="text-xs mt-1" style="color: #b829ff;">🧮 Sum Match</div>` : ""}
+            <div class="text-xs text-gray-500 mb-1">PanCafe (${panCafeEntryCount} ${panCafeEntryCount > 1 ? 'txns' : 'txn'})</div>
+            <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
+            <div class="text-xs mt-1" style="color: #00ff88;">✓ Daily totals match</div>
           </div>
         </div>
       `;
@@ -2378,33 +2338,37 @@ function renderSyncResults() {
         </div>
       `;
     } else if (r.status === "pancafe-only") {
+      const panCafeEntryCount = r.panCafeEntryCount || 1;
       detailsHtml = `
         <div class="mt-2 p-2 rounded text-sm" style="background: rgba(255,0,68,0.1);">
           <div class="flex items-center justify-between">
             <span style="color: #00ff88;">₹${r.panCafeAmount}</span>
-            ${r.panCafeData?.time ? `<span class="text-xs text-gray-500">⏰ ${r.panCafeData.time}</span>` : ""}
+            <span class="text-xs text-gray-500">${panCafeEntryCount} ${panCafeEntryCount > 1 ? 'transactions' : 'transaction'}</span>
           </div>
-          <div class="text-xs text-gray-400 mt-1">This entry exists in PanCafe but not recorded in Admin</div>
+          <div class="text-xs text-gray-400 mt-1">This member recharged in PanCafe but not recorded in Admin</div>
         </div>
       `;
     } else if (r.status === "mismatch") {
       const diffColor = r.difference > 0 ? "#00ff88" : "#ff0044";
       const diffSign = r.difference > 0 ? "+" : "";
+      const adminEntryCount = r.adminEntryCount || 1;
+      const panCafeEntryCount = r.panCafeEntryCount || 1;
       detailsHtml = `
         <div class="grid grid-cols-3 gap-3 mt-2 text-sm">
           <div class="p-2 rounded text-center" style="background: rgba(0,240,255,0.1);">
-            <div class="text-xs text-gray-500 mb-1">Admin</div>
+            <div class="text-xs text-gray-500 mb-1">Admin (${adminEntryCount})</div>
             <div style="color: #00f0ff;">₹${r.adminAmount}</div>
           </div>
           <div class="p-2 rounded text-center" style="background: rgba(0,255,136,0.1);">
-            <div class="text-xs text-gray-500 mb-1">PanCafe</div>
+            <div class="text-xs text-gray-500 mb-1">PanCafe (${panCafeEntryCount})</div>
             <div style="color: #00ff88;">₹${r.panCafeAmount}</div>
           </div>
           <div class="p-2 rounded text-center" style="background: rgba(184,41,255,0.1);">
             <div class="text-xs text-gray-500 mb-1">Difference</div>
-            <div style="color: ${diffColor};">${diffSign}₹${r.difference}</div>
+            <div style="color: ${diffColor};">${diffSign}₹${Math.abs(r.difference)}</div>
           </div>
         </div>
+        ${r.note ? `<div class="text-xs text-gray-400 mt-2 p-2 rounded" style="background: rgba(0,0,0,0.2);">ℹ️ ${r.note}</div>` : ""}
       `;
     }
     
