@@ -296,13 +296,30 @@ function calculateSummary() {
   // Total revenue = all cash collected + all UPI collected
   totalRevenue = cashTotal + upiTotal;
 
-  // Expenses
-  let totalExpenses = 0;
+  // Expenses - track by payment mode
+  let totalExpenses = 0, expenseCash = 0, expenseOnline = 0;
   expenses.forEach(exp => {
-    totalExpenses += exp.amount || 0;
+    const amount = exp.amount || ((exp.cash || 0) + (exp.online || 0));
+    totalExpenses += amount;
+    
+    // Track expenses by payment mode
+    if (exp.cash !== undefined || exp.online !== undefined) {
+      // New split format
+      expenseCash += exp.cash || 0;
+      expenseOnline += exp.online || 0;
+    } else if (exp.paymentMode === "cash") {
+      expenseCash += amount;
+    } else if (exp.paymentMode === "online" || exp.paymentMode === "upi") {
+      expenseOnline += amount;
+    } else {
+      // Default: assume cash for old entries without payment mode
+      expenseCash += amount;
+    }
   });
 
   const profit = totalRevenue - totalExpenses;
+  const cashProfit = cashTotal - expenseCash;
+  const onlineProfit = upiTotal - expenseOnline;
 
   // Usage stats from daily summaries
   let totalMinutes = 0, totalSessions = 0;
@@ -354,8 +371,23 @@ function calculateSummary() {
   $("finMinutes").textContent = `${formatNumber(hours)}h`;
   $("finSessions").textContent = `${formatNumber(totalSessions)} sessions`;
 
+  // Cash & Online summary with profit breakdown
   $("finCash").textContent = `₹${formatNumber(cashTotal)}`;
   $("finUpi").textContent = `₹${formatNumber(upiTotal)}`;
+  
+  // Expense breakdown by mode
+  if ($("finCashExpense")) $("finCashExpense").textContent = `₹${formatNumber(expenseCash)}`;
+  if ($("finOnlineExpense")) $("finOnlineExpense").textContent = `₹${formatNumber(expenseOnline)}`;
+  
+  // Profit breakdown by mode
+  if ($("finCashProfit")) {
+    $("finCashProfit").textContent = `₹${formatNumber(cashProfit)}`;
+    $("finCashProfit").style.color = cashProfit < 0 ? "var(--neon-red)" : "var(--neon-cyan)";
+  }
+  if ($("finOnlineProfit")) {
+    $("finOnlineProfit").textContent = `₹${formatNumber(onlineProfit)}`;
+    $("finOnlineProfit").style.color = onlineProfit < 0 ? "var(--neon-red)" : "var(--neon-cyan)";
+  }
 
   $("finActiveMembers").textContent = activeMembers;
   $("finNewMembers").textContent = newMembers;
@@ -459,17 +491,33 @@ function openFinanceExpenseModal(expenseId = null) {
   document.querySelectorAll(".fin-cat-btn").forEach(btn => btn.classList.remove("selected"));
   document.getElementById("finExpenseCategory").value = "";
 
+  // Reset payment fields
+  const cashInput = document.getElementById("finExpenseCash");
+  const onlineInput = document.getElementById("finExpenseOnline");
+  if (cashInput) cashInput.value = "";
+  if (onlineInput) onlineInput.value = "";
+  updateExpenseTotal();
+
   if (expenseId) {
     title.textContent = "EDIT EXPENSE";
     const expense = financeState.expenses.find(e => e.id === expenseId);
     console.log("📝 Found expense for edit:", expense);
     if (expense) {
       document.getElementById("finExpenseId").value = expenseId;
-      document.getElementById("finExpenseAmount").value = expense.amount;
       document.getElementById("finExpenseDate").value = expense.date;
       document.getElementById("finExpenseDesc").value = expense.description || "";
       document.getElementById("finExpenseVendor").value = expense.vendor || "";
       selectFinanceCategory(expense.category);
+      
+      // Populate cash/online split
+      if (expense.cash !== undefined || expense.online !== undefined) {
+        if (cashInput) cashInput.value = expense.cash || "";
+        if (onlineInput) onlineInput.value = expense.online || "";
+      } else {
+        // Old format - put full amount in cash by default
+        if (cashInput) cashInput.value = expense.amount || "";
+      }
+      updateExpenseTotal();
     } else {
       console.error("❌ Expense not found in state:", expenseId);
       showFinanceToast("Expense not found", "error");
@@ -505,7 +553,9 @@ async function saveFinanceExpense(event) {
   }
 
   const category = document.getElementById("finExpenseCategory").value;
-  const amount = parseFloat(document.getElementById("finExpenseAmount").value);
+  const cash = parseFloat(document.getElementById("finExpenseCash")?.value) || 0;
+  const online = parseFloat(document.getElementById("finExpenseOnline")?.value) || 0;
+  const amount = cash + online;
   const date = document.getElementById("finExpenseDate").value;
   const description = document.getElementById("finExpenseDesc").value.trim();
   const vendor = document.getElementById("finExpenseVendor").value.trim();
@@ -514,8 +564,8 @@ async function saveFinanceExpense(event) {
     showFinanceToast("Please select a category", "error");
     return;
   }
-  if (!amount || amount <= 0) {
-    showFinanceToast("Please enter a valid amount", "error");
+  if (amount <= 0) {
+    showFinanceToast("Please enter cash or online amount", "error");
     return;
   }
   if (!date) {
@@ -526,7 +576,9 @@ async function saveFinanceExpense(event) {
   const session = getStaffSession();
   const expenseData = {
     category,
-    amount,
+    amount,  // Total for backward compatibility
+    cash,    // Cash portion
+    online,  // Online/UPI portion
     description,
     vendor,
     admin: session?.name || session?.email?.split("@")[0] || "Admin",
@@ -666,6 +718,20 @@ function renderExpenses() {
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
     ` : '';
+    
+    // Build payment mode badges
+    const amount = exp.amount || ((exp.cash || 0) + (exp.online || 0));
+    let paymentBadges = '';
+    if (exp.cash > 0) {
+      paymentBadges += `<span class="text-xs px-1.5 py-0.5 rounded" style="background: rgba(0,255,136,0.2); color: #00ff88;">💵${formatNumber(exp.cash)}</span>`;
+    }
+    if (exp.online > 0) {
+      paymentBadges += `<span class="text-xs px-1.5 py-0.5 rounded ml-1" style="background: rgba(184,41,255,0.2); color: #b829ff;">📱${formatNumber(exp.online)}</span>`;
+    }
+    if (!exp.cash && !exp.online && amount > 0) {
+      // Old format - show just total
+      paymentBadges = `<span class="text-xs text-gray-500">💵 Cash</span>`;
+    }
 
     return `
       <div class="expense-item flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-black/20 border border-gray-800 hover:border-gray-700 transition-colors">
@@ -683,7 +749,10 @@ function renderExpenses() {
         </div>
         <div class="flex-1 text-gray-300 text-sm">${exp.description || "-"}</div>
         <div class="flex items-center justify-between md:justify-end gap-4">
-          <span class="font-orbitron font-bold text-lg" style="color: var(--neon-red);">₹${formatNumber(exp.amount)}</span>
+          <div class="text-right">
+            <div class="font-orbitron font-bold text-lg" style="color: var(--neon-red);">₹${formatNumber(amount)}</div>
+            <div class="flex gap-1 justify-end">${paymentBadges}</div>
+          </div>
           <div class="hidden md:flex">${actions}</div>
         </div>
       </div>
@@ -860,6 +929,19 @@ function renderExpenseChart() {
   });
 }
 
+// ==================== EXPENSE FORM HELPERS ====================
+
+function updateExpenseTotal() {
+  const cash = parseFloat(document.getElementById("finExpenseCash")?.value) || 0;
+  const online = parseFloat(document.getElementById("finExpenseOnline")?.value) || 0;
+  const total = cash + online;
+  const totalEl = document.getElementById("finExpenseTotal");
+  if (totalEl) {
+    totalEl.textContent = `₹${formatNumber(total)}`;
+    totalEl.style.color = total > 0 ? "var(--neon-cyan)" : "var(--text-secondary)";
+  }
+}
+
 // ==================== EXPORT ====================
 
 function exportFinanceExpenses() {
@@ -945,3 +1027,4 @@ window.closeFinanceDeleteModal = closeFinanceDeleteModal;
 window.confirmFinanceDelete = confirmFinanceDelete;
 window.filterFinanceExpenses = filterFinanceExpenses;
 window.exportFinanceExpenses = exportFinanceExpenses;
+window.updateExpenseTotal = updateExpenseTotal;
