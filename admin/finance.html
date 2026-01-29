@@ -123,6 +123,8 @@
     /* Expense Table */
     .expense-table {
       width: 100%;
+      min-width: 100%;
+      table-layout: auto;
       border-collapse: separate;
       border-spacing: 0;
     }
@@ -137,6 +139,11 @@
       letter-spacing: 0.05em;
       color: var(--neon-red);
       border-bottom: 1px solid var(--card-border);
+      white-space: nowrap;
+    }
+
+    .expense-table th:nth-child(3) {
+      width: 30%;
     }
 
     .expense-table td {
@@ -147,6 +154,11 @@
 
     .expense-table tr:hover td {
       background: rgba(255, 255, 255, 0.02);
+    }
+
+    .overflow-x-auto {
+      overflow-x: auto;
+      width: 100%;
     }
 
     /* Category Badge */

@@ -34,6 +34,7 @@ let selectedMonth = new Date(); // Current month being viewed
 let expenses = [];
 let recharges = {};
 let members = [];
+let dailySummaries = {}; // Daily summary data from FDB
 let currentFilter = "all";
 let editingExpenseId = null;
 let deleteExpenseData = null;
@@ -46,14 +47,40 @@ let fdbDb = null;
 
 // ==================== FIREBASE INIT ====================
 
+// Wait for firebase global to be available (mobile can be slow to load)
+function waitForFirebase(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (typeof firebase !== 'undefined' && firebase.apps) {
+      resolve();
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (typeof firebase !== 'undefined' && firebase.apps) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Firebase SDK not loaded'));
+      }
+    }, 100);
+  });
+}
+
 async function initFirebase() {
   try {
+    // Wait for Firebase SDK to load
+    await waitForFirebase();
+    console.log("🔥 Firebase SDK loaded");
+
     // Initialize booking database (for expenses, recharges)
     let bookingApp = firebase.apps.find(a => a.name === BOOKING_APP_NAME);
     if (!bookingApp) {
       bookingApp = firebase.initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
     }
     bookingDb = bookingApp.database();
+    console.log("✅ Booking DB initialized");
 
     // Initialize FDB database (for members, sessions, daily-summary)
     let fdbApp = firebase.apps.find(a => a.name === FDB_APP_NAME);
@@ -61,8 +88,9 @@ async function initFirebase() {
       fdbApp = firebase.initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
     }
     fdbDb = fdbApp.database();
+    console.log("✅ FDB initialized");
 
-    console.log("✅ Finance: Firebase initialized");
+    console.log("✅ Finance: Firebase fully initialized");
     return true;
   } catch (error) {
     console.error("❌ Finance: Firebase init failed:", error);
@@ -107,7 +135,11 @@ async function init() {
     if (!checkPermissions()) return;
 
     // Initialize Firebase
-    await initFirebase();
+    const fbInit = await initFirebase();
+    if (!fbInit) {
+      document.getElementById("loading-status").textContent = "Failed to connect to database";
+      return;
+    }
 
     // Set initial month
     selectedMonth = getISTDate();
@@ -139,7 +171,8 @@ async function loadAllData() {
     await Promise.all([
       loadExpenses(),
       loadRecharges(),
-      loadMembers()
+      loadMembers(),
+      loadDailySummaries()
     ]);
 
     // Calculate and display summaries
@@ -207,6 +240,33 @@ async function loadMembers() {
   } catch (error) {
     console.error("Error loading members:", error);
     members = [];
+  }
+}
+
+async function loadDailySummaries() {
+  const monthKey = getMonthKey(selectedMonth);
+  const startDate = `${monthKey}-01`;
+  const endDate = `${monthKey}-31`;
+
+  try {
+    // Fetch all daily summaries
+    const summaryRef = fdbDb.ref(FB_PATHS.DAILY_SUMMARY);
+    const snapshot = await summaryRef.once("value");
+    const allSummaries = snapshot.val() || {};
+
+    dailySummaries = {};
+    
+    // Filter summaries for selected month
+    Object.entries(allSummaries).forEach(([date, summary]) => {
+      if (date >= startDate && date <= endDate) {
+        dailySummaries[date] = summary;
+      }
+    });
+
+    console.log(`✅ Loaded ${Object.keys(dailySummaries).length} daily summaries for ${monthKey}`);
+  } catch (error) {
+    console.error("Error loading daily summaries:", error);
+    dailySummaries = {};
   }
 }
 
@@ -286,7 +346,7 @@ function calculateMonthlySummary() {
     profitEl.style.color = "var(--neon-cyan)";
   }
 
-  // Calculate total minutes (placeholder - would need session data)
+  // Calculate total minutes from daily summaries (also updates sessions stats)
   const totalMinutes = calculateTotalMinutes();
   const hours = Math.floor(totalMinutes / 60);
   document.getElementById("totalMinutes").textContent = `${formatNumber(hours)}h`;
@@ -296,11 +356,9 @@ function calculateMonthlySummary() {
   document.getElementById("upiTotal").textContent = `₹${formatNumber(upiTotal)}`;
   document.getElementById("creditTotal").textContent = `₹${formatNumber(creditTotal)}`;
 
-  // Member stats
+  // Member stats (sessions stats are updated by calculateTotalMinutes)
   document.getElementById("activeMembers").textContent = activeMembers;
   document.getElementById("newMembers").textContent = newMembers;
-  document.getElementById("totalSessions").textContent = "-";
-  document.getElementById("avgSession").textContent = "-";
 
   // Calculate month-over-month changes
   calculateMoMChanges(totalRevenue, totalExpenses, profit);
@@ -309,9 +367,46 @@ function calculateMonthlySummary() {
 }
 
 function calculateTotalMinutes() {
-  // This would need to fetch session data from FDB
-  // For now, return a placeholder
-  return 0;
+  // Calculate total minutes from daily summaries
+  let totalMinutes = 0;
+  let totalSessions = 0;
+
+  Object.values(dailySummaries).forEach(summary => {
+    // Check for different data structures
+    if (summary.total_minutes !== undefined) {
+      totalMinutes += summary.total_minutes || 0;
+    } else if (summary.totals?.minutes !== undefined) {
+      totalMinutes += summary.totals.minutes || 0;
+    } else if (summary.by_member) {
+      // Sum up from individual members
+      Object.values(summary.by_member).forEach(member => {
+        totalMinutes += member.minutes || member.total_minutes || 0;
+        totalSessions += member.sessions || member.session_count || 1;
+      });
+    }
+
+    // Count sessions
+    if (summary.total_sessions !== undefined) {
+      totalSessions += summary.total_sessions || 0;
+    } else if (summary.totals?.sessions !== undefined) {
+      totalSessions += summary.totals.sessions || 0;
+    } else if (summary.session_count !== undefined) {
+      totalSessions += summary.session_count || 0;
+    }
+  });
+
+  // Update total sessions in UI
+  document.getElementById("totalSessions").textContent = formatNumber(totalSessions);
+  
+  // Calculate average session length
+  if (totalSessions > 0) {
+    const avgMinutes = Math.round(totalMinutes / totalSessions);
+    const avgHours = Math.floor(avgMinutes / 60);
+    const avgMins = avgMinutes % 60;
+    document.getElementById("avgSession").textContent = avgHours > 0 ? `${avgHours}h ${avgMins}m` : `${avgMins}m`;
+  }
+
+  return totalMinutes;
 }
 
 async function calculateMoMChanges(currentRevenue, currentExpenses, currentProfit) {
@@ -457,15 +552,34 @@ async function saveExpense(event) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
 
+    // Ensure Firebase is initialized
+    if (!bookingDb) {
+      console.error("Firebase booking database not initialized");
+      await initFirebase();
+      if (!bookingDb) {
+        throw new Error("Could not initialize Firebase");
+      }
+    }
+
+    console.log("📝 Saving expense:", { category, amount, date, editingExpenseId });
+
     if (editingExpenseId) {
       // Update existing expense
       const existingExpense = expenses.find(e => e.id === editingExpenseId);
-      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${existingExpense.date}/${editingExpenseId}`).update(expenseData);
+      if (!existingExpense) {
+        throw new Error("Could not find expense to edit");
+      }
+      const updatePath = `${FB_PATHS.EXPENSES}/${existingExpense.date}/${editingExpenseId}`;
+      console.log("📝 Updating at path:", updatePath);
+      await bookingDb.ref(updatePath).update(expenseData);
       showToast("Expense updated successfully", "success");
     } else {
       // Create new expense
       expenseData.createdAt = new Date().toISOString();
-      await bookingDb.ref(`${FB_PATHS.EXPENSES}/${date}`).push(expenseData);
+      const newPath = `${FB_PATHS.EXPENSES}/${date}`;
+      console.log("📝 Creating at path:", newPath, expenseData);
+      const newRef = await bookingDb.ref(newPath).push(expenseData);
+      console.log("✅ Expense created with ID:", newRef.key);
       showToast("Expense added successfully", "success");
     }
 
@@ -476,8 +590,9 @@ async function saveExpense(event) {
     renderCharts();
 
   } catch (error) {
-    console.error("Error saving expense:", error);
-    showToast("Failed to save expense", "error");
+    console.error("❌ Error saving expense:", error);
+    console.error("Error details:", error.message, error.code);
+    showToast(`Failed to save expense: ${error.message || "Unknown error"}`, "error");
   } finally {
     const saveBtn = document.getElementById("saveExpenseBtn");
     saveBtn.disabled = false;
