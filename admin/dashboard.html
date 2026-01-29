@@ -2297,9 +2297,9 @@
           return;
         }
         
-        // Backend writes `last_sync`, not `last_fdb_sync` – support both for safety.
-        const lastFdbSync = data?.last_fdb_sync || data?.last_sync;
-        console.log('⏰ FDB last sync:', lastFdbSync);
+        // Backend writes `last_sync` to sync-meta root. Prefer this over old `last_fdb_sync` field.
+        const lastFdbSync = data?.last_sync || data?.last_fdb_sync;
+        console.log('⏰ FDB last sync:', lastFdbSync, '(last_sync:', data?.last_sync, ', last_fdb_sync:', data?.last_fdb_sync, ')');
         console.log('⏰ Terminals last sync:', data?.terminals?.last_sync);
         
         // Update FDB status
