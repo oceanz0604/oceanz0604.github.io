@@ -270,30 +270,38 @@ if (elements.datePicker) {
 // Wrapped in async function to ensure Firebase is ready (important for mobile)
 async function loadMembersForRecharges() {
   try {
-    await initFirebaseForRecharges();
-    if (!fdbDb) {
-      console.error("❌ fdbDb not ready");
+    const ready = await initFirebaseForRecharges();
+    if (!ready || !fdbDb) {
+      console.error("❌ fdbDb not ready for members load");
+      // Retry after delay
+      setTimeout(() => loadMembersForRecharges(), 2000);
       return;
     }
     
+    console.log("🔄 Loading members from Firebase...");
     const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
+    
+    if (!members || members.length === 0) {
+      console.warn("⚠️ No members returned from SharedCache");
+      allMembers = [];
+      return;
+    }
+    
     allMembers = members.map(m => ({
-      USERNAME: m.USERNAME,
-      DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
+      // Use both username (key) and USERNAME (profile) for robustness
+      USERNAME: m.USERNAME || m.username || "",
+      DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME || m.username || "",
       FIRSTNAME: m.FIRSTNAME || "",
       LASTNAME: m.LASTNAME || "",
       BALANCE: m.balance?.current_balance || 0
-    }));
+    })).filter(m => m.USERNAME); // Filter out any members without username
     
-    // Update member search if initialized
-    if (memberSearch) {
-      memberSearch.setMembers(allMembers);
-    }
-    
-    console.log(`✅ Loaded ${allMembers.length} members (SharedCache)`);
+    console.log(`✅ Loaded ${allMembers.length} members for autocomplete`);
   } catch (err) {
-    console.error("Failed to load members:", err);
+    console.error("❌ Failed to load members:", err);
     allMembers = [];
+    // Retry after delay
+    setTimeout(() => loadMembersForRecharges(), 3000);
   }
 }
 
@@ -301,7 +309,7 @@ async function loadMembersForRecharges() {
 loadMembersForRecharges();
 
 elements.memberInput?.addEventListener("input", () => {
-  const q = elements.memberInput.value.toLowerCase();
+  const q = (elements.memberInput.value || "").toLowerCase().trim();
   elements.suggestionsBox.innerHTML = "";
 
   if (!q) {
@@ -309,14 +317,41 @@ elements.memberInput?.addEventListener("input", () => {
     return;
   }
 
+  // If members not loaded yet, show loading message
+  if (!allMembers || allMembers.length === 0) {
+    const div = document.createElement("div");
+    div.className = "px-3 py-2 text-gray-500 text-sm";
+    div.textContent = "Loading members...";
+    elements.suggestionsBox.appendChild(div);
+    elements.suggestionsBox.classList.remove("hidden");
+    return;
+  }
+
   const matches = allMembers
-    .filter(m => m.USERNAME?.toLowerCase().includes(q))
-    .slice(0, 6);
+    .filter(m => {
+      const username = (m.USERNAME || "").toLowerCase();
+      const displayName = (m.DISPLAY_NAME || "").toLowerCase();
+      const firstName = (m.FIRSTNAME || "").toLowerCase();
+      return username.includes(q) || displayName.includes(q) || firstName.includes(q);
+    })
+    .slice(0, 8);
+
+  if (matches.length === 0) {
+    const div = document.createElement("div");
+    div.className = "px-3 py-2 text-gray-500 text-sm";
+    div.textContent = `No members found for "${q}"`;
+    elements.suggestionsBox.appendChild(div);
+    elements.suggestionsBox.classList.remove("hidden");
+    return;
+  }
 
   matches.forEach(m => {
     const div = document.createElement("div");
     div.className = "px-3 py-2 hover:bg-gray-700 cursor-pointer";
-    div.textContent = m.USERNAME;
+    div.innerHTML = `<span class="font-medium">${m.USERNAME}</span>`;
+    if (m.DISPLAY_NAME && m.DISPLAY_NAME !== m.USERNAME) {
+      div.innerHTML += `<span class="text-xs text-gray-500 ml-2">${m.DISPLAY_NAME}</span>`;
+    }
     div.onclick = () => {
       elements.memberInput.value = m.USERNAME;
       elements.suggestionsBox.classList.add("hidden");
@@ -1930,9 +1965,8 @@ async function fetchGuestSessionsForDate(date) {
 }
 
 async function fetchPanCafeEntriesForDate(date) {
-  // OPTIMIZATION: Use history-by-date index instead of scanning ALL history
-  // This is MUCH more efficient - downloads only entries for the specific date
-  // Instead of downloading entire history for ALL users
+  // Use daily-summary which has per-member aggregates for the day
+  // This gives us member name and total recharge amount per member per day
   
   // Ensure Firebase is ready
   await initFirebaseForRecharges();
@@ -1952,38 +1986,61 @@ async function fetchPanCafeEntriesForDate(date) {
   };
   
   try {
-    // Try using pre-indexed history-by-date path first
-    console.log(`🔍 Fetching history-by-date for ${date}...`);
-    const byDateSnap = await fetchWithTimeout(fdbDb.ref(`${FB_PATHS.HISTORY_BY_DATE}/${date}`));
-    const byDateData = byDateSnap.val();
+    // Fetch daily-summary which has per-member totals for the day
+    console.log(`🔍 Fetching daily-summary for ${date}...`);
+    const summarySnap = await fetchWithTimeout(fdbDb.ref(`${FB_PATHS.DAILY_SUMMARY}/${date}/by_member`));
+    const summaryData = summarySnap.val();
     
-    if (byDateData) {
+    if (summaryData && Object.keys(summaryData).length > 0) {
       const entries = [];
-      Object.entries(byDateData).forEach(([recordId, record]) => {
-        const charge = Number(record.CHARGE) || 0;
-        if (charge > 0) {
-          entries.push({
-            id: recordId,
-            member: (record.USERNAME || record.username || "").toUpperCase().trim(),
-            amount: charge,
-            balance: record.BALANCE,
-            time: record.TIME,
-            date: record.DATE,
-            raw: record
-          });
+      Object.entries(summaryData).forEach(([member, data]) => {
+        const amount = Number(data.amount) || 0;
+        const count = Number(data.count) || 1;
+        if (amount > 0) {
+          // If there are multiple transactions, create separate entries for better matching
+          // Each entry represents the daily total divided by count (approximate per-transaction amount)
+          if (count > 1) {
+            // Create individual approximate entries for better sum-matching
+            const avgAmount = Math.round(amount / count);
+            for (let i = 0; i < count; i++) {
+              const entryAmount = (i === count - 1) ? (amount - avgAmount * (count - 1)) : avgAmount;
+              entries.push({
+                id: `${member}_${i}`,
+                member: member.toUpperCase().trim(),
+                amount: entryAmount,
+                count: 1,
+                time: "",
+                date: date,
+                totalForDay: amount,
+                transactionCount: count,
+                raw: data
+              });
+            }
+          } else {
+            entries.push({
+              id: `${member}_0`,
+              member: member.toUpperCase().trim(),
+              amount: amount,
+              count: count,
+              time: "",
+              date: date,
+              totalForDay: amount,
+              transactionCount: count,
+              raw: data
+            });
+          }
         }
       });
-      console.log(`✅ Loaded ${entries.length} PanCafe entries from history-by-date index`);
+      console.log(`✅ Loaded ${entries.length} PanCafe entries from daily-summary`);
       return entries;
     }
     
-    // No data in history-by-date index
-    console.log(`📭 No history-by-date data for ${date}`);
+    // No data found
+    console.log(`📭 No PanCafe data found for ${date}`);
     return [];
     
   } catch (e) {
-    console.warn("⚠️ history-by-date fetch failed:", e.message);
-    // Don't fallback to full scan - it's too slow
+    console.warn("⚠️ PanCafe fetch failed:", e.message);
     return [];
   }
 }

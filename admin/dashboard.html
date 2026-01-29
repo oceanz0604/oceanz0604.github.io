@@ -2288,6 +2288,15 @@
         const data = await response.json();
         console.log('📦 Sync metadata received:', data);
         
+        if (!data || Object.keys(data).length === 0) {
+          console.warn('⚠️ No sync metadata found - sync may not have run yet');
+          ['fdb', 'terminals'].forEach(type => {
+            const el = document.getElementById(`${type}LastSync`);
+            if (el) el.textContent = 'No sync data';
+          });
+          return;
+        }
+        
         // Backend writes `last_sync`, not `last_fdb_sync` – support both for safety.
         const lastFdbSync = data?.last_fdb_sync || data?.last_sync;
         console.log('⏰ FDB last sync:', lastFdbSync);
@@ -2308,33 +2317,50 @@
       }
     }
     
+    // Also fetch sync times when page loads (not just when panel opens)
+    document.addEventListener('DOMContentLoaded', () => {
+      // Delay slightly to ensure elements are ready
+      setTimeout(fetchLastSyncTimes, 500);
+    });
+    
     // Update sync status UI for a specific type
     function updateSyncStatusUI(type, lastSync, recordCount, status) {
       const dotEl = document.getElementById(`${type}StatusDot`);
       const textEl = document.getElementById(`${type}LastSync`);
       
-      if (!textEl) return;
+      console.log(`🔄 Updating ${type} UI:`, { lastSync, recordCount, status, hasTextEl: !!textEl });
+      
+      if (!textEl) {
+        console.warn(`⚠️ Element #${type}LastSync not found`);
+        return;
+      }
       
       if (lastSync) {
-        const timeAgo = getRelativeTime(lastSync);
-        const isRecent = isWithinMinutes(lastSync, type === 'terminals' ? 5 : 60);
-        
-        if (dotEl) {
-          dotEl.className = (status === 'ok' || isRecent) 
-            ? 'w-2 h-2 rounded-full bg-green-500' 
-            : 'w-2 h-2 rounded-full bg-yellow-500';
+        try {
+          const timeAgo = getRelativeTime(lastSync);
+          const isRecent = isWithinMinutes(lastSync, type === 'terminals' ? 5 : 60);
+          
+          if (dotEl) {
+            dotEl.className = (status === 'ok' || isRecent) 
+              ? 'w-2 h-2 rounded-full bg-green-500' 
+              : 'w-2 h-2 rounded-full bg-yellow-500';
+          }
+          
+          let text = timeAgo;
+          if (recordCount !== null && recordCount !== undefined) {
+            text += ` (${recordCount} new)`;
+          }
+          textEl.textContent = text;
+          textEl.title = new Date(lastSync).toLocaleString();
+          console.log(`✅ ${type} UI updated: ${text}`);
+        } catch (e) {
+          console.error(`❌ Error updating ${type} UI:`, e);
+          textEl.textContent = 'Error';
         }
-        
-        let text = timeAgo;
-        if (recordCount !== null && recordCount !== undefined) {
-          text += ` (${recordCount} new)`;
-        }
-        textEl.textContent = text;
-        textEl.title = new Date(lastSync).toLocaleString();
-        
       } else {
         if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-gray-600';
         textEl.textContent = 'Never synced';
+        console.log(`ℹ️ ${type}: Never synced`);
       }
     }
     
