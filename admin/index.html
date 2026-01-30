@@ -421,6 +421,16 @@
           }
         } catch (err) {
           console.error("❌ Staff session error:", err);
+          // Show error to user (e.g., disabled account)
+          const errorDiv = document.getElementById("loginError");
+          if (errorDiv) {
+            errorDiv.textContent = "⚠️ " + (err.message || "Login failed");
+            errorDiv.classList.remove("hidden");
+          }
+          // Sign out the Firebase user since they can't use the app
+          await auth.signOut();
+          document.getElementById("login-container").classList.remove("hidden");
+          return;
         }
         
         // Verify session was created before redirecting

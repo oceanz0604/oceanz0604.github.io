@@ -211,33 +211,37 @@ function renderStaffDashboard(container, staff, activities) {
 
 function renderStaffCard(id, member) {
   const role = ROLES[member.role] || ROLES.STAFF;
-  const statusColor = member.active ? "#00ff88" : "#666";
+  const isDisabled = member.disabled === true;
+  const statusColor = isDisabled ? "#ff0044" : (member.active ? "#00ff88" : "#666");
   const currentSession = getStaffSession();
   const isCurrentUser = member.email?.toLowerCase() === currentSession?.email?.toLowerCase();
-  const canModify = hasPermission("staff") && !isCurrentUser;
+  const canModify = hasPermission("staff") && !isCurrentUser && !isDisabled;
   const currentRole = ROLES[currentSession?.role];
   const canChangeRole = currentSession?.role === "SUPER_ADMIN" || (currentRole && role.level < currentRole.level);
   
   return `
-    <div class="flex items-center justify-between p-3 rounded-lg transition-all hover:bg-gray-800/30" 
-      style="background: rgba(0,0,0,0.2); border-left: 3px solid ${role.color}; ${isCurrentUser ? 'box-shadow: 0 0 10px ' + role.color + '40;' : ''}">
+    <div class="flex items-center justify-between p-3 rounded-lg transition-all hover:bg-gray-800/30 ${isDisabled ? 'opacity-50' : ''}" 
+      style="background: rgba(0,0,0,0.2); border-left: 3px solid ${isDisabled ? '#ff0044' : role.color}; ${isCurrentUser ? 'box-shadow: 0 0 10px ' + role.color + '40;' : ''}">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-lg flex items-center justify-center font-orbitron font-bold text-lg relative"
-          style="background: ${role.color}20; color: ${role.color};">
+          style="background: ${isDisabled ? '#ff004420' : role.color + '20'}; color: ${isDisabled ? '#ff0044' : role.color};">
           ${member.name?.charAt(0).toUpperCase() || "?"}
           ${isCurrentUser ? '<span class="absolute -top-1 -right-1 text-xs">👤</span>' : ''}
+          ${isDisabled ? '<span class="absolute -bottom-1 -right-1 text-xs">🚫</span>' : ''}
         </div>
         <div>
-          <p class="font-orbitron text-sm flex items-center gap-2" style="color: #00f0ff;">
+          <p class="font-orbitron text-sm flex items-center gap-2" style="color: ${isDisabled ? '#ff0044' : '#00f0ff'};">
             ${member.name || "Unknown"}
             ${isCurrentUser ? '<span class="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-normal">YOU</span>' : ''}
+            ${isDisabled ? '<span class="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-normal">DISABLED</span>' : ''}
           </p>
           <p class="text-xs text-gray-500">${member.email || "No email"}</p>
-          ${member.lastLogin ? `<p class="text-xs text-gray-600">Last: ${new Date(member.lastLogin).toLocaleDateString()}</p>` : ''}
+          ${isDisabled && member.disabledAt ? `<p class="text-xs text-red-400">Disabled: ${new Date(member.disabledAt).toLocaleDateString()}</p>` : 
+            (member.lastLogin ? `<p class="text-xs text-gray-600">Last: ${new Date(member.lastLogin).toLocaleDateString()}</p>` : '')}
         </div>
       </div>
       <div class="flex items-center gap-3">
-        ${canModify && canChangeRole ? `
+        ${!isDisabled && canModify && canChangeRole ? `
           <select onchange="changeStaffRole('${id}', this.value)" 
             class="text-xs px-2 py-1 rounded font-orbitron cursor-pointer" 
             style="background: ${role.color}20; color: ${role.color}; border: 1px solid ${role.color}40;">
@@ -247,17 +251,22 @@ function renderStaffCard(id, member) {
             }).join('')}
           </select>
         ` : `
-          <span class="text-xs px-2 py-1 rounded font-orbitron" style="background: ${role.color}20; color: ${role.color};">
-            ${role.icon} ${role.name}
+          <span class="text-xs px-2 py-1 rounded font-orbitron" style="background: ${isDisabled ? '#ff004420' : role.color + '20'}; color: ${isDisabled ? '#ff0044' : role.color};">
+            ${isDisabled ? '🚫' : role.icon} ${isDisabled ? 'Disabled' : role.name}
           </span>
         `}
-        <div class="w-2 h-2 rounded-full ${member.active ? 'animate-pulse' : ''}" style="background: ${statusColor};" title="${member.active ? 'Online' : 'Offline'}"></div>
+        <div class="w-2 h-2 rounded-full ${!isDisabled && member.active ? 'animate-pulse' : ''}" style="background: ${statusColor};" title="${isDisabled ? 'Disabled' : (member.active ? 'Online' : 'Offline')}"></div>
         ${canModify ? `
           <button onclick="openEditStaffModal('${id}')" class="text-cyan-400 hover:text-cyan-300 p-1" title="Edit">
             ✏️
           </button>
           <button onclick="removeStaffMember('${id}')" class="text-red-400 hover:text-red-300 p-1" title="Remove">
             ✕
+          </button>
+        ` : ''}
+        ${isDisabled && hasPermission("staff") ? `
+          <button onclick="reactivateStaffMember('${id}')" class="text-green-400 hover:text-green-300 p-1 text-xs" title="Reactivate">
+            ♻️ Reactivate
           </button>
         ` : ''}
       </div>
@@ -473,11 +482,85 @@ async function removeStaffMember(id) {
   if (!confirmed) return;
 
   try {
-    await set(ref(db, `staff/${id}`), null);
-    await logActivity("staff_remove", `Removed staff member: ${staffMember.name}`);
+    // Mark user as disabled (Firebase Auth can't be deleted from client-side)
+    // The login check will reject disabled users
+    await update(ref(db, `staff/${id}`), {
+      disabled: true,
+      disabledAt: new Date().toISOString(),
+      disabledBy: currentSession?.email || "Unknown"
+    });
+    
+    // Also add to disabled-users list for quick lookup during login
+    if (staffMember.uid) {
+      await set(ref(db, `disabled-users/${staffMember.uid}`), {
+        email: staffMember.email,
+        name: staffMember.name,
+        disabledAt: new Date().toISOString(),
+        disabledBy: currentSession?.email || "Unknown"
+      });
+    }
+    
+    await logActivity("staff_remove", `Disabled staff member: ${staffMember.name}`);
+    notifySuccess(`${staffMember.name} has been disabled and can no longer login`);
     loadStaffManagement();
   } catch (error) {
     console.error("Error removing staff:", error);
+    notifyError("Failed to remove staff member");
+  }
+}
+
+async function reactivateStaffMember(id) {
+  // Check permission
+  if (!hasPermission("staff")) {
+    notifyError("You don't have permission to manage staff");
+    return;
+  }
+
+  const currentSession = getStaffSession();
+  
+  // Get the staff member to reactivate
+  const staffSnap = await get(ref(db, `staff/${id}`));
+  const staffMember = staffSnap.val();
+  
+  if (!staffMember) {
+    notifyError("Staff member not found");
+    return;
+  }
+
+  if (!staffMember.disabled) {
+    notifyWarning("This staff member is already active");
+    return;
+  }
+
+  const confirmed = await showConfirm(`Reactivate ${staffMember.name}?`, {
+    title: "Reactivate Staff Member",
+    type: "info",
+    confirmText: "Reactivate",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
+
+  try {
+    // Remove disabled flag
+    await update(ref(db, `staff/${id}`), {
+      disabled: null,
+      disabledAt: null,
+      disabledBy: null,
+      reactivatedAt: new Date().toISOString(),
+      reactivatedBy: currentSession?.email || "Unknown"
+    });
+    
+    // Remove from disabled-users list
+    if (staffMember.uid) {
+      await set(ref(db, `disabled-users/${staffMember.uid}`), null);
+    }
+    
+    await logActivity("staff_reactivate", `Reactivated staff member: ${staffMember.name}`);
+    notifySuccess(`${staffMember.name} has been reactivated and can login again`);
+    loadStaffManagement();
+  } catch (error) {
+    console.error("Error reactivating staff:", error);
+    notifyError("Failed to reactivate staff member");
   }
 }
 
@@ -740,6 +823,7 @@ async function saveStaffEdit() {
 window.loadStaffManagement = loadStaffManagement;
 window.addStaffMember = addStaffMember;
 window.removeStaffMember = removeStaffMember;
+window.reactivateStaffMember = reactivateStaffMember;
 window.changeStaffRole = changeStaffRole;
 window.openEditStaffModal = openEditStaffModal;
 window.closeEditStaffModal = closeEditStaffModal;

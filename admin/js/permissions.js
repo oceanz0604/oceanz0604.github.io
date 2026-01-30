@@ -399,6 +399,12 @@ export async function handleStaffLogin(email, displayName = null) {
   try {
     let staffRecord = await getStaffByEmail(email);
     
+    // Check if user is disabled
+    if (staffRecord && staffRecord.disabled) {
+      console.error("❌ User account is disabled:", email);
+      throw new Error("Your account has been disabled. Please contact an administrator.");
+    }
+    
     // If no staff record exists, check if this is the first user (make them super admin)
     if (!staffRecord) {
       const staffRef = ref(db, FB_PATHS.STAFF);
