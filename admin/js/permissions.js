@@ -39,7 +39,7 @@ export const ROLES = {
     level: 100,
     color: "#ff0044",
     icon: "👑",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "staff", "settings", "cash_register", "leaderboard", "finance"],
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "staff", "settings", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
     canEdit: true,
     description: "Full access to all features"
   },
@@ -48,7 +48,7 @@ export const ROLES = {
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "cash_register", "leaderboard", "finance"],
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
     canEdit: true,
     description: "Full access except staff management"
   },
@@ -57,7 +57,7 @@ export const ROLES = {
     level: 60,
     color: "#00f0ff",
     icon: "🎯",
-    permissions: ["dashboard", "bookings", "recharges", "members", "cash_register", "leaderboard"],
+    permissions: ["dashboard", "bookings", "recharges", "members", "cash_register", "leaderboard", "food_menu", "food_analytics"],
     canEdit: true,
     description: "Day-to-day operations management"
   },
@@ -103,6 +103,8 @@ export const MODULE_NAV_MAP = {
   cash_register: { name: "Cash Register", icon: "banknote", view: "cash" },
   leaderboard: { name: "Leaderboards", icon: "trophy", view: "leaderboard" },
   finance: { name: "Finance", icon: "indian-rupee", view: "finance" },
+  food_menu: { name: "Food Menu", icon: "utensils", view: "food-menu" },
+  food_analytics: { name: "Food Analytics", icon: "pie-chart", view: "food-analytics" },
   counter: { name: "POS Counter", icon: "receipt", view: "counter", redirect: "counter.html" }
 };
 

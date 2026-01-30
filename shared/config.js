@@ -115,7 +115,13 @@ export const FB_PATHS = {
   // Finance Dashboard (Expenses & Summaries)
   EXPENSES: "expenses",                       // /expenses/{YYYY-MM-DD}/{expense_id}
   EXPENSE_AUDIT: "expense_audit",             // /expense_audit/{audit_id}
-  FINANCE_MONTHLY: "finance_monthly"          // /finance_monthly/{YYYY-MM} - cached monthly summaries
+  FINANCE_MONTHLY: "finance_monthly",         // /finance_monthly/{YYYY-MM} - cached monthly summaries
+  
+  // Food Sales (separate from gaming recharges)
+  FOOD_MENU: "food_menu",                     // /food_menu/{item_id} - menu items with prices
+  FOOD_SALES: "food_sales",                   // /food_sales/{YYYY-MM-DD}/{sale_id} - daily sales
+  FOOD_CREDITS: "food_credits",               // /food_credits/{customer_id} - outstanding credits
+  FOOD_CREDIT_PAYMENTS: "food_credit_payments" // /food_credit_payments/{YYYY-MM-DD}/{payment_id}
 };
 
 // ==================== APP CONSTANTS ====================

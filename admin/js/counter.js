@@ -139,6 +139,7 @@ async function init(session) {
   setupRealtimeUpdates();
   loadBookings();
   loadCredits();
+  loadFoodMenu();
   
   console.log("✅ POS Counter initialized");
 }
@@ -993,7 +994,354 @@ window.refreshData = async () => {
   if (memberSearch) memberSearch.setMembers(allMembers);
   loadBookings();
   loadCredits();
+  loadFoodMenu();
 };
+
+// ==================== FOOD SALES ====================
+
+let foodMenu = [];
+let foodCart = [];
+let foodCustomer = "Counter";
+let foodPaymentMode = "cash";
+let foodCurrentCategory = "all";
+let foodSearchTimeout = null;
+
+// Load food menu from Firebase
+async function loadFoodMenu() {
+  try {
+    const snapshot = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
+    foodMenu = [];
+    
+    if (snapshot.exists()) {
+      snapshot.forEach(child => {
+        const item = child.val();
+        if (item.available !== false) {
+          foodMenu.push({ id: child.key, ...item });
+        }
+      });
+    }
+    
+    // Sort by name
+    foodMenu.sort((a, b) => a.name.localeCompare(b.name));
+    console.log(`[Food] Loaded ${foodMenu.length} menu items`);
+    
+    renderFoodMenu();
+  } catch (err) {
+    console.error("[Food] Load menu error:", err);
+  }
+}
+
+// Render food menu items
+function renderFoodMenu() {
+  const container = $("foodMenuItems");
+  if (!container) return;
+  
+  const filtered = foodCurrentCategory === "all" 
+    ? foodMenu 
+    : foodMenu.filter(item => item.category === foodCurrentCategory);
+  
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state col-span-3">
+        <i data-lucide="utensils" class="w-8 h-8"></i>
+        <p class="text-sm">${foodCurrentCategory === "all" ? "No items available" : "No items in category"}</p>
+      </div>
+    `;
+    if (typeof lucide !== "undefined") lucide.createIcons();
+    return;
+  }
+  
+  const categoryIcons = {
+    snacks: "🍿",
+    drinks: "🥤",
+    meals: "🍽️",
+    combos: "🎁"
+  };
+  
+  container.innerHTML = filtered.map(item => {
+    const emoji = categoryIcons[item.category] || "🍽️";
+    const isOutOfStock = item.stock !== null && item.stock <= 0;
+    
+    return `
+      <div class="food-menu-item ${isOutOfStock ? 'out-of-stock' : ''}" onclick="addToFoodCart('${item.id}')">
+        <div class="item-emoji">${emoji}</div>
+        <div class="item-name">${item.name}</div>
+        <div class="item-price">₹${item.price}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+// Filter food menu by category
+window.filterFoodMenu = function(category) {
+  foodCurrentCategory = category;
+  
+  // Update button states
+  document.querySelectorAll(".food-cat").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.cat === category);
+  });
+  
+  renderFoodMenu();
+};
+
+// Add item to cart
+window.addToFoodCart = function(itemId) {
+  const item = foodMenu.find(i => i.id === itemId);
+  if (!item) return;
+  
+  // Check if already in cart
+  const existingIndex = foodCart.findIndex(c => c.id === itemId);
+  if (existingIndex >= 0) {
+    foodCart[existingIndex].qty += 1;
+  } else {
+    foodCart.push({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      qty: 1
+    });
+  }
+  
+  renderFoodCart();
+};
+
+// Update cart item quantity
+window.updateFoodCartQty = function(itemId, delta) {
+  const index = foodCart.findIndex(c => c.id === itemId);
+  if (index < 0) return;
+  
+  foodCart[index].qty += delta;
+  
+  if (foodCart[index].qty <= 0) {
+    foodCart.splice(index, 1);
+  }
+  
+  renderFoodCart();
+};
+
+// Clear cart
+window.clearFoodCart = function() {
+  foodCart = [];
+  renderFoodCart();
+};
+
+// Render cart
+function renderFoodCart() {
+  const container = $("foodCartItems");
+  const totalEl = $("foodCartTotal");
+  if (!container) return;
+  
+  if (foodCart.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state py-2">
+        <p class="text-xs text-gray-500">Cart is empty</p>
+      </div>
+    `;
+    if (totalEl) totalEl.textContent = "₹0";
+    return;
+  }
+  
+  let total = 0;
+  
+  container.innerHTML = foodCart.map(item => {
+    const itemTotal = item.price * item.qty;
+    total += itemTotal;
+    
+    return `
+      <div class="food-cart-item">
+        <div class="item-info">
+          <div class="item-name">${item.name}</div>
+          <div class="item-qty">₹${item.price} x ${item.qty}</div>
+        </div>
+        <div class="qty-controls">
+          <button class="qty-btn" onclick="updateFoodCartQty('${item.id}', -1)">-</button>
+          <span>${item.qty}</span>
+          <button class="qty-btn" onclick="updateFoodCartQty('${item.id}', 1)">+</button>
+        </div>
+        <div class="item-total">₹${itemTotal}</div>
+      </div>
+    `;
+  }).join("");
+  
+  if (totalEl) totalEl.textContent = `₹${total}`;
+}
+
+// Food customer search
+window.searchFoodCustomer = function(query) {
+  clearTimeout(foodSearchTimeout);
+  
+  if (!query || query.length < 2) {
+    $("foodCustomerSuggestions")?.classList.add("hidden");
+    return;
+  }
+  
+  foodSearchTimeout = setTimeout(() => {
+    const matches = allMembers
+      .filter(m => m.name?.toLowerCase().includes(query.toLowerCase()) || m.member_name?.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 5);
+    
+    const container = $("foodCustomerSuggestions");
+    if (!container) return;
+    
+    if (matches.length === 0) {
+      container.classList.add("hidden");
+      return;
+    }
+    
+    container.innerHTML = matches.map(m => {
+      const name = m.name || m.member_name || "Unknown";
+      return `<div class="suggestion" onclick="setFoodCustomer('${name}')">${name}</div>`;
+    }).join("");
+    
+    container.classList.remove("hidden");
+  }, 200);
+};
+
+window.showFoodCustomerSuggestions = function() {
+  const input = $("foodCustomerInput");
+  if (input && input.value.length >= 2) {
+    searchFoodCustomer(input.value);
+  }
+};
+
+// Set food customer
+window.setFoodCustomer = function(name) {
+  foodCustomer = name;
+  const input = $("foodCustomerInput");
+  if (input) input.value = name;
+  $("foodCustomerSuggestions")?.classList.add("hidden");
+};
+
+// Food payment mode
+window.setFoodPaymentMode = function(mode) {
+  foodPaymentMode = mode;
+  
+  // Update button states
+  document.querySelectorAll(".food-pay-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === mode);
+  });
+  
+  // Show/hide split fields
+  const splitFields = $("foodSplitFields");
+  if (splitFields) {
+    splitFields.classList.toggle("hidden", mode !== "split");
+  }
+};
+
+// Update food split total
+window.updateFoodSplitTotal = function() {
+  // Just for validation display if needed
+  const cash = parseFloat($("foodSplitCash")?.value) || 0;
+  const upi = parseFloat($("foodSplitUpi")?.value) || 0;
+  const total = foodCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  
+  // Visual feedback could be added here
+};
+
+// Complete food sale
+window.completeFoodSale = async function() {
+  if (foodCart.length === 0) {
+    notifyWarning("Cart is empty");
+    return;
+  }
+  
+  const total = foodCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  
+  // Validate split payment
+  if (foodPaymentMode === "split") {
+    const cash = parseFloat($("foodSplitCash")?.value) || 0;
+    const upi = parseFloat($("foodSplitUpi")?.value) || 0;
+    if (cash + upi !== total) {
+      notifyError(`Split amount (₹${cash + upi}) doesn't match total (₹${total})`);
+      return;
+    }
+  }
+  
+  const today = getTodayIST();
+  const session = getStaffSession();
+  
+  const saleData = {
+    customerName: foodCustomer,
+    items: foodCart.map(item => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      qty: item.qty
+    })),
+    total,
+    paymentMode: foodPaymentMode,
+    timestamp: Date.now(),
+    staffId: session?.id || "unknown",
+    staffName: session?.name || "Unknown"
+  };
+  
+  // Add split amounts if applicable
+  if (foodPaymentMode === "split") {
+    saleData.cashAmount = parseFloat($("foodSplitCash")?.value) || 0;
+    saleData.upiAmount = parseFloat($("foodSplitUpi")?.value) || 0;
+  }
+  
+  // For credit sales, track the outstanding amount
+  if (foodPaymentMode === "credit") {
+    saleData.creditAmount = total;
+  }
+  
+  try {
+    // Save sale to food_sales
+    const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${today}`).push();
+    await saleRef.set(saleData);
+    
+    // If credit, also update food_credits for the customer
+    if (foodPaymentMode === "credit" && foodCustomer) {
+      const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${encodeURIComponent(foodCustomer)}`);
+      const creditSnap = await creditRef.once("value");
+      const existing = creditSnap.val() || { outstanding: 0 };
+      
+      await creditRef.update({
+        customerName: foodCustomer,
+        outstanding: (existing.outstanding || 0) + total,
+        lastUpdated: Date.now()
+      });
+    }
+    
+    // Update stock
+    for (const item of foodCart) {
+      const menuItem = foodMenu.find(m => m.id === item.id);
+      if (menuItem && menuItem.stock !== null) {
+        const newStock = Math.max(0, menuItem.stock - item.qty);
+        await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
+      }
+    }
+    
+    notifySuccess(`Sale completed: ₹${total}`);
+    
+    // Reset form
+    foodCart = [];
+    foodCustomer = "Counter";
+    $("foodCustomerInput").value = "";
+    $("foodSplitCash").value = "";
+    $("foodSplitUpi").value = "";
+    setFoodPaymentMode("cash");
+    renderFoodCart();
+    loadFoodMenu(); // Refresh to update stock
+    
+    // Log activity
+    logStaffActivity("food_sale", `Food sale ₹${total} to ${foodCustomer}`);
+    
+  } catch (err) {
+    console.error("[Food] Sale error:", err);
+    notifyError("Failed to complete sale: " + err.message);
+  }
+};
+
+// Close suggestions when clicking outside
+document.addEventListener("click", (e) => {
+  const suggestions = $("foodCustomerSuggestions");
+  const input = $("foodCustomerInput");
+  if (suggestions && !suggestions.contains(e.target) && e.target !== input) {
+    suggestions.classList.add("hidden");
+  }
+});
 
 // ==================== LOGOUT ====================
 

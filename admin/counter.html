@@ -440,6 +440,235 @@
       color: #666;
     }
     .empty-state i { margin-bottom: 10px; opacity: 0.5; }
+    
+    /* Food Panel Styles */
+    #foodCustomerSuggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: rgba(20, 20, 30, 0.98);
+      border: 1px solid rgba(255,107,0,0.3);
+      border-radius: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      z-index: 50;
+      margin-top: 4px;
+    }
+    #foodCustomerSuggestions .suggestion {
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.85rem;
+    }
+    #foodCustomerSuggestions .suggestion:hover {
+      background: rgba(255,107,0,0.2);
+    }
+    
+    .food-quick-customer {
+      flex: 1;
+      padding: 6px;
+      font-size: 0.7rem;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #aaa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .food-quick-customer:hover {
+      background: rgba(255,107,0,0.1);
+      border-color: rgba(255,107,0,0.3);
+      color: var(--pos-orange);
+    }
+    
+    .food-category-tabs {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .food-cat {
+      padding: 4px 8px;
+      font-size: 0.65rem;
+      border-radius: 4px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .food-cat:hover {
+      background: rgba(255,107,0,0.1);
+    }
+    .food-cat.active {
+      background: rgba(255,107,0,0.2);
+      border-color: rgba(255,107,0,0.4);
+      color: var(--pos-orange);
+    }
+    
+    .food-menu-grid {
+      flex: 1;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 8px 0;
+    }
+    
+    .food-menu-item {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 10px 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .food-menu-item:hover {
+      border-color: var(--pos-orange);
+      background: rgba(255,107,0,0.1);
+    }
+    .food-menu-item:active {
+      transform: scale(0.95);
+    }
+    .food-menu-item.out-of-stock {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .food-menu-item .item-emoji { font-size: 1.2rem; margin-bottom: 2px; }
+    .food-menu-item .item-name { 
+      font-size: 0.7rem; 
+      color: #ddd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .food-menu-item .item-price { 
+      font-family: 'Orbitron', monospace; 
+      font-size: 0.75rem;
+      color: var(--pos-green);
+      margin-top: 2px;
+    }
+    
+    .food-cart {
+      flex-shrink: 0;
+    }
+    .food-cart-items {
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .food-cart-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+    .food-cart-item .item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .food-cart-item .item-name {
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .food-cart-item .item-qty {
+      font-size: 0.65rem;
+      color: #888;
+    }
+    .food-cart-item .qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .food-cart-item .qty-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+    }
+    .food-cart-item .qty-btn:hover {
+      background: rgba(255,107,0,0.2);
+      border-color: var(--pos-orange);
+      color: var(--pos-orange);
+    }
+    .food-cart-item .item-total {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.75rem;
+      color: var(--pos-green);
+      margin-left: 8px;
+    }
+    
+    .food-cart-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(0,255,136,0.1);
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+    
+    .food-pay-btn {
+      flex: 1;
+      padding: 6px 4px;
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.55rem;
+      border: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.05);
+      color: #888;
+    }
+    .food-pay-btn:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .food-pay-btn.active {
+      border-color: var(--pos-orange);
+      background: rgba(255,107,0,0.15);
+      color: var(--pos-orange);
+    }
+    
+    .food-checkout-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.85rem;
+      font-weight: bold;
+      background: linear-gradient(135deg, var(--pos-orange), #cc5500);
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    .food-checkout-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(255,107,0,0.4);
+    }
+    .food-checkout-btn:active {
+      transform: translateY(0);
+    }
+    .food-checkout-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
   </style>
 </head>
 <body class="text-white">
@@ -484,6 +713,10 @@
         <i data-lucide="credit-card" class="w-4 h-4"></i>
         <span>Credits</span>
         <span class="badge hidden" id="creditBadge">0</span>
+      </div>
+      <div class="pos-tab" data-tab="food" onclick="switchPosTab('food')">
+        <i data-lucide="utensils" class="w-4 h-4"></i>
+        <span>Food</span>
       </div>
       <div class="pos-tab" data-tab="more" onclick="switchPosTab('more')">
         <i data-lucide="menu" class="w-4 h-4"></i>
@@ -654,6 +887,94 @@
               <div class="text-xs text-gray-500">Collected Today</div>
             </div>
           </div>
+        </div>
+        
+      </div>
+      
+      <!-- FOOD PANEL -->
+      <div id="foodPanel" class="pos-panel">
+        
+        <!-- Customer Selection -->
+        <div class="pos-card">
+          <div class="pos-card-title"><i data-lucide="user" class="w-3 h-3"></i> Customer</div>
+          <div style="position: relative;">
+            <input id="foodCustomerInput" type="text" 
+              placeholder="Search member or type name..." 
+              class="w-full px-3 py-2 rounded-lg text-sm"
+              style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,107,0,0.3); color: white;"
+              oninput="searchFoodCustomer(this.value)"
+              onfocus="showFoodCustomerSuggestions()"
+              autocomplete="off">
+            <div id="foodCustomerSuggestions" class="hidden"></div>
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button onclick="setFoodCustomer('Counter')" class="food-quick-customer">Counter</button>
+            <button onclick="setFoodCustomer('Walk-in')" class="food-quick-customer">Walk-in</button>
+          </div>
+        </div>
+        
+        <!-- Menu Items -->
+        <div class="pos-card" style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+          <div class="pos-card-title" style="flex-shrink: 0;">
+            <i data-lucide="utensils" class="w-3 h-3"></i> Menu
+            <div class="food-category-tabs">
+              <button class="food-cat active" data-cat="all" onclick="filterFoodMenu('all')">All</button>
+              <button class="food-cat" data-cat="snacks" onclick="filterFoodMenu('snacks')">🍿</button>
+              <button class="food-cat" data-cat="drinks" onclick="filterFoodMenu('drinks')">🥤</button>
+              <button class="food-cat" data-cat="meals" onclick="filterFoodMenu('meals')">🍽️</button>
+              <button class="food-cat" data-cat="combos" onclick="filterFoodMenu('combos')">🎁</button>
+            </div>
+          </div>
+          <div id="foodMenuItems" class="food-menu-grid">
+            <div class="empty-state">
+              <i data-lucide="utensils" class="w-8 h-8"></i>
+              <p class="text-sm">Loading menu...</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Cart -->
+        <div class="pos-card food-cart">
+          <div class="pos-card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i data-lucide="shopping-cart" class="w-3 h-3 inline"></i> Cart</span>
+            <button onclick="clearFoodCart()" class="text-xs text-gray-500 hover:text-red-400">Clear</button>
+          </div>
+          <div id="foodCartItems" class="food-cart-items">
+            <div class="empty-state py-2">
+              <p class="text-xs text-gray-500">Cart is empty</p>
+            </div>
+          </div>
+          <div class="food-cart-total">
+            <span>Total:</span>
+            <span id="foodCartTotal" class="font-orbitron text-lg" style="color: var(--pos-green);">₹0</span>
+          </div>
+          
+          <!-- Payment Mode -->
+          <div class="payment-toggle mt-2">
+            <button class="food-pay-btn active" data-mode="cash" onclick="setFoodPaymentMode('cash')">💵 Cash</button>
+            <button class="food-pay-btn" data-mode="upi" onclick="setFoodPaymentMode('upi')">📱 UPI</button>
+            <button class="food-pay-btn" data-mode="split" onclick="setFoodPaymentMode('split')">✂️ Split</button>
+            <button class="food-pay-btn" data-mode="credit" onclick="setFoodPaymentMode('credit')">⏰ Credit</button>
+          </div>
+          
+          <!-- Split Fields (hidden by default) -->
+          <div id="foodSplitFields" class="hidden mt-2">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">💵 Cash</label>
+                <input type="number" id="foodSplitCash" placeholder="₹0" class="split-input" oninput="updateFoodSplitTotal()">
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 block mb-1">📱 UPI</label>
+                <input type="number" id="foodSplitUpi" placeholder="₹0" class="split-input" oninput="updateFoodSplitTotal()">
+              </div>
+            </div>
+          </div>
+          
+          <button onclick="completeFoodSale()" class="food-checkout-btn">
+            <i data-lucide="check-circle" class="w-5 h-5 inline mr-2"></i>
+            Complete Sale
+          </button>
         </div>
         
       </div>

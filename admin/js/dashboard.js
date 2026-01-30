@@ -51,6 +51,8 @@ const elements = {
   navCash: $("nav-cash"),
   navLeaderboard: $("nav-leaderboard"),
   navFinance: $("nav-finance"),
+  navFoodMenu: $("nav-food-menu"),
+  navFoodAnalytics: $("nav-food-analytics"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
@@ -59,7 +61,9 @@ const elements = {
   staffSection: $("staff-section"),
   cashSection: $("cash-section"),
   leaderboardSection: $("leaderboard-section"),
-  financeSection: $("finance-section")
+  financeSection: $("finance-section"),
+  foodMenuSection: $("food-menu-section"),
+  foodAnalyticsSection: $("food-analytics-section")
 };
 
 // ==================== STATE ====================
@@ -126,7 +130,9 @@ function switchView(view) {
     "recharges": "recharges",
     "analytics": "analytics",
     "staff": "staff",
-    "finance": "finance"
+    "finance": "finance",
+    "food-menu": "food_menu",
+    "food-analytics": "food_analytics"
   };
   const permissionKey = permissionMap[view] || view;
   
@@ -146,7 +152,9 @@ function switchView(view) {
     elements.staffSection,
     elements.cashSection,
     elements.leaderboardSection,
-    elements.financeSection
+    elements.financeSection,
+    elements.foodMenuSection,
+    elements.foodAnalyticsSection
   ];
 
   const navs = [
@@ -158,7 +166,9 @@ function switchView(view) {
     elements.navStaff,
     elements.navCash,
     elements.navLeaderboard,
-    elements.navFinance
+    elements.navFinance,
+    elements.navFoodMenu,
+    elements.navFoodAnalytics
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -176,7 +186,9 @@ function switchView(view) {
     staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() },
     cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() },
     leaderboard: { section: elements.leaderboardSection, nav: elements.navLeaderboard, onShow: () => window.initLeaderboards?.() },
-    finance: { section: elements.financeSection, nav: elements.navFinance, onShow: () => window.loadFinanceDashboard?.() }
+    finance: { section: elements.financeSection, nav: elements.navFinance, onShow: () => window.loadFinanceDashboard?.() },
+    "food-menu": { section: elements.foodMenuSection, nav: elements.navFoodMenu, onShow: () => window.initFoodMenu?.() },
+    "food-analytics": { section: elements.foodAnalyticsSection, nav: elements.navFoodAnalytics, onShow: () => window.initFoodAnalytics?.() }
   };
 
   const config = viewMap[view];
@@ -214,7 +226,9 @@ const navLinks = [
   { el: elements.navStaff, view: "staff" },
   { el: elements.navCash, view: "cash" },
   { el: elements.navLeaderboard, view: "leaderboard" },
-  { el: elements.navFinance, view: "finance" }
+  { el: elements.navFinance, view: "finance" },
+  { el: elements.navFoodMenu, view: "food-menu" },
+  { el: elements.navFoodAnalytics, view: "food-analytics" }
 ];
 
 navLinks.forEach(({ el, view }) => {
