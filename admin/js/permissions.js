@@ -57,7 +57,7 @@ export const ROLES = {
     level: 60,
     color: "#00f0ff",
     icon: "🎯",
-    permissions: ["dashboard", "bookings", "recharges", "members", "cash_register", "leaderboard", "food_menu", "food_analytics"],
+    permissions: ["bookings", "recharges", "cash_register", "food_menu", "food_analytics"],
     canEdit: true,
     description: "Day-to-day operations management"
   },
@@ -66,7 +66,7 @@ export const ROLES = {
     level: 55,
     color: "#ffd700",
     icon: "💰",
-    permissions: ["dashboard", "analytics", "cash_register", "leaderboard", "finance"],
+    permissions: ["analytics", "cash_register", "finance"],
     canEdit: false,  // View-only for finance data
     description: "View-only access to financial reports and expenses"
   },
@@ -85,7 +85,7 @@ export const ROLES = {
     level: 40,
     color: "#00ff88",
     icon: "🎮",
-    permissions: ["dashboard", "bookings", "recharges"],
+    permissions: ["bookings", "recharges"],
     canEdit: true,
     description: "Basic staff access"
   }
