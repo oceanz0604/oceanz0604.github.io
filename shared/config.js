@@ -42,17 +42,18 @@ export const BOOKING_DB_CONFIG = {
 };
 
 /**
- * FDB Dataset Database (oceanz-fdb)
+ * FDB Dataset Database (oceanz-fdb-asia)
  * Used for: Members, Sessions, History, Terminal Status
+ * Region: asia-southeast1 (Singapore)
  */
 export const FDB_DATASET_CONFIG = {
-  apiKey: "AIzaSyB-DKTtleay44TXjFH0inqAFMztdy7JB1E",
-  authDomain: "oceanz-fdb.firebaseapp.com",
-  databaseURL: "https://oceanz-fdb-default-rtdb.firebaseio.com",
-  projectId: "oceanz-fdb",
-  storageBucket: "oceanz-fdb.firebasestorage.app",
-  messagingSenderId: "67265567513",
-  appId: "1:67265567513:web:25595b8adf10aa3d7c8388"
+  apiKey: "AIzaSyDOLss2QcYNMmtJr75tu4yxK_8axzXO6pU",
+  authDomain: "oceanz-fdb-4401f.firebaseapp.com",
+  databaseURL: "https://oceanz-fdb-4401f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "oceanz-fdb-4401f",
+  storageBucket: "oceanz-fdb-4401f.firebasestorage.app",
+  messagingSenderId: "679521576417",
+  appId: "1:679521576417:web:d05ef3f90f9c58c5cbdea0"
 };
 
 // ==================== FIREBASE APP NAMES ====================

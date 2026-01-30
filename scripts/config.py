@@ -20,7 +20,7 @@ IPLOG_BASE_PATH = r"C:\Users\decrypter\Downloads\iplogs\iplogs"
 
 # ==================== FIREBASE ====================
 
-FIREBASE_DB_URL = "https://oceanz-fdb-default-rtdb.firebaseio.com"
+FIREBASE_DB_URL = "https://oceanz-fdb-4401f-default-rtdb.asia-southeast1.firebasedatabase.app"
 FDB_FIREBASE_DB_URL = FIREBASE_DB_URL  # Alias for sync service
 
 # Firebase Data Paths (must match JS config.js)
