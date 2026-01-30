@@ -3300,16 +3300,8 @@
       return div.innerHTML;
     }
     
-    // Check service status periodically when panel is open
-    setInterval(() => {
-      const panel = document.getElementById('dbSyncPanel');
-      if (panel && !panel.classList.contains('hidden')) {
-        checkSyncService();
-      }
-    }, 15000); // Every 15 seconds
-    
-    // Initial fetch on page load to update sidebar status indicator
-    document.addEventListener('DOMContentLoaded', async () => {
+    // Update sidebar sync status dot
+    async function updateSidebarSyncStatus() {
       try {
         const response = await fetch(FDB_SYNC_META_URL);
         if (response.ok) {
@@ -3322,12 +3314,29 @@
             statusDot.className = isRecent 
               ? 'ml-auto w-2 h-2 rounded-full bg-green-500' 
               : 'ml-auto w-2 h-2 rounded-full bg-yellow-500';
-            console.log('📊 Initial sync status:', isRecent ? 'Recent' : 'Stale', '-', lastSync);
+            console.log('📊 Sync status:', isRecent ? 'Recent' : 'Stale', '-', lastSync);
           }
         }
       } catch (e) {
-        console.log('Could not fetch initial sync status');
+        console.log('Could not fetch sync status');
       }
+    }
+    
+    // Check service status periodically when panel is open
+    setInterval(() => {
+      const panel = document.getElementById('dbSyncPanel');
+      if (panel && !panel.classList.contains('hidden')) {
+        checkSyncService();
+      }
+    }, 15000); // Every 15 seconds
+    
+    // Update sidebar status dot periodically (every 60 seconds)
+    setInterval(updateSidebarSyncStatus, 60000);
+    
+    // Initial fetch on page load to update sidebar status indicator
+    document.addEventListener('DOMContentLoaded', () => {
+      // Small delay to ensure dashboard is fully loaded
+      setTimeout(updateSidebarSyncStatus, 1000);
     });
   </script>
 </body>
