@@ -6,7 +6,7 @@
   <title>OceanZ - POS Counter</title>
   
   <!-- PWA Meta Tags -->
-  <meta name="description" content="OceanZ Gaming Cafe - POS Counter for quick recharges"/>
+  <meta name="description" content="OceanZ Gaming Cafe - POS Counter"/>
   <meta name="theme-color" content="#ff6b00"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -32,75 +32,80 @@
     }
     
     * { box-sizing: border-box; }
-    
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-    
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     body {
       background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
       font-family: 'Rajdhani', sans-serif;
     }
     
-    .pos-app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      width: 100vw;
-      overflow: hidden;
-    }
+    .pos-app { display: flex; flex-direction: column; height: 100vh; width: 100vw; overflow: hidden; }
     
     /* Header */
     .pos-header {
       flex: 0 0 auto;
       background: rgba(0, 0, 0, 0.9);
       border-bottom: 2px solid var(--pos-orange);
-      padding: 8px 16px;
+      padding: 8px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
+    .pos-header h1 { font-family: 'Orbitron', monospace; font-size: 0.9rem; color: var(--pos-orange); margin: 0; }
     
-    .pos-header h1 {
-      font-family: 'Orbitron', monospace;
-      font-size: 1rem;
-      color: var(--pos-orange);
-      margin: 0;
+    /* Tab Navigation */
+    .pos-tabs {
+      display: flex;
+      gap: 4px;
+      background: rgba(0,0,0,0.5);
+      padding: 6px;
+      border-bottom: 1px solid rgba(255,107,0,0.2);
     }
-    
-    /* Main Grid */
-    .pos-main {
+    .pos-tab {
       flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 280px;
-      gap: 12px;
-      padding: 12px;
-      overflow: hidden;
-      min-height: 0;
-    }
-    
-    /* Left Panel */
-    .pos-left {
+      padding: 8px 6px;
+      text-align: center;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      color: #999;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      overflow: hidden;
+      align-items: center;
+      gap: 4px;
     }
+    .pos-tab span { display: block; }
+    .pos-tab:hover { background: rgba(255,107,0,0.1); color: #ccc; }
+    .pos-tab.active {
+      background: rgba(255,107,0,0.2);
+      color: var(--pos-orange);
+      border: 1px solid rgba(255,107,0,0.4);
+    }
+    .pos-tab .badge {
+      background: var(--pos-red);
+      color: white;
+      font-size: 0.55rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      min-width: 16px;
+    }
+    
+    /* Main Content */
+    .pos-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+    .pos-panel { display: none; flex: 1; overflow: hidden; padding: 10px; min-height: 0; }
+    .pos-panel.active { display: flex; flex-direction: column; gap: 10px; }
     
     /* Card Style */
     .pos-card {
       background: rgba(10, 10, 20, 0.8);
       border: 1px solid rgba(255, 107, 0, 0.2);
-      border-radius: 12px;
-      padding: 12px;
+      border-radius: 10px;
+      padding: 10px;
     }
-    
     .pos-card-title {
       font-family: 'Orbitron', monospace;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       color: #666;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -111,13 +116,8 @@
     }
     
     /* Member Input */
-    .member-row {
-      display: flex;
-      gap: 8px;
-    }
-    
     .member-input {
-      flex: 1;
+      width: 100%;
       background: rgba(0, 0, 0, 0.5);
       border: 2px solid rgba(255, 107, 0, 0.3);
       border-radius: 8px;
@@ -127,189 +127,115 @@
       color: white;
       text-transform: uppercase;
     }
-    
-    .member-input:focus {
-      outline: none;
-      border-color: var(--pos-orange);
-    }
-    
-    .guest-select {
-      background: rgba(0, 240, 255, 0.1);
-      border: 2px solid rgba(0, 240, 255, 0.3);
-      border-radius: 8px;
-      padding: 8px;
-      color: var(--pos-cyan);
-      font-family: 'Orbitron', monospace;
-      font-size: 0.8rem;
-      cursor: pointer;
-    }
+    .member-input:focus { outline: none; border-color: var(--pos-orange); }
     
     /* Amount Grid */
-    .amount-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-    }
-    
+    .amount-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
     .amount-btn {
       background: linear-gradient(145deg, rgba(255, 107, 0, 0.15), rgba(255, 107, 0, 0.05));
       border: 2px solid rgba(255, 107, 0, 0.4);
-      border-radius: 10px;
-      padding: 12px 8px;
+      border-radius: 8px;
+      padding: 8px 4px;
       text-align: center;
       cursor: pointer;
       transition: all 0.15s;
     }
-    
-    .amount-btn:hover {
-      border-color: var(--pos-orange);
-      box-shadow: 0 0 15px rgba(255, 107, 0, 0.3);
-    }
-    
+    .amount-btn:hover { border-color: var(--pos-orange); box-shadow: 0 0 15px rgba(255, 107, 0, 0.3); }
     .amount-btn.selected {
       background: linear-gradient(145deg, rgba(255, 107, 0, 0.4), rgba(255, 107, 0, 0.2));
       border-color: var(--pos-orange);
       box-shadow: 0 0 20px rgba(255, 107, 0, 0.4);
     }
-    
-    .amount-btn .value {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.3rem;
-      font-weight: 700;
-      color: var(--pos-orange);
+    .amount-btn.combo {
+      background: linear-gradient(145deg, rgba(255, 255, 0, 0.1), rgba(255, 107, 0, 0.1));
+      border-color: rgba(255, 255, 0, 0.4);
     }
-    
-    .amount-btn .label {
-      font-size: 0.65rem;
-      color: #666;
-      margin-top: 2px;
+    .amount-btn.combo:hover {
+      border-color: var(--pos-yellow);
+      box-shadow: 0 0 15px rgba(255, 255, 0, 0.3);
     }
-    
+    .amount-btn.combo.selected {
+      background: linear-gradient(145deg, rgba(255, 255, 0, 0.3), rgba(255, 107, 0, 0.2));
+      border-color: var(--pos-yellow);
+      box-shadow: 0 0 20px rgba(255, 255, 0, 0.4);
+    }
+    .amount-btn .value { font-family: 'Orbitron', monospace; font-size: 0.95rem; font-weight: 700; color: var(--pos-orange); }
+    .amount-btn .label { font-size: 0.55rem; color: #666; margin-top: 1px; }
     .custom-input {
-      background: transparent;
-      border: none;
-      font-family: 'Orbitron', monospace;
-      font-size: 1.1rem;
-      color: var(--pos-orange);
-      text-align: center;
-      width: 100%;
+      background: transparent; border: none;
+      font-family: 'Orbitron', monospace; font-size: 1rem;
+      color: var(--pos-orange); text-align: center; width: 100%;
     }
-    
     .custom-input:focus { outline: none; }
     .custom-input::placeholder { color: #555; }
     
-    /* Free Amount Row */
-    .free-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      background: rgba(255, 255, 0, 0.05);
-      border: 1px solid rgba(255, 255, 0, 0.2);
+    /* Split Payment */
+    .split-payment { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .split-box {
+      background: rgba(0,0,0,0.3);
       border-radius: 8px;
+      padding: 8px;
+      text-align: center;
     }
-    
-    .free-row label {
-      font-size: 0.8rem;
-      color: var(--pos-yellow);
-      white-space: nowrap;
-    }
-    
-    .free-input {
-      flex: 1;
+    .split-box label { font-size: 0.7rem; color: #888; display: block; margin-bottom: 4px; }
+    .split-input {
+      width: 100%;
       background: transparent;
       border: none;
-      border-bottom: 2px solid rgba(255, 255, 0, 0.3);
-      padding: 4px 8px;
+      border-bottom: 2px solid rgba(255,255,255,0.2);
       font-family: 'Orbitron', monospace;
-      font-size: 1rem;
-      color: var(--pos-yellow);
+      font-size: 1.2rem;
+      color: white;
       text-align: center;
-      max-width: 100px;
+      padding: 4px;
     }
+    .split-input:focus { outline: none; }
+    .split-box.cash .split-input { color: var(--pos-cyan); border-color: var(--pos-cyan); }
+    .split-box.upi .split-input { color: var(--pos-purple); border-color: var(--pos-purple); }
     
-    .free-input:focus {
-      outline: none;
-      border-color: var(--pos-yellow);
-    }
-    
-    /* Payment Buttons */
-    .payment-row {
-      display: flex;
-      gap: 8px;
-    }
-    
-    .payment-btn {
+    /* Payment Mode Toggle */
+    .payment-toggle { display: flex; gap: 4px; flex-wrap: nowrap; }
+    .payment-opt {
       flex: 1;
-      background: rgba(0, 0, 0, 0.4);
-      border: 2px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      padding: 10px;
+      padding: 6px 4px;
+      border-radius: 6px;
+      text-align: center;
       cursor: pointer;
-      transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    
-    .payment-btn span {
       font-family: 'Orbitron', monospace;
-      font-size: 0.85rem;
+      font-size: 0.6rem;
+      border: 2px solid transparent;
+      transition: all 0.15s;
+      white-space: nowrap;
     }
+    .payment-opt.cash { background: rgba(0,240,255,0.1); color: var(--pos-cyan); }
+    .payment-opt.upi { background: rgba(184,41,255,0.1); color: var(--pos-purple); }
+    .payment-opt.split { background: rgba(255,255,0,0.1); color: var(--pos-yellow); }
+    .payment-opt.credit { background: rgba(255,107,0,0.1); color: var(--pos-orange); }
+    .payment-opt.selected { border-color: currentColor; box-shadow: 0 0 10px currentColor; }
     
-    .payment-btn.cash.selected {
-      background: rgba(0, 240, 255, 0.15);
-      border-color: var(--pos-cyan);
-    }
-    .payment-btn.cash.selected span { color: var(--pos-cyan); }
-    
-    .payment-btn.upi.selected {
-      background: rgba(184, 41, 255, 0.15);
-      border-color: var(--pos-purple);
-    }
-    .payment-btn.upi.selected span { color: var(--pos-purple); }
-    
-    .payment-btn.credit.selected {
-      background: rgba(255, 107, 0, 0.15);
-      border-color: var(--pos-orange);
-    }
-    .payment-btn.credit.selected span { color: var(--pos-orange); }
-    
-    /* Summary & Confirm */
-    .summary-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
+    /* Summary */
+    .summary-row { display: flex; gap: 8px; align-items: stretch; }
     .summary-box {
       flex: 1;
       text-align: center;
-      padding: 12px;
+      padding: 10px;
       background: rgba(255, 107, 0, 0.1);
       border: 1px solid rgba(255, 107, 0, 0.3);
       border-radius: 10px;
     }
-    
     .summary-box .total {
       font-family: 'Orbitron', monospace;
-      font-size: 2rem;
+      font-size: 1.8rem;
       font-weight: 700;
       color: var(--pos-orange);
       text-shadow: 0 0 20px var(--pos-orange);
     }
-    
-    .summary-box .breakdown {
-      font-size: 0.75rem;
-      color: #888;
-    }
-    
+    .summary-box .breakdown { font-size: 0.7rem; color: #888; }
     .confirm-btn {
       background: linear-gradient(135deg, var(--pos-green), #00cc66);
       border: none;
-      border-radius: 12px;
-      padding: 16px 32px;
+      border-radius: 10px;
+      padding: 0 24px;
       font-family: 'Orbitron', monospace;
       font-size: 1rem;
       font-weight: 700;
@@ -318,88 +244,100 @@
       transition: all 0.15s;
       white-space: nowrap;
     }
+    .confirm-btn:hover:not(:disabled) { box-shadow: 0 0 30px rgba(0, 255, 136, 0.5); transform: scale(1.02); }
+    .confirm-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
     
-    .confirm-btn:hover:not(:disabled) {
-      box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
-      transform: scale(1.02);
-    }
-    
-    .confirm-btn:disabled {
-      background: #333;
-      color: #666;
-      cursor: not-allowed;
-    }
-    
-    /* Right Panel */
-    .pos-right {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      overflow: hidden;
-    }
-    
-    /* Stats Grid */
-    .stats-grid {
+    /* Stats Bar */
+    .stats-bar {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      background: rgba(0,0,0,0.4);
+      padding: 8px;
+      border-top: 1px solid rgba(255,107,0,0.2);
     }
+    .stat-item { text-align: center; }
+    .stat-item .value { font-family: 'Orbitron', monospace; font-size: 0.9rem; font-weight: 700; }
+    .stat-item .label { font-size: 0.6rem; color: #666; text-transform: uppercase; }
     
-    .stat-card {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      padding: 10px;
-      text-align: center;
-    }
-    
-    .stat-card .value {
-      font-family: 'Orbitron', monospace;
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-    
-    .stat-card .label {
-      font-size: 0.65rem;
-      color: #666;
-      text-transform: uppercase;
-    }
-    
-    /* Recent List */
-    .recent-list {
-      flex: 1;
-      overflow-y: auto;
-      min-height: 0;
-    }
-    
-    .recent-item {
+    /* Booking Items */
+    .booking-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 10px;
-      background: rgba(0, 0, 0, 0.3);
+      padding: 10px;
+      background: rgba(0,0,0,0.3);
       border-radius: 8px;
-      margin-bottom: 6px;
+      border-left: 3px solid var(--pos-cyan);
     }
-    
-    .recent-item .member {
-      font-family: 'Orbitron', monospace;
-      font-size: 0.85rem;
-      color: var(--pos-cyan);
-    }
-    
-    .recent-item .time {
+    .booking-item.pending { border-left-color: var(--pos-yellow); }
+    .booking-item.ongoing { border-left-color: var(--pos-green); background: rgba(0,255,136,0.05); }
+    .booking-item.past { border-left-color: #444; }
+    .booking-item .info { flex: 1; }
+    .booking-item .name { font-family: 'Orbitron', monospace; font-size: 0.9rem; color: var(--pos-cyan); }
+    .booking-item .details { font-size: 0.7rem; color: #888; }
+    .booking-item .actions { display: flex; gap: 6px; }
+    .booking-action {
+      padding: 6px 12px;
+      border-radius: 6px;
       font-size: 0.7rem;
-      color: #555;
-    }
-    
-    .recent-item .amount {
       font-family: 'Orbitron', monospace;
-      font-size: 0.9rem;
-      color: var(--pos-green);
+      cursor: pointer;
+      border: none;
+    }
+    .booking-action.approve { background: var(--pos-green); color: #000; }
+    .booking-action.decline { background: var(--pos-red); color: white; }
+    
+    /* Credit Items */
+    .credit-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      border-left: 3px solid var(--pos-orange);
+    }
+    .credit-item .member { font-family: 'Orbitron', monospace; font-size: 0.9rem; color: var(--pos-orange); }
+    .credit-item .amount { font-family: 'Orbitron', monospace; font-size: 1rem; color: var(--pos-red); }
+    .credit-item .collect-btn {
+      background: var(--pos-green);
+      color: #000;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-family: 'Orbitron', monospace;
+      cursor: pointer;
+      border: none;
     }
     
-    /* Member Suggestions */
+    /* Recent List */
+    .recent-item {
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      width: 100%;
+      height: auto;
+      min-height: 28px;
+    }
+    .recent-item .info { 
+      flex: 1; 
+      min-width: 0; 
+      display: flex !important; 
+      flex-direction: row !important;
+      align-items: center; 
+      gap: 6px; 
+    }
+    .recent-item .info > * { display: inline !important; }
+    .recent-item .member { font-family: 'Orbitron', monospace; font-size: 0.7rem; color: var(--pos-cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+    .recent-item .time { font-size: 0.6rem; color: #666; white-space: nowrap; }
+    .recent-item .amount { font-family: 'Orbitron', monospace; font-size: 0.75rem; color: var(--pos-green); white-space: nowrap; flex-shrink: 0; margin-left: auto; }
+    
+    /* Suggestions */
     .suggestions {
       position: absolute;
       top: 100%;
@@ -414,9 +352,7 @@
       z-index: 100;
       display: none;
     }
-    
     .suggestions.show { display: block; }
-    
     .suggestion {
       padding: 8px 12px;
       cursor: pointer;
@@ -424,12 +360,18 @@
       font-family: 'Orbitron', monospace;
       color: var(--pos-orange);
     }
+    .suggestion:hover { background: rgba(255, 107, 0, 0.2); }
     
-    .suggestion:hover {
-      background: rgba(255, 107, 0, 0.2);
+    /* Loading & Success */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
     }
-    
-    /* Success Animation */
     .success-flash {
       position: fixed;
       inset: 0;
@@ -440,67 +382,64 @@
       z-index: 1000;
       animation: flash 0.4s ease-out forwards;
     }
+    @keyframes flash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+    .success-flash .icon { font-size: 5rem; color: var(--pos-green); animation: pop 0.3s ease-out; }
+    @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
     
-    @keyframes flash {
-      0% { opacity: 0; }
-      30% { opacity: 1; }
-      100% { opacity: 0; }
+    /* Quick Actions */
+    .quick-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .quick-action {
+      flex: 1;
+      min-width: 70px;
+      padding: 8px;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.65rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #888;
+      transition: all 0.15s;
     }
+    .quick-action:hover { background: rgba(255,107,0,0.1); border-color: var(--pos-orange); color: var(--pos-orange); }
+    .quick-action i { display: block; margin-bottom: 4px; }
     
-    .success-flash .icon {
-      font-size: 5rem;
-      color: var(--pos-green);
-      animation: pop 0.3s ease-out;
-    }
-    
-    @keyframes pop {
-      0% { transform: scale(0); }
-      70% { transform: scale(1.2); }
-      100% { transform: scale(1); }
-    }
-    
-    /* Loading */
-    .loading-screen {
+    /* Modal */
+    .pos-modal {
       position: fixed;
       inset: 0;
-      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 200;
+      z-index: 500;
+      padding: 16px;
+    }
+    .pos-modal.hidden { display: none; }
+    .modal-content {
+      background: rgba(15,15,25,0.98);
+      border: 1px solid var(--pos-orange);
+      border-radius: 12px;
+      padding: 16px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .modal-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.9rem;
+      color: var(--pos-orange);
+      margin-bottom: 12px;
+      text-align: center;
     }
     
-    /* Mobile */
-    @media (max-width: 768px) {
-      .pos-main {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
-      }
-      
-      .pos-right {
-        display: none;
-      }
-      
-      .amount-grid {
-        grid-template-columns: repeat(4, 1fr);
-      }
-      
-      .amount-btn .value {
-        font-size: 1rem;
-      }
-      
-      .summary-row {
-        flex-direction: column;
-      }
-      
-      .summary-box {
-        width: 100%;
-      }
-      
-      .confirm-btn {
-        width: 100%;
-      }
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: #666;
     }
+    .empty-state i { margin-bottom: 10px; opacity: 0.5; }
   </style>
 </head>
 <body class="text-white">
@@ -518,53 +457,68 @@
     
     <!-- Header -->
     <header class="pos-header">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <h1>⚡ OCEANZ POS</h1>
+        <span id="dateTime" class="text-xs text-gray-600"></span>
       </div>
-      <div class="flex items-center gap-4">
-        <div class="text-right">
-          <div id="userName" class="font-orbitron text-xs" style="color: var(--pos-cyan);">-</div>
-          <div id="dateTime" class="text-xs text-gray-600"></div>
-        </div>
-        <button onclick="posLogout()" class="p-2 hover:bg-red-500/20 rounded-lg" title="Logout">
+      <div class="flex items-center gap-3">
+        <div id="userName" class="font-orbitron text-xs" style="color: var(--pos-cyan);">-</div>
+        <button onclick="posLogout()" class="p-1.5 hover:bg-red-500/20 rounded-lg" title="Logout">
           <i data-lucide="log-out" class="w-4 h-4" style="color: var(--pos-red);"></i>
         </button>
       </div>
     </header>
     
-    <!-- Main Content -->
-    <main class="pos-main">
+    <!-- Tab Navigation -->
+    <div class="pos-tabs">
+      <div class="pos-tab active" data-tab="recharge" onclick="switchPosTab('recharge')">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Recharge</span>
+      </div>
+      <div class="pos-tab" data-tab="bookings" onclick="switchPosTab('bookings')">
+        <i data-lucide="calendar" class="w-4 h-4"></i>
+        <span>Bookings</span>
+        <span class="badge hidden" id="pendingBadge">0</span>
+      </div>
+      <div class="pos-tab" data-tab="credits" onclick="switchPosTab('credits')">
+        <i data-lucide="credit-card" class="w-4 h-4"></i>
+        <span>Credits</span>
+        <span class="badge hidden" id="creditBadge">0</span>
+      </div>
+      <div class="pos-tab" data-tab="more" onclick="switchPosTab('more')">
+        <i data-lucide="menu" class="w-4 h-4"></i>
+        <span>More</span>
+      </div>
+    </div>
+    
+    <!-- Content Panels -->
+    <div class="pos-content">
       
-      <!-- Left Panel: Recharge Form -->
-      <div class="pos-left">
+      <!-- RECHARGE PANEL -->
+      <div id="rechargePanel" class="pos-panel active">
         
         <!-- Member Input -->
         <div class="pos-card">
-          <div class="pos-card-title">
-            <i data-lucide="user" class="w-3 h-3"></i> Member / Guest
-          </div>
-          <div class="member-row" style="position: relative;">
+          <div class="pos-card-title"><i data-lucide="user" class="w-3 h-3"></i> Member / Guest</div>
+          <div style="position: relative;">
             <input type="text" id="memberInput" class="member-input" placeholder="Type name..." autocomplete="off"/>
-            <select id="guestSelect" class="guest-select" onchange="selectGuest(this.value)">
-              <option value="">Guest ▾</option>
-            </select>
             <div id="suggestions" class="suggestions"></div>
           </div>
         </div>
         
         <!-- Quick Amounts -->
         <div class="pos-card" style="flex: 1;">
-          <div class="pos-card-title">
-            <i data-lucide="zap" class="w-3 h-3"></i> Amount
-          </div>
+          <div class="pos-card-title"><i data-lucide="zap" class="w-3 h-3"></i> Amount</div>
           <div class="amount-grid">
+            <button class="amount-btn" data-amount="20"><div class="value">₹20</div><div class="label">12m</div></button>
+            <button class="amount-btn" data-amount="40"><div class="value">₹40</div><div class="label">24m</div></button>
             <button class="amount-btn" data-amount="50"><div class="value">₹50</div><div class="label">30m</div></button>
+            <button class="amount-btn" data-amount="80"><div class="value">₹80</div><div class="label">48m</div></button>
             <button class="amount-btn" data-amount="100"><div class="value">₹100</div><div class="label">1h</div></button>
+            <button class="amount-btn" data-amount="180"><div class="value">₹180</div><div class="label">1h48m</div></button>
             <button class="amount-btn" data-amount="200"><div class="value">₹200</div><div class="label">2h</div></button>
-            <button class="amount-btn" data-amount="300"><div class="value">₹300</div><div class="label">3h</div></button>
-            <button class="amount-btn" data-amount="400"><div class="value">₹400</div><div class="label">4h</div></button>
-            <button class="amount-btn" data-amount="500"><div class="value">₹500</div><div class="label">5h</div></button>
-            <button class="amount-btn" data-amount="1000"><div class="value">₹1K</div><div class="label">Pop</div></button>
+            <button class="amount-btn combo" data-amount="200" data-free="40" onclick="selectCombo(200, 40)"><div class="value">₹200</div><div class="label" style="color: var(--pos-yellow);">+40 free</div></button>
+            <button class="amount-btn combo" data-amount="300" data-free="60" onclick="selectCombo(300, 60)"><div class="value">₹300</div><div class="label" style="color: var(--pos-yellow);">+60 free</div></button>
             <div class="amount-btn" style="border-style: dashed;">
               <input type="number" id="customAmount" class="custom-input" placeholder="₹..." min="10"/>
               <div class="label">Custom</div>
@@ -572,31 +526,33 @@
           </div>
           
           <!-- Free Amount -->
-          <div class="free-row mt-3">
-            <label>🎁 Free:</label>
-            <input type="number" id="freeAmount" class="free-input" placeholder="0" min="0"/>
+          <div class="flex items-center gap-3 mt-3 p-2 rounded-lg" style="background: rgba(255,255,0,0.05); border: 1px solid rgba(255,255,0,0.2);">
+            <span class="text-xs" style="color: var(--pos-yellow);">🎁 Free:</span>
+            <input type="number" id="freeAmount" class="split-input" style="color: var(--pos-yellow); border-color: var(--pos-yellow); max-width: 80px;" placeholder="0" min="0"/>
             <span class="text-xs text-gray-500">(Offer/Bonus)</span>
           </div>
         </div>
         
-        <!-- Payment Method -->
+        <!-- Payment Mode -->
         <div class="pos-card">
-          <div class="pos-card-title">
-            <i data-lucide="credit-card" class="w-3 h-3"></i> Payment
+          <div class="pos-card-title"><i data-lucide="wallet" class="w-3 h-3"></i> Payment Mode</div>
+          <div class="payment-toggle">
+            <div class="payment-opt cash selected" onclick="selectPaymentMode('cash')">💵 Cash</div>
+            <div class="payment-opt upi" onclick="selectPaymentMode('upi')">📱 UPI</div>
+            <div class="payment-opt split" onclick="selectPaymentMode('split')">✂️ Split</div>
+            <div class="payment-opt credit" onclick="selectPaymentMode('credit')">⏰ Credit</div>
           </div>
-          <div class="payment-row">
-            <button class="payment-btn cash selected" onclick="selectPayment('cash')">
-              <i data-lucide="banknote" class="w-4 h-4" style="color: var(--pos-cyan);"></i>
-              <span style="color: var(--pos-cyan);">CASH</span>
-            </button>
-            <button class="payment-btn upi" onclick="selectPayment('upi')">
-              <i data-lucide="smartphone" class="w-4 h-4" style="color: var(--pos-purple);"></i>
-              <span style="color: var(--pos-purple);">UPI</span>
-            </button>
-            <button class="payment-btn credit" onclick="selectPayment('credit')">
-              <i data-lucide="clock" class="w-4 h-4" style="color: var(--pos-orange);"></i>
-              <span style="color: var(--pos-orange);">CREDIT</span>
-            </button>
+          
+          <!-- Split Payment Fields (hidden by default) -->
+          <div id="splitFields" class="split-payment mt-3 hidden">
+            <div class="split-box cash">
+              <label>💵 Cash</label>
+              <input type="number" id="splitCash" class="split-input" placeholder="0" min="0" oninput="updateSplitTotal()"/>
+            </div>
+            <div class="split-box upi">
+              <label>📱 UPI</label>
+              <input type="number" id="splitUpi" class="split-input" placeholder="0" min="0" oninput="updateSplitTotal()"/>
+            </div>
           </div>
         </div>
         
@@ -610,54 +566,204 @@
             ✓ ADD
           </button>
         </div>
-        
       </div>
       
-      <!-- Right Panel: Stats -->
-      <div class="pos-right">
+      <!-- BOOKINGS PANEL -->
+      <div id="bookingsPanel" class="pos-panel">
         
-        <!-- Today Stats -->
+        <!-- Pending Bookings -->
         <div class="pos-card">
-          <div class="pos-card-title">📊 Today</div>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="value" id="statCash" style="color: var(--pos-cyan);">₹0</div>
-              <div class="label">Cash</div>
-            </div>
-            <div class="stat-card">
-              <div class="value" id="statUpi" style="color: var(--pos-purple);">₹0</div>
-              <div class="label">UPI</div>
-            </div>
-            <div class="stat-card">
-              <div class="value" id="statCredit" style="color: var(--pos-orange);">₹0</div>
-              <div class="label">Credit</div>
-            </div>
-            <div class="stat-card">
-              <div class="value" id="statCount" style="color: var(--pos-green);">0</div>
-              <div class="label">TXN</div>
+          <div class="pos-card-title" style="color: var(--pos-yellow);">
+            <i data-lucide="clock" class="w-3 h-3"></i> Pending Approval
+          </div>
+          <div id="pendingBookings" class="space-y-2" style="max-height: 120px; overflow-y: auto;">
+            <div class="empty-state">
+              <i data-lucide="check-circle" class="w-6 h-6"></i>
+              <p class="text-xs">No pending</p>
             </div>
           </div>
         </div>
         
-        <!-- Recent -->
+        <!-- Ongoing Sessions -->
+        <div class="pos-card">
+          <div class="pos-card-title" style="color: var(--pos-green);">
+            <i data-lucide="play-circle" class="w-3 h-3"></i> Active Now
+          </div>
+          <div id="ongoingBookings" class="space-y-2" style="max-height: 120px; overflow-y: auto;">
+            <div class="empty-state">
+              <i data-lucide="users" class="w-6 h-6"></i>
+              <p class="text-xs">No active sessions</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Upcoming (Today + Tomorrow) -->
         <div class="pos-card" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-          <div class="pos-card-title">🕐 Recent</div>
-          <div class="recent-list" id="recentList">
-            <p class="text-gray-600 text-center text-xs py-4">No transactions</p>
+          <div class="pos-card-title" style="color: var(--pos-cyan);">
+            <i data-lucide="calendar-check" class="w-3 h-3"></i> Upcoming (Today & Tomorrow)
+          </div>
+          <div id="todayBookings" class="space-y-2" style="flex: 1; overflow-y: auto; min-height: 0;">
+            <div class="empty-state">
+              <i data-lucide="calendar-x" class="w-6 h-6"></i>
+              <p class="text-xs">No upcoming bookings</p>
+            </div>
           </div>
         </div>
         
-        <!-- Dashboard Link -->
-        <a href="dashboard.html" class="pos-card flex items-center gap-2 hover:border-cyan-500/50 transition-colors">
-          <i data-lucide="layout-dashboard" class="w-4 h-4 text-gray-500"></i>
-          <span class="text-gray-500 text-sm">Full Dashboard</span>
-          <i data-lucide="chevron-right" class="w-3 h-3 text-gray-600 ml-auto"></i>
-        </a>
+        <!-- Completed Today -->
+        <div class="pos-card">
+          <div class="pos-card-title" style="color: #888;">
+            <i data-lucide="check-circle" class="w-3 h-3"></i> Completed Today
+          </div>
+          <div id="pastBookings" class="space-y-2" style="max-height: 100px; overflow-y: auto;">
+            <div class="empty-state">
+              <i data-lucide="check-circle" class="w-6 h-6"></i>
+              <p class="text-xs">No completed sessions</p>
+            </div>
+          </div>
+        </div>
         
       </div>
       
-    </main>
+      <!-- CREDITS PANEL -->
+      <div id="creditsPanel" class="pos-panel">
+        
+        <!-- Outstanding Credits -->
+        <div class="pos-card" style="flex: 1;">
+          <div class="pos-card-title" style="color: var(--pos-orange);">
+            <i data-lucide="alert-circle" class="w-3 h-3"></i> Outstanding Credits
+          </div>
+          <div id="creditsList" class="space-y-2" style="max-height: 400px; overflow-y: auto;">
+            <div class="empty-state">
+              <i data-lucide="check-circle" class="w-8 h-8"></i>
+              <p class="text-sm">No outstanding credits</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Credit Summary -->
+        <div class="pos-card">
+          <div class="pos-card-title">Credit Summary</div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="text-center p-3 rounded-lg" style="background: rgba(255,0,68,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="totalCredits" style="color: var(--pos-red);">₹0</div>
+              <div class="text-xs text-gray-500">Total Outstanding</div>
+            </div>
+            <div class="text-center p-3 rounded-lg" style="background: rgba(0,255,136,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="collectedToday" style="color: var(--pos-green);">₹0</div>
+              <div class="text-xs text-gray-500">Collected Today</div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+      
+      <!-- MORE PANEL -->
+      <div id="morePanel" class="pos-panel">
+        
+        <!-- Quick Actions -->
+        <div class="pos-card">
+          <div class="pos-card-title"><i data-lucide="zap" class="w-3 h-3"></i> Quick Actions</div>
+          <div class="quick-actions">
+            <a href="dashboard.html" class="quick-action">
+              <i data-lucide="layout-dashboard" class="w-5 h-5 mx-auto"></i>
+              Dashboard
+            </a>
+            <div class="quick-action" onclick="refreshData()">
+              <i data-lucide="rotate-cw" class="w-5 h-5 mx-auto"></i>
+              Refresh
+            </div>
+          </div>
+        </div>
+        
+        <!-- Today's Summary -->
+        <div class="pos-card">
+          <div class="pos-card-title">📊 Today's Summary</div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="text-center p-3 rounded-lg" style="background: rgba(0,240,255,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="summaryCash" style="color: var(--pos-cyan);">₹0</div>
+              <div class="text-xs text-gray-500">Cash Collected</div>
+            </div>
+            <div class="text-center p-3 rounded-lg" style="background: rgba(184,41,255,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="summaryUpi" style="color: var(--pos-purple);">₹0</div>
+              <div class="text-xs text-gray-500">UPI Collected</div>
+            </div>
+            <div class="text-center p-3 rounded-lg" style="background: rgba(255,0,68,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="summaryPending" style="color: var(--pos-red);">₹0</div>
+              <div class="text-xs text-gray-500">Pending Collection</div>
+            </div>
+            <div class="text-center p-3 rounded-lg" style="background: rgba(0,255,136,0.1);">
+              <div class="font-orbitron text-xl font-bold" id="summaryTotal" style="color: var(--pos-green);">₹0</div>
+              <div class="text-xs text-gray-500">Total Collected</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Recent Transactions -->
+        <div class="pos-card" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+          <div class="pos-card-title" style="flex-shrink: 0;">🕐 Recent Transactions</div>
+          <div id="recentList" class="space-y-1" style="flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0;">
+            <div class="empty-state">
+              <p class="text-sm">No transactions yet</p>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+      
+    </div>
     
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="value" id="statCash" style="color: var(--pos-cyan);">₹0</div>
+        <div class="label">Cash</div>
+      </div>
+      <div class="stat-item">
+        <div class="value" id="statUpi" style="color: var(--pos-purple);">₹0</div>
+        <div class="label">UPI</div>
+      </div>
+      <div class="stat-item">
+        <div class="value" id="statPending" style="color: var(--pos-red);">₹0</div>
+        <div class="label">Pending</div>
+      </div>
+      <div class="stat-item">
+        <div class="value" id="statCount" style="color: var(--pos-green);">0</div>
+        <div class="label">TXN</div>
+      </div>
+    </div>
+    
+  </div>
+
+  <!-- Credit Collection Modal -->
+  <div id="collectModal" class="pos-modal hidden">
+    <div class="modal-content">
+      <div class="modal-title">💰 Collect Credit</div>
+      <div id="collectMemberName" class="text-center font-orbitron text-lg mb-2" style="color: var(--pos-cyan);">-</div>
+      <div id="collectAmount" class="text-center font-orbitron text-2xl mb-4" style="color: var(--pos-red);">₹0</div>
+      
+      <div class="pos-card-title">Payment Mode</div>
+      <div class="split-payment mb-4">
+        <div class="split-box cash">
+          <label>💵 Cash</label>
+          <input type="number" id="collectCash" class="split-input" placeholder="0" min="0" oninput="updateCollectTotal()"/>
+        </div>
+        <div class="split-box upi">
+          <label>📱 UPI</label>
+          <input type="number" id="collectUpi" class="split-input" placeholder="0" min="0" oninput="updateCollectTotal()"/>
+        </div>
+      </div>
+      
+      <div class="text-center mb-4">
+        <span class="text-gray-500 text-sm">Collecting: </span>
+        <span id="collectTotal" class="font-orbitron" style="color: var(--pos-green);">₹0</span>
+      </div>
+      
+      <div class="flex gap-3">
+        <button onclick="closeCollectModal()" class="flex-1 py-2 rounded-lg border border-gray-700 text-gray-400">Cancel</button>
+        <button id="collectBtn" onclick="confirmCollect()" class="flex-1 py-2 rounded-lg font-semibold" style="background: var(--pos-green); color: #000;">Collect</button>
+      </div>
+    </div>
   </div>
 
   <!-- Success Flash -->
@@ -674,4 +780,3 @@
   <script type="module" src="js/counter.js"></script>
 </body>
 </html>
-
