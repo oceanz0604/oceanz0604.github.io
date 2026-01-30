@@ -68,9 +68,6 @@ async function initFirebase() {
   }
 }
 
-// Try to init immediately (will work on desktop)
-initFirebase();
-
 // ==================== STATE ====================
 
 let selectedMember = "";
@@ -109,13 +106,36 @@ const elements = {
 
 // ==================== AUTH CHECK ====================
 
-auth.onAuthStateChanged(user => {
-  if (!user || !getStaffSession()) {
-    window.location.replace("index.html");
-    return;
+async function checkAuthAndInit() {
+  try {
+    // Wait for Firebase to be ready
+    const ready = await initFirebase();
+    if (!ready) {
+      console.error("❌ Firebase failed to initialize");
+      document.getElementById("loadingScreen").innerHTML = `
+        <div class="text-center">
+          <div class="text-red-500 text-xl mb-2">⚠️</div>
+          <p class="text-gray-500 text-sm">Failed to load. Please refresh.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Now auth is available
+    auth.onAuthStateChanged(user => {
+      if (!user || !getStaffSession()) {
+        window.location.replace("index.html");
+        return;
+      }
+      init(getStaffSession());
+    });
+  } catch (error) {
+    console.error("❌ Counter init error:", error);
   }
-  init(getStaffSession());
-});
+}
+
+// Start the app
+checkAuthAndInit();
 
 // ==================== INITIALIZATION ====================
 
