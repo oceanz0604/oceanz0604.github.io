@@ -183,6 +183,9 @@ export const CONSTANTS = {
   ],
   
   MIN_BOOKING_HOURS: 1,
+
+  // Auto-purge bookings older than this many days (by end time)
+  BOOKING_RETENTION_DAYS: 15,
   
   // Operating hours
   OPERATING_HOURS: { start: 10, end: 22 },

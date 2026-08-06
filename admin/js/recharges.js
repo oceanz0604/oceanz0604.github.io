@@ -1691,8 +1691,28 @@ window.deleteRecharge = async id => {
     notifyWarning("You have view-only access. Deleting is not allowed.");
     return;
   }
+
+  const r = state.find(x => x.id === id);
+  const collected = r
+    ? (Number(r.creditPaid) || 0) ||
+      Object.values(r.creditPayments || {}).reduce(
+        (sum, p) => sum + (Number(p?.cash) || 0) + (Number(p?.upi) || 0),
+        0
+      )
+    : 0;
+  const pending = r
+    ? Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0))
+    : 0;
+
+  let msg = "Delete this recharge entry?";
+  if (collected > 0 || pending > 0) {
+    const bits = [];
+    if (collected > 0) bits.push(`₹${collected} collected credit history will be removed from finance`);
+    if (pending > 0) bits.push(`₹${pending} pending credit will be cleared`);
+    msg = `Delete this recharge entry? ${bits.join(". ")}.`;
+  }
   
-  const confirmed = await showConfirm("Delete this recharge entry?", {
+  const confirmed = await showConfirm(msg, {
     title: "Delete Entry",
     type: "error",
     confirmText: "Delete",
@@ -1704,6 +1724,7 @@ window.deleteRecharge = async id => {
     invalidateRechargesCache(); // Clear cache after deletion
     logAudit("DELETE", id);
     notifySuccess("Entry deleted");
+    loadAllOutstandingCredits();
   }
 };
 

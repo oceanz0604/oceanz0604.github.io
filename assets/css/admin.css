@@ -944,11 +944,11 @@ table.recharge-table th {
   table.recharge-table td:nth-child(8) { width: 5.5rem !important; } /* Actions */
 }
 
-/* Recharge table mobile */
+/* Recharge table mobile — stacked cards (not a sparse single row) */
 @media (max-width: 640px) {
   .recharge-table-wrapper {
     overflow: visible !important;
-    padding: 10px !important;
+    padding: 8px !important;
   }
   
   .recharge-table {
@@ -965,17 +965,20 @@ table.recharge-table th {
     width: 100% !important;
   }
   
-  /* Card-style rows */
   #rechargeList tr {
-    display: flex !important;
-    align-items: center !important;
+    display: grid !important;
+    grid-template-columns: 54px minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "time member amt actions"
+      "pay  pay    pay   pay";
+    align-items: start;
     width: 100% !important;
-    padding: 8px 10px !important;
-    margin-bottom: 6px !important;
-    gap: 8px !important;
-    background: rgba(15, 15, 25, 0.8) !important;
-    border: 1px solid rgba(0, 240, 255, 0.15) !important;
-    border-radius: 10px !important;
+    padding: 10px 12px !important;
+    margin-bottom: 8px !important;
+    gap: 6px 8px !important;
+    background: rgba(15, 15, 25, 0.88) !important;
+    border: 1px solid rgba(0, 240, 255, 0.14) !important;
+    border-radius: 12px !important;
     box-sizing: border-box !important;
   }
   
@@ -983,61 +986,80 @@ table.recharge-table th {
     padding: 0 !important;
     border: none !important;
     background: none !important;
+    width: auto !important;
+    max-width: none !important;
   }
 
-  /* # serial — compact */
+  /* Hide serial # on mobile — time chip is enough */
   #rechargeList td:nth-child(1) {
-    flex: 0 0 28px !important;
-    text-align: center !important;
+    display: none !important;
   }
   
-  /* Time */
+  /* Time chip */
   #rechargeList td:nth-child(2) {
-    flex: 0 0 52px !important;
+    grid-area: time;
     text-align: center !important;
-    background: rgba(184, 41, 255, 0.15) !important;
-    border-radius: 6px !important;
-    padding: 4px !important;
+    background: rgba(184, 41, 255, 0.12) !important;
+    border-radius: 8px !important;
+    padding: 6px 4px !important;
+    align-self: stretch;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
   }
   
   #rechargeList td:nth-child(2) .txn-time {
     font-size: 10px !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     color: #b829ff !important;
+    white-space: normal !important;
+    line-height: 1.2 !important;
   }
   
   #rechargeList td:nth-child(2) .txn-date {
     font-size: 8px !important;
-    color: rgba(184, 41, 255, 0.7) !important;
+    color: rgba(184, 41, 255, 0.75) !important;
   }
   
-  /* Member name */
+  /* Member + type + items */
   #rechargeList td:nth-child(3) {
-    flex: 1 1 0 !important;
+    grid-area: member;
     min-width: 0 !important;
     overflow: hidden !important;
   }
   
   #rechargeList td:nth-child(3) .txn-member {
-    font-size: 12px !important;
-    font-weight: 600 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    display: block !important;
+    display: inline !important;
   }
 
   #rechargeList td:nth-child(3) .txn-type-badge {
-    display: none !important;
+    display: inline-block !important;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  #rechargeList td:nth-child(3) .txn-items {
+    display: block !important;
+    margin-top: 2px;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
   
   /* Amount */
   #rechargeList td:nth-child(4) {
-    flex: 0 0 auto !important;
+    grid-area: amt;
+    text-align: right !important;
+    align-self: center;
   }
   
   #rechargeList td:nth-child(4) .txn-amt {
-    font-size: 13px !important;
+    font-size: 14px !important;
     font-weight: 700 !important;
     color: #00ff88 !important;
   }
@@ -1046,8 +1068,20 @@ table.recharge-table th {
     display: none !important;
   }
   
-  /* Hide Pay, Note, Admin */
-  #rechargeList td:nth-child(5),
+  /* Payment badges — keep visible on mobile */
+  #rechargeList td:nth-child(5) {
+    grid-area: pay;
+    display: block !important;
+    margin-top: 2px;
+  }
+
+  #rechargeList td:nth-child(5) .flex {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  
+  /* Hide note + admin on mobile */
   #rechargeList td:nth-child(6),
   #rechargeList td:nth-child(7) {
     display: none !important;
@@ -1055,7 +1089,8 @@ table.recharge-table th {
   
   /* Actions */
   #rechargeList td:nth-child(8) {
-    flex: 0 0 auto !important;
+    grid-area: actions;
+    align-self: center;
   }
   
   #rechargeList td:nth-child(8) .txn-actions {
@@ -1064,12 +1099,12 @@ table.recharge-table th {
   }
   
   #rechargeList td:nth-child(8) button {
-    width: 30px !important;
-    height: 30px !important;
+    width: 32px !important;
+    height: 32px !important;
     padding: 0 !important;
     font-size: 14px !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-radius: 6px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-radius: 8px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;

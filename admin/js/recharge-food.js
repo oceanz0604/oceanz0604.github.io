@@ -21,7 +21,9 @@ import {
   FOOD_SALE_SOURCES,
   buildFoodLedgerSale,
   foodCreditKey,
-  foodSaleToLedger
+  foodSaleToLedger,
+  removeFoodCreditPaymentsForSale,
+  purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
 
 // ==================== FIREBASE ====================
@@ -620,28 +622,47 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
     return;
   }
 
+  const pending = Math.max(0, (sale.credit || 0) - (sale.creditPaid || 0));
+  const collected = Number(sale.creditPaid) || 0;
+  const warnParts = [];
+  if (pending > 0) warnParts.push(`₹${pending} pending credit will be cleared`);
+  if (collected > 0) warnParts.push(`₹${collected} already-collected credit will be removed from finance`);
+
+  const confirmMsg = warnParts.length
+    ? `Delete this food entry? ${warnParts.join(". ")}.`
+    : "Delete this food entry?";
+
   const confirmed = typeof showConfirm === "function"
-    ? await showConfirm("Delete this food entry? Pending food credit for this sale will be reduced.", {
+    ? await showConfirm(confirmMsg, {
         title: "Delete Food Entry",
         type: "error",
         confirmText: "Delete",
         cancelText: "Cancel"
       })
-    : confirm("Delete this food entry?");
+    : confirm(confirmMsg);
 
   if (!confirmed) return;
 
   try {
     await initFoodFirebase();
-    const pending = Math.max(0, (sale.credit || 0) - (sale.creditPaid || 0));
+
+    // Remove sale first, then scrub matching credit-collection log rows
     await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).remove();
+
+    const paymentsRemoved = await removeFoodCreditPaymentsForSale(
+      bookingDb,
+      id,
+      dateStr,
+      FB_PATHS.FOOD_CREDIT_PAYMENTS
+    );
 
     if (pending > 0 && sale.member) {
       await adjustFoodCreditLedger(sale.member, -pending, sale.customerType, sale);
     }
 
     SharedCache.invalidateFoodSales();
-    toast("success", "Food entry deleted");
+    const extra = paymentsRemoved > 0 ? ` (cleared ${paymentsRemoved} credit collection${paymentsRemoved > 1 ? "s" : ""})` : "";
+    toast("success", "Food entry deleted" + extra);
     if (typeof window.loadAllOutstandingCredits === "function") {
       window.loadAllOutstandingCredits();
     }
@@ -844,8 +865,35 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
 
 // Auto-init
 document.addEventListener("DOMContentLoaded", () => {
-  initRechargeFood().catch(err => console.error(err));
+  initRechargeFood()
+    .then(() => scrubOrphanFoodCreditPaymentsQuietly())
+    .catch(err => console.error(err));
 });
+
+/** One-shot cleanup of orphaned food credit payment logs (does not block UI). */
+async function scrubOrphanFoodCreditPaymentsQuietly() {
+  try {
+    const ready = await initFoodFirebase();
+    if (!ready || !bookingDb) return;
+    // At most once per browser day
+    const key = "oceanz_food_credit_orphan_scrub";
+    const today = getTodayISTString();
+    if (localStorage.getItem(key) === today) return;
+
+    const result = await purgeOrphanedFoodCreditPayments(
+      bookingDb,
+      FB_PATHS.FOOD_SALES,
+      FB_PATHS.FOOD_CREDIT_PAYMENTS
+    );
+    localStorage.setItem(key, today);
+    if (result.removed > 0) {
+      SharedCache.invalidateFoodSales();
+      console.log(`🧹 Removed ${result.removed} orphaned food credit payment(s)`);
+    }
+  } catch (err) {
+    console.warn("Food credit orphan scrub skipped:", err);
+  }
+}
 
 window.initRechargeFood = initRechargeFood;
 window.getFoodDayState = getFoodDayState;

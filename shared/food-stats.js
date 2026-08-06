@@ -403,3 +403,100 @@ export function buildFoodSalePayload({
 export function foodCreditKey(customerName) {
   return encodeURIComponent(String(customerName || "Walk-in").trim());
 }
+
+/**
+ * Remove food_credit_payments rows that belong to a deleted sale.
+ * Finance / food-analytics read this separate log — leaving orphans inflates revenue.
+ *
+ * @param {object} db - Firebase compat database OR modular-like { ref().once/remove }
+ * @param {string} saleId
+ * @param {string} [saleDate] - optional hint to scan that date first
+ * @param {string} paymentsPath - FB path root
+ * @returns {Promise<number>} number of payment rows removed
+ */
+export async function removeFoodCreditPaymentsForSale(
+  db,
+  saleId,
+  saleDate = null,
+  paymentsPath = "food_credit_payments"
+) {
+  if (!db || !saleId) return 0;
+  let removed = 0;
+
+  const removeMatchingInDay = async (dayKey, dayData) => {
+    if (!dayData || typeof dayData !== "object") return;
+    const deletes = [];
+    Object.entries(dayData).forEach(([payId, payment]) => {
+      if (!payment || typeof payment !== "object") return;
+      if (payment.saleId === saleId) {
+        deletes.push(payId);
+      }
+    });
+    for (const payId of deletes) {
+      await db.ref(`${paymentsPath}/${dayKey}/${payId}`).remove();
+      removed += 1;
+    }
+  };
+
+  // Prefer scanning the collection dates from the sale if available, else full tree
+  const treeSnap = await db.ref(paymentsPath).once("value");
+  const tree = treeSnap.val() || {};
+
+  if (saleDate && tree[saleDate]) {
+    await removeMatchingInDay(saleDate, tree[saleDate]);
+  }
+
+  // Payments can land on a different day than the sale — scan all days
+  for (const [dayKey, dayData] of Object.entries(tree)) {
+    if (saleDate && dayKey === saleDate) continue; // already handled
+    await removeMatchingInDay(dayKey, dayData);
+  }
+
+  return removed;
+}
+
+/**
+ * Delete orphaned food_credit_payments that reference a missing saleId.
+ * Payments without saleId (customer-level collections from Food Analytics) are kept.
+ *
+ * @returns {Promise<{removed: number, scanned: number}>}
+ */
+export async function purgeOrphanedFoodCreditPayments(
+  db,
+  salesPath = "food_sales",
+  paymentsPath = "food_credit_payments"
+) {
+  if (!db) return { removed: 0, scanned: 0 };
+
+  const [salesSnap, paysSnap] = await Promise.all([
+    db.ref(salesPath).once("value"),
+    db.ref(paymentsPath).once("value")
+  ]);
+
+  const salesTree = salesSnap.val() || {};
+  const paysTree = paysSnap.val() || {};
+  const existingSaleIds = new Set();
+
+  Object.values(salesTree).forEach(day => {
+    if (!day || typeof day !== "object") return;
+    Object.keys(day).forEach(id => existingSaleIds.add(id));
+  });
+
+  let removed = 0;
+  let scanned = 0;
+
+  for (const [dayKey, dayPays] of Object.entries(paysTree)) {
+    if (!dayPays || typeof dayPays !== "object") continue;
+    for (const [payId, payment] of Object.entries(dayPays)) {
+      scanned += 1;
+      const saleId = payment?.saleId;
+      // Only scrub payments tied to a specific sale that no longer exists
+      if (saleId && !existingSaleIds.has(saleId)) {
+        await db.ref(`${paymentsPath}/${dayKey}/${payId}`).remove();
+        removed += 1;
+      }
+    }
+  }
+
+  return { removed, scanned };
+}

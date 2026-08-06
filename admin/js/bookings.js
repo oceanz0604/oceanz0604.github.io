@@ -15,7 +15,7 @@ import {
   getISTToday,
   FB_PATHS
 } from "../../shared/config.js";
-import { getStaffSession } from "./permissions.js";
+import { getStaffSession, canEditData } from "./permissions.js";
 
 // Get admin name from staff session
 function getAdminName() {
@@ -144,7 +144,61 @@ onValue(bookingsRef, snapshot => {
   renderTimeHeader();
   renderTimetable(buildTimetableBookings(data));
   renderCurrentTimeLine();
+  // Opportunistic retention purge (non-blocking)
+  purgeOldBookingsIfNeeded(currentBookingsData);
 });
+
+/**
+ * Delete bookings whose end time is older than BOOKING_RETENTION_DAYS.
+ * Runs at most once per browser day for staff who can edit.
+ */
+async function purgeOldBookingsIfNeeded(bookingsData) {
+  try {
+    if (!bookingsData || typeof bookingsData !== "object") return;
+    if (typeof canEditData === "function" && !canEditData()) return;
+
+    const retentionDays = Number(CONSTANTS.BOOKING_RETENTION_DAYS) || 15;
+    const todayKey = getISTToday();
+    const storageKey = "oceanz_bookings_purge_day";
+    if (localStorage.getItem(storageKey) === todayKey) return;
+
+    const cutoffMs = getISTDate().getTime() - retentionDays * 24 * 60 * 60 * 1000;
+    const toDelete = [];
+
+    Object.entries(bookingsData).forEach(([id, b]) => {
+      if (!b || typeof b !== "object") return;
+      // Prefer end timestamp; fall back to start / legacy date
+      let endMs = 0;
+      if (b.end) endMs = new Date(b.end).getTime();
+      else if (b.start) endMs = new Date(b.start).getTime();
+      else if (b.date) endMs = new Date(`${b.date}T23:59:59`).getTime();
+
+      if (endMs && endMs < cutoffMs) {
+        toDelete.push(id);
+      }
+    });
+
+    // Mark as done even if nothing to delete — avoid re-scanning every snapshot
+    localStorage.setItem(storageKey, todayKey);
+
+    if (toDelete.length === 0) return;
+
+    // Batch deletes (Firebase web client has no multi-path remove helper here)
+    const BATCH = 25;
+    for (let i = 0; i < toDelete.length; i += BATCH) {
+      await Promise.all(
+        toDelete.slice(i, i + BATCH).map(id => remove(ref(db, `bookings/${id}`)))
+      );
+    }
+
+    console.log(`🧹 Purged ${toDelete.length} booking(s) older than ${retentionDays} days`);
+    if (window.notifyInfo) {
+      window.notifyInfo(`Cleaned ${toDelete.length} old booking${toDelete.length > 1 ? "s" : ""} (>${retentionDays}d)`);
+    }
+  } catch (err) {
+    console.warn("Booking retention purge skipped:", err);
+  }
+}
 
 // ==================== EXPORTS FOR GLOBAL ACCESS ====================
 
