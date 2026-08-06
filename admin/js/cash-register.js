@@ -619,7 +619,7 @@ window.openCashEntryModal = async function(dateToEdit = null) {
             ₹<span id="modalSaleDisplay">${todaySale.toLocaleString("en-IN")}</span>
           </div>
           <input type="hidden" id="modalTodaySale" value="${todaySale}"/>
-          <p class="text-xs text-gray-600 mt-1">From recharges (cash only)</p>
+          <p class="text-xs text-gray-600 mt-1">From gaming + food (cash only)</p>
         </div>
       </div>
       
@@ -803,12 +803,15 @@ window.calculateModalTotals = function() {
 async function calculateSaleFromRecharges(targetDate) {
   const dateStr = targetDate || getISTDateString();
   try {
-    const allRecharges = await SharedCache.getRecharges(db, FB_PATHS.RECHARGES);
+    const [allRecharges, allFood] = await Promise.all([
+      SharedCache.getRecharges(db, FB_PATHS.RECHARGES),
+      SharedCache.getFoodSales(db, FB_PATHS.FOOD_SALES).catch(() => ({}))
+    ]);
     
     let totalCash = 0;
     let creditCash = 0;
     
-    // Direct recharges for the target date
+    // Direct gaming recharges for the target date
     const dateRecharges = allRecharges[dateStr] || {};
     Object.values(dateRecharges).forEach(r => {
       if (r.total !== undefined) {
@@ -818,14 +821,39 @@ async function calculateSaleFromRecharges(targetDate) {
       }
     });
     
-    // Credit collections that happened on the target date
+    // Gaming credit collections that happened on the target date
     Object.entries(allRecharges).forEach(([date, dayData]) => {
       Object.values(dayData).forEach(r => {
-        if (r.lastPaidAt?.split("T")[0] === dateStr) {
-            creditCash += r.lastPaidCash || 0;
+        if (r.creditPayments?.[dateStr]) {
+          creditCash += r.creditPayments[dateStr].cash || 0;
+        } else if (r.lastPaidAt?.split("T")[0] === dateStr) {
+          creditCash += r.lastPaidCash || 0;
         }
         if (r.paidAt?.split("T")[0] === dateStr && r.mode === "credit" && r.paid && r.paidVia === "cash") {
           creditCash += r.amount;
+        }
+      });
+    });
+
+    // Food sales cash for the target date
+    const dateFood = allFood[dateStr] || {};
+    Object.values(dateFood).forEach(r => {
+      if (r.cash !== undefined) {
+        totalCash += r.cash || 0;
+      } else if (r.paymentMode === "cash") {
+        totalCash += r.total || 0;
+      } else if (r.paymentMode === "split") {
+        totalCash += r.cashAmount || 0;
+      }
+    });
+
+    // Food credit collections (per-sale creditPayments + food_credit_payments cash)
+    Object.entries(allFood).forEach(([date, dayData]) => {
+      Object.values(dayData || {}).forEach(r => {
+        if (r.creditPayments?.[dateStr]) {
+          creditCash += r.creditPayments[dateStr].cash || 0;
+        } else if (r.lastPaidAt?.split("T")[0] === dateStr) {
+          creditCash += r.lastPaidCash || 0;
         }
       });
     });
@@ -851,7 +879,7 @@ window.refreshModalSale = async function() {
   calculateModalTotals();
   
   const isToday = targetDate === getISTDateString();
-  notifySuccess(isToday ? "Sale updated from today's recharges!" : `Sale updated for ${formatDateShort(targetDate)}!`);
+  notifySuccess(isToday ? "Sale updated from today's gaming + food cash!" : `Sale updated for ${formatDateShort(targetDate)}!`);
 };
 
 // Save modal entry

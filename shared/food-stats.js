@@ -55,11 +55,23 @@ export function normalizeFoodSale(sale = {}) {
 
 /**
  * Cash / UPI collected from a single sale (credit not included until paid).
+ * Prefers recharge-style ledger fields (cash/upi/credit) when present.
  * @param {object} sale
  * @returns {Object} amounts with cash, upi, credit, and total
  */
 export function getSaleCollectedAmounts(sale) {
   const s = normalizeFoodSale(sale);
+
+  // New ledger format (aligned with gaming recharges)
+  if (sale.cash !== undefined || sale.upi !== undefined || sale.credit !== undefined) {
+    return {
+      cash: Number(sale.cash) || 0,
+      upi: Number(sale.upi) || 0,
+      credit: Number(sale.credit) || 0,
+      total: Number(sale.total) || s.total || 0
+    };
+  }
+
   let cash = 0;
   let upi = 0;
   let credit = 0;
@@ -214,7 +226,128 @@ export function sumFoodExpenses(expenses = [], foodCategoryIds = ["food_purchase
 }
 
 /**
- * Build food_sales write payload (additive schema).
+ * Map any food sale (legacy POS or new ledger) into recharge-compatible payment fields.
+ * @param {object} sale
+ * @returns {object}
+ */
+export function foodSaleToLedger(sale = {}) {
+  const normalized = normalizeFoodSale(sale);
+  const amounts = getSaleCollectedAmounts(normalized);
+
+  // Prefer explicit ledger fields when present (recharges-style)
+  const hasLedger =
+    sale.cash !== undefined ||
+    sale.upi !== undefined ||
+    sale.credit !== undefined ||
+    sale.creditPaid !== undefined;
+
+  const cash = hasLedger ? (Number(sale.cash) || 0) : amounts.cash;
+  const upi = hasLedger ? (Number(sale.upi) || 0) : amounts.upi;
+  const credit = hasLedger
+    ? (Number(sale.credit) || 0)
+    : (amounts.credit || (normalized.paymentMode === "credit" ? normalized.total : 0));
+  const creditPaid = Number(sale.creditPaid) || 0;
+
+  const member =
+    sale.member ||
+    normalized.customerName ||
+    normalized.memberName ||
+    normalized.pcName ||
+    "Walk-in";
+
+  const createdAt =
+    sale.createdAt ||
+    (sale.timestamp ? new Date(sale.timestamp).toISOString() : null);
+
+  const itemsNote = (normalized.items || [])
+    .map(i => `${i.qty || 1}× ${i.name}`)
+    .join(", ");
+
+  return {
+    ...normalized,
+    entryType: "food",
+    member,
+    total: Number(sale.total) || normalized.total || 0,
+    cash,
+    upi,
+    credit,
+    creditPaid,
+    creditPayments: sale.creditPayments || {},
+    free: 0,
+    note: sale.note || itemsNote || "",
+    admin: sale.admin || sale.staffName || "Admin",
+    createdAt,
+    items: normalized.items,
+    pendingCredit: Math.max(0, credit - creditPaid)
+  };
+}
+
+/**
+ * Build recharge-style food sale write payload (cash/upi/credit + items).
+ */
+export function buildFoodLedgerSale({
+  customerName,
+  customerType = FOOD_CUSTOMER_TYPES.WALKIN,
+  memberId = null,
+  memberName = null,
+  pcName = null,
+  source = FOOD_SALE_SOURCES.RECHARGES,
+  items = [],
+  total = 0,
+  cash = 0,
+  upi = 0,
+  credit = 0,
+  note = "",
+  admin = "Admin",
+  staffId = "unknown",
+  staffName = "Unknown",
+  timestamp = Date.now(),
+  creditPaid = 0,
+  creditPayments = null
+}) {
+  const displayName = customerName || memberName || pcName || "Walk-in";
+  let paymentMode = "cash";
+  if (credit > 0 && cash === 0 && upi === 0) paymentMode = "credit";
+  else if (credit > 0 || (cash > 0 && upi > 0)) paymentMode = "split";
+  else if (upi > 0 && cash === 0) paymentMode = "upi";
+
+  return {
+    entryType: "food",
+    member: displayName,
+    customerName: displayName,
+    customerType,
+    memberId: memberId || null,
+    memberName: memberName || null,
+    pcName: pcName || null,
+    source,
+    items: items.map(item => ({
+      id: item.id,
+      name: item.name,
+      price: Number(item.price) || 0,
+      qty: Number(item.qty) || 1
+    })),
+    total: Number(total) || 0,
+    cash: Number(cash) || 0,
+    upi: Number(upi) || 0,
+    credit: Number(credit) || 0,
+    creditPaid: Number(creditPaid) || 0,
+    creditPayments: creditPayments || {},
+    free: 0,
+    paymentMode,
+    cashAmount: Number(cash) || 0,
+    upiAmount: Number(upi) || 0,
+    creditAmount: Number(credit) || 0,
+    note: note || "",
+    admin,
+    staffId,
+    staffName,
+    timestamp,
+    createdAt: new Date(timestamp).toISOString()
+  };
+}
+
+/**
+ * Backward-compatible POS payload builder.
  */
 export function buildFoodSalePayload({
   customerName,
@@ -234,40 +367,34 @@ export function buildFoodSalePayload({
   note = "",
   timestamp = Date.now()
 }) {
-  const payload = {
-    customerName: customerName || memberName || pcName || "Walk-in",
-    customerType,
-    memberId: memberId || null,
-    memberName: memberName || null,
-    pcName: pcName || null,
-    source,
-    items: items.map(item => ({
-      id: item.id,
-      name: item.name,
-      price: Number(item.price) || 0,
-      qty: Number(item.qty) || 1
-    })),
-    total: Number(total) || 0,
-    paymentMode,
-    timestamp,
-    staffId,
-    staffName,
-    note: note || ""
-  };
-
-  if (paymentMode === "split") {
-    payload.cashAmount = Number(cashAmount) || 0;
-    payload.upiAmount = Number(upiAmount) || 0;
-    if (creditAmount > 0) payload.creditAmount = Number(creditAmount) || 0;
-  } else if (paymentMode === "credit") {
-    payload.creditAmount = Number(creditAmount) || Number(total) || 0;
-  } else if (paymentMode === "cash") {
-    payload.cashAmount = Number(total) || 0;
-  } else if (paymentMode === "upi") {
-    payload.upiAmount = Number(total) || 0;
+  let cash = 0, upi = 0, credit = 0;
+  if (paymentMode === "cash") cash = total;
+  else if (paymentMode === "upi") upi = total;
+  else if (paymentMode === "credit") credit = total;
+  else if (paymentMode === "split") {
+    cash = cashAmount;
+    upi = upiAmount;
+    credit = creditAmount;
   }
 
-  return payload;
+  return buildFoodLedgerSale({
+    customerName,
+    customerType,
+    memberId,
+    memberName,
+    pcName,
+    source,
+    items,
+    total,
+    cash,
+    upi,
+    credit,
+    note,
+    admin: staffName,
+    staffId,
+    staffName,
+    timestamp
+  });
 }
 
 /**

@@ -1220,7 +1220,7 @@
           <div class="space-y-6">
             <div class="flex flex-wrap justify-between gap-4 items-center">
               <h2 class="font-orbitron text-2xl font-bold glow-green flex items-center gap-3" style="color: var(--neon-green);">
-                💳 DAILY RECHARGES
+                💳 DAILY TRANSACTIONS
               </h2>
               <div class="flex gap-2">
                 <input type="date" id="datePicker" class="neon-input px-3 py-2 rounded-lg text-white"/>
@@ -1306,7 +1306,7 @@
                   <span id="rechargeCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(0,240,255,0.2);">0</span>
                 </h3>
                 <div class="relative">
-                  <input type="text" id="rechargeSearch" placeholder="" 
+                  <input type="text" id="rechargeSearch" placeholder="Search member / food / note"
                     class="neon-input px-4 py-2 pl-10 rounded-lg text-sm w-full sm:w-64"
                     oninput="filterRechargeList()"/>
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
@@ -1320,7 +1320,7 @@
                     <tr class="text-left">
                       <th class="px-2 py-3 font-orbitron text-xs uppercase tracking-wider text-center" style="color: var(--neon-red); width: 40px;">#</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-purple);">Time</th>
-                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-cyan);">Member</th>
+                      <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-cyan);">Member / Food</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amt</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider recharge-col-payment" style="color: var(--neon-yellow);">Pay</th>
                       <th class="px-4 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500 recharge-col-note">Note</th>
@@ -1345,8 +1345,8 @@
               </div>
             </div>
 
-            <!-- Food / Snacks Sales for Selected Date -->
-            <div class="neon-card rounded-xl overflow-hidden w-full" style="border-color: rgba(255,107,0,0.25);">
+            <!-- Legacy separate food list kept hidden (food now lives in Today's Transactions) -->
+            <div class="neon-card rounded-xl overflow-hidden w-full hidden" style="border-color: rgba(255,107,0,0.25);">
               <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
                 <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-orange);">
                   🍔 FOOD / SNACKS
@@ -2410,7 +2410,7 @@
       <button onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
 
       <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">🍔 ADD FOOD / SNACKS</h3>
-      <p class="text-xs text-gray-500 mb-4">Log food against a member or PC — same ledger as POS</p>
+      <p class="text-xs text-gray-500 mb-4">Same cash / UPI / credit workflow as gaming recharges — shared counter drawer</p>
 
       <div class="space-y-4">
         <div class="relative">
@@ -2452,7 +2452,7 @@
             <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="split" onclick="setFoodRechargePaymentMode('split')" style="border: 1px solid #374151; color: #9ca3af;">Split</button>
             <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="credit" onclick="setFoodRechargePaymentMode('credit')" style="border: 1px solid #374151; color: #9ca3af;">Credit</button>
           </div>
-          <div id="foodRechargeSplitFields" class="hidden grid grid-cols-3 gap-3">
+          <div id="foodRechargeSplitFields" class="grid grid-cols-3 gap-3">
             <div>
               <label class="text-xs mb-1 block" style="color: #00f0ff;">💵 Cash</label>
               <input id="foodRechargeCash" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>

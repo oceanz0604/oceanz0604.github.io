@@ -18,6 +18,16 @@ import {
   SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
+import {
+  foodSaleToLedger
+} from "../../shared/food-stats.js";
+import {
+  getFoodDayState,
+  onFoodDayChange,
+  loadFoodDay,
+  collectFoodSaleCredit,
+  getAllFoodSalesTree
+} from "./recharge-food.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -86,10 +96,20 @@ function getISTDateString() {
 let selectedDate = getISTDateString();
 let editId = null;
 let state = [];
+let foodState = [];
 let allMembers = [];
 let auditData = [];
 let auditLimit = 20;
 let auditFilter = "all";
+
+// Keep unified list in sync when food sales change
+onFoodDayChange((foods) => {
+  foodState = foods || [];
+  render();
+  loadCreditCollectionsForDate(selectedDate);
+  loadOtherDayCollections(selectedDate);
+  loadAllOutstandingCredits();
+});
 
 // OPTIMIZATION: Use SharedCache for recharges data to avoid repeated downloads
 // SharedCache is shared across all admin pages (recharges, analytics, cash-register)
@@ -261,6 +281,7 @@ if (elements.datePicker) {
   elements.datePicker.onchange = e => {
     selectedDate = e.target.value;
     loadDay();
+    loadFoodDay(selectedDate);
   };
 }
 
@@ -386,7 +407,7 @@ async function loadDay() {
   ref.off();
   ref.on("value", snap => {
     state = snap.val()
-      ? Object.entries(snap.val()).map(([id, r]) => ({ id, ...r }))
+      ? Object.entries(snap.val()).map(([id, r]) => ({ id, entryType: "recharge", ...r }))
       : [];
     render();
     // After rendering, scan for credit collections that happened on selectedDate
@@ -397,120 +418,130 @@ async function loadDay() {
     // Reload outstanding credits whenever data changes (including new credit entries)
     loadAllOutstandingCredits();
   });
+
+  // Food day listener (via onFoodDayChange) merges into Today's Transactions
+  loadFoodDay(selectedDate);
 }
 
-// Scan ALL recharges to find credit collections that happened on a specific date
+// Scan ALL gaming + food sales for credit collections on a specific date
 // and update the displayed totals (cash/UPI from credit collections)
 async function loadCreditCollectionsForDate(targetDate) {
   try {
-    // OPTIMIZATION: Use cached recharges data instead of downloading every time
-    const allRecharges = await getCachedRecharges();
+    const [allRecharges, allFood] = await Promise.all([
+      getCachedRecharges(),
+      getAllFoodSalesTree().catch(() => ({}))
+    ]);
     
     // Track collections separately:
     // - sameDayCash/UPI: credit collected same day as transaction (total already counted in render)
     // - otherDayCash/UPI: credit collected today for transactions from other dates (add to total)
     let sameDayCash = 0, sameDayUpi = 0;
     let otherDayCash = 0, otherDayUpi = 0;
-    
-    // Scan all dates for credit collections that happened on targetDate
-    Object.entries(allRecharges).forEach(([transactionDate, dayData]) => {
-      Object.values(dayData).forEach(r => {
-        // NEW FORMAT with creditPayments history (supports partial payments across multiple days)
-        if (r.creditPayments && r.creditPayments[targetDate]) {
-          const payment = r.creditPayments[targetDate];
-          if (transactionDate === targetDate) {
-            sameDayCash += payment.cash || 0;
-            sameDayUpi += payment.upi || 0;
-          } else {
-            otherDayCash += payment.cash || 0;
-            otherDayUpi += payment.upi || 0;
-          }
-        }
-        // FALLBACK: Old format with lastPaidAt (single payment only)
-        else if (r.lastPaidAt && !r.creditPayments) {
-          const paidDate = r.lastPaidAt.split("T")[0];
-          if (paidDate === targetDate) {
+
+    const foldDayTree = (allDays, { includeLegacy = false } = {}) => {
+      Object.entries(allDays || {}).forEach(([transactionDate, dayData]) => {
+        Object.values(dayData || {}).forEach(r => {
+          if (!r || typeof r !== "object") return;
+
+          // NEW FORMAT with creditPayments history
+          if (r.creditPayments && r.creditPayments[targetDate]) {
+            const payment = r.creditPayments[targetDate];
             if (transactionDate === targetDate) {
-              sameDayCash += r.lastPaidCash || 0;
-              sameDayUpi += r.lastPaidUpi || 0;
+              sameDayCash += payment.cash || 0;
+              sameDayUpi += payment.upi || 0;
             } else {
-              otherDayCash += r.lastPaidCash || 0;
-              otherDayUpi += r.lastPaidUpi || 0;
+              otherDayCash += payment.cash || 0;
+              otherDayUpi += payment.upi || 0;
             }
           }
-        }
-        // LEGACY: Old format with paidAt (credit mode) - only if NO new format fields
-        // Skip if creditPayments exists (already handled above)
-        if (r.paidAt && r.mode === "credit" && r.paid && !r.creditPayments && !r.lastPaidCash && !r.lastPaidUpi) {
-          const paidDate = r.paidAt.split("T")[0];
-          if (paidDate === targetDate) {
-            let cash = 0, upi = 0;
-            if (r.paidVia === "cash") cash = r.amount;
-            else if (r.paidVia === "upi") upi = r.amount;
-            else if (r.paidVia === "cash+upi") {
-              cash = Math.floor(r.amount / 2);
-              upi = r.amount - Math.floor(r.amount / 2);
-            } else {
-              cash = r.amount; // Default to cash
-            }
-            
-            if (transactionDate === targetDate) {
-              sameDayCash += cash;
-              sameDayUpi += upi;
-            } else {
-              otherDayCash += cash;
-              otherDayUpi += upi;
+          // FALLBACK: Old format with lastPaidAt (single payment only)
+          else if (r.lastPaidAt && !r.creditPayments) {
+            const paidDate = r.lastPaidAt.split("T")[0];
+            if (paidDate === targetDate) {
+              if (transactionDate === targetDate) {
+                sameDayCash += r.lastPaidCash || 0;
+                sameDayUpi += r.lastPaidUpi || 0;
+              } else {
+                otherDayCash += r.lastPaidCash || 0;
+                otherDayUpi += r.lastPaidUpi || 0;
+              }
             }
           }
-        }
+
+          // LEGACY gaming-only: paidAt credit mode
+          if (
+            includeLegacy &&
+            r.paidAt &&
+            r.mode === "credit" &&
+            r.paid &&
+            !r.creditPayments &&
+            !r.lastPaidCash &&
+            !r.lastPaidUpi
+          ) {
+            const paidDate = r.paidAt.split("T")[0];
+            if (paidDate === targetDate) {
+              let cash = 0, upi = 0;
+              if (r.paidVia === "cash") cash = r.amount;
+              else if (r.paidVia === "upi") upi = r.amount;
+              else if (r.paidVia === "cash+upi") {
+                cash = Math.floor(r.amount / 2);
+                upi = r.amount - Math.floor(r.amount / 2);
+              } else {
+                cash = r.amount;
+              }
+
+              if (transactionDate === targetDate) {
+                sameDayCash += cash;
+                sameDayUpi += upi;
+              } else {
+                otherDayCash += cash;
+                otherDayUpi += upi;
+              }
+            }
+          }
+        });
       });
-    });
+    };
+
+    foldDayTree(allRecharges, { includeLegacy: true });
+    foldDayTree(allFood, { includeLegacy: false });
     
     const totalCollectedCash = sameDayCash + otherDayCash;
     const totalCollectedUpi = sameDayUpi + otherDayUpi;
+
+    // Stale response if user changed the date picker while we were loading
+    if (targetDate !== selectedDate) return;
     
-    // Update the displayed totals with credit collections
-    if (totalCollectedCash > 0 || totalCollectedUpi > 0) {
-      const cashEl = elements.cashEl;
-      const upiEl = elements.upiEl;
-      
-      // Update cash display - add all credit collections to total
-      if (cashEl) {
-        const currentCash = parseInt(cashEl.textContent.replace(/[₹,]/g, "")) || 0;
-        cashEl.innerHTML = `₹${currentCash + totalCollectedCash}`;
-        // Only show green indicator for OTHER-DAY credit collections (not same-day)
-        if (otherDayCash > 0) {
-          cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayCash} credit)</span>`;
-        }
-      }
-      
-      // Update UPI display - add all credit collections to total
-      if (upiEl) {
-        const currentUpi = parseInt(upiEl.textContent.replace(/[₹,]/g, "")) || 0;
-        upiEl.innerHTML = `₹${currentUpi + totalCollectedUpi}`;
-        // Only show green indicator for OTHER-DAY credit collections (not same-day)
-        if (otherDayUpi > 0) {
-          upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayUpi} credit)</span>`;
-        }
-      }
-      
-      // ONLY add to total for credit collections from OTHER dates
-      // (same-day collections are already counted in render via creditPaid)
-      if (elements.totalEl && (otherDayCash > 0 || otherDayUpi > 0)) {
-        const currentTotal = parseInt(elements.totalEl.textContent.replace(/[₹,]/g, "")) || 0;
-        elements.totalEl.textContent = `₹${currentTotal + otherDayCash + otherDayUpi}`;
+    // Apply overlay from last render() base totals (never read mutated DOM)
+    const baseCash = lastRenderTotals.cash || 0;
+    const baseUpi = lastRenderTotals.upi || 0;
+    const baseCollected = lastRenderTotals.collected || 0;
+
+    if (elements.cashEl) {
+      elements.cashEl.innerHTML = `₹${baseCash + totalCollectedCash}`;
+      if (otherDayCash > 0) {
+        elements.cashEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayCash} credit)</span>`;
       }
     }
-    
-    // Get current values from render() before adding credit collections
-    const renderCash = parseInt(elements.cashEl?.textContent?.replace(/[₹,]/g, "")) || 0;
-    const renderUpi = parseInt(elements.upiEl?.textContent?.replace(/[₹,]/g, "")) || 0;
+
+    if (elements.upiEl) {
+      elements.upiEl.innerHTML = `₹${baseUpi + totalCollectedUpi}`;
+      if (otherDayUpi > 0) {
+        elements.upiEl.innerHTML += ` <span class="text-xs" style="color: #00ff88;">(+₹${otherDayUpi} credit)</span>`;
+      }
+    }
+
+    // ONLY add to total for credit collections from OTHER dates
+    // (same-day collections are already counted in render via creditPaid)
+    if (elements.totalEl) {
+      elements.totalEl.textContent = `₹${baseCollected + otherDayCash + otherDayUpi}`;
+    }
     
     console.log(`[RECHARGES] Date: ${targetDate}`);
-    console.log(`  From render() - Direct Cash: ₹${renderCash}, Direct UPI: ₹${renderUpi}`);
+    console.log(`  From render() - Direct Cash: ₹${baseCash}, Direct UPI: ₹${baseUpi}`);
     console.log(`  Credit collections - Same-day: Cash ₹${sameDayCash}, UPI ₹${sameDayUpi}`);
     console.log(`  Credit collections - Other-day: Cash ₹${otherDayCash}, UPI ₹${otherDayUpi}`);
-    console.log(`  Final totals: Cash ₹${renderCash + totalCollectedCash}, UPI ₹${renderUpi + totalCollectedUpi}`);
+    console.log(`  Final totals: Cash ₹${baseCash + totalCollectedCash}, UPI ₹${baseUpi + totalCollectedUpi}`);
   } catch (error) {
     console.warn("Could not load credit collections:", error);
   }
@@ -526,81 +557,98 @@ async function loadOtherDayCollections(targetDate) {
   if (!section || !listEl) return;
   
   try {
-    // OPTIMIZATION: Use cached recharges data
-    const allRecharges = await getCachedRecharges();
+    const [allRecharges, allFood] = await Promise.all([
+      getCachedRecharges(),
+      getAllFoodSalesTree().catch(() => ({}))
+    ]);
     
     const collections = [];
-    
-    // Scan all dates for credit collections that happened on targetDate from OTHER dates
-    Object.entries(allRecharges).forEach(([transactionDate, dayData]) => {
-      // Skip same-day transactions
-      if (transactionDate === targetDate) return;
-      
-      Object.entries(dayData).forEach(([id, r]) => {
-        // NEW FORMAT with creditPayments history
-        if (r.creditPayments && r.creditPayments[targetDate]) {
-          const payment = r.creditPayments[targetDate];
-          const totalCollected = (payment.cash || 0) + (payment.upi || 0);
-          if (totalCollected > 0) {
-            collections.push({
-              id,
-              transactionDate,
-              member: r.member,
-              cash: payment.cash || 0,
-              upi: payment.upi || 0,
-              total: totalCollected,
-              collectedAt: payment.at,
-              collectedBy: payment.by
-            });
-          }
-        }
-        // FALLBACK: Old format with lastPaidAt
-        else if (r.lastPaidAt && !r.creditPayments) {
-          const paidDate = r.lastPaidAt.split("T")[0];
-          if (paidDate === targetDate) {
-            const totalCollected = (r.lastPaidCash || 0) + (r.lastPaidUpi || 0);
+
+    const foldCollections = (allDays, kind) => {
+      Object.entries(allDays || {}).forEach(([transactionDate, dayData]) => {
+        if (transactionDate === targetDate) return;
+
+        Object.entries(dayData || {}).forEach(([id, r]) => {
+          if (!r || typeof r !== "object") return;
+          const member = r.member || r.customerName || r.memberName || r.pcName || "—";
+
+          if (r.creditPayments && r.creditPayments[targetDate]) {
+            const payment = r.creditPayments[targetDate];
+            const totalCollected = (payment.cash || 0) + (payment.upi || 0);
             if (totalCollected > 0) {
               collections.push({
                 id,
+                kind,
                 transactionDate,
-                member: r.member,
-                cash: r.lastPaidCash || 0,
-                upi: r.lastPaidUpi || 0,
+                member,
+                cash: payment.cash || 0,
+                upi: payment.upi || 0,
                 total: totalCollected,
-                collectedAt: r.lastPaidAt,
-                collectedBy: r.lastPaidBy
+                collectedAt: payment.at,
+                collectedBy: payment.by
+              });
+            }
+          } else if (r.lastPaidAt && !r.creditPayments) {
+            const paidDate = r.lastPaidAt.split("T")[0];
+            if (paidDate === targetDate) {
+              const totalCollected = (r.lastPaidCash || 0) + (r.lastPaidUpi || 0);
+              if (totalCollected > 0) {
+                collections.push({
+                  id,
+                  kind,
+                  transactionDate,
+                  member,
+                  cash: r.lastPaidCash || 0,
+                  upi: r.lastPaidUpi || 0,
+                  total: totalCollected,
+                  collectedAt: r.lastPaidAt,
+                  collectedBy: r.lastPaidBy
+                });
+              }
+            }
+          }
+
+          // Legacy gaming credit paidAt
+          if (
+            kind === "recharge" &&
+            r.paidAt &&
+            r.mode === "credit" &&
+            r.paid &&
+            !r.creditPayments &&
+            !r.lastPaidCash &&
+            !r.lastPaidUpi
+          ) {
+            const paidDate = r.paidAt.split("T")[0];
+            if (paidDate === targetDate) {
+              let cash = 0, upi = 0;
+              if (r.paidVia === "cash") cash = r.amount;
+              else if (r.paidVia === "upi") upi = r.amount;
+              else if (r.paidVia === "cash+upi") {
+                cash = Math.floor(r.amount / 2);
+                upi = r.amount - Math.floor(r.amount / 2);
+              } else {
+                cash = r.amount;
+              }
+
+              collections.push({
+                id,
+                kind,
+                transactionDate,
+                member,
+                cash,
+                upi,
+                total: cash + upi,
+                collectedAt: r.paidAt,
+                collectedBy: r.paidBy
               });
             }
           }
-        }
-        // LEGACY: Old format with paidAt - only if NO new format fields
-        if (r.paidAt && r.mode === "credit" && r.paid && !r.creditPayments && !r.lastPaidCash && !r.lastPaidUpi) {
-          const paidDate = r.paidAt.split("T")[0];
-          if (paidDate === targetDate) {
-            let cash = 0, upi = 0;
-            if (r.paidVia === "cash") cash = r.amount;
-            else if (r.paidVia === "upi") upi = r.amount;
-            else if (r.paidVia === "cash+upi") {
-              cash = Math.floor(r.amount / 2);
-              upi = r.amount - Math.floor(r.amount / 2);
-            } else {
-              cash = r.amount;
-            }
-            
-            collections.push({
-              id,
-              transactionDate,
-              member: r.member,
-              cash,
-              upi,
-              total: cash + upi,
-              collectedAt: r.paidAt,
-              collectedBy: r.paidBy
-            });
-          }
-        }
+        });
       });
-    });
+    };
+
+    foldCollections(allRecharges, "recharge");
+    foldCollections(allFood, "food");
     
     // Sort by transaction date (newest first)
     collections.sort((a, b) => b.transactionDate.localeCompare(a.transactionDate));
@@ -633,12 +681,17 @@ async function loadOtherDayCollections(targetDate) {
       if (c.upi > 0) {
         methodBadges += `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background: rgba(184,41,255,0.2); color: #b829ff;">📱${c.upi}</span>`;
       }
+
+      const kindBadge = c.kind === "food"
+        ? `<span class="text-[9px] px-1 py-0.5 rounded" style="background: rgba(255,107,0,0.2); color: #ff6b00;">🍔</span>`
+        : `<span class="text-[9px] px-1 py-0.5 rounded" style="background: rgba(0,240,255,0.15); color: #00f0ff;">🎮</span>`;
       
       return `
         <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-800/30 border-b border-gray-800/20">
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-gray-500">${origDate}</span>
-            <span class="font-orbitron text-xs font-bold" style="color: var(--neon-cyan);">${c.member}</span>
+            ${kindBadge}
+            <span class="font-orbitron text-xs font-bold" style="color: ${c.kind === "food" ? "var(--neon-orange)" : "var(--neon-cyan)"};">${c.member}</span>
           </div>
           <div class="flex items-center gap-2">
             ${methodBadges}
@@ -655,14 +708,16 @@ async function loadOtherDayCollections(targetDate) {
   }
 }
 
-// Load all outstanding credits across all dates
+// Load all outstanding credits across all dates (gaming + food)
 function loadAllOutstandingCredits() {
   // OPTIMIZATION: Use cached recharges data
-  getCachedRecharges().then(allData => {
-    const snap = { val: () => allData };
+  Promise.all([
+    getCachedRecharges(),
+    getAllFoodSalesTree().catch(() => ({}))
+  ]).then(([allData, allFood]) => {
     const allCredits = [];
     
-    Object.entries(snap.val() || {}).forEach(([date, dayData]) => {
+    Object.entries(allData || {}).forEach(([date, dayData]) => {
       Object.entries(dayData).forEach(([id, r]) => {
         // Handle new split format
         if (r.total !== undefined) {
@@ -677,7 +732,8 @@ function loadAllOutstandingCredits() {
               creditPaid: r.creditPaid || 0,
               note: r.note,
               createdAt: r.createdAt,
-              isNewFormat: true
+              isNewFormat: true,
+              kind: "recharge"
             });
           }
         }
@@ -690,7 +746,30 @@ function loadAllOutstandingCredits() {
             amount: r.amount,
             note: r.note,
             createdAt: r.createdAt,
-            isNewFormat: false
+            isNewFormat: false,
+            kind: "recharge"
+          });
+        }
+      });
+    });
+
+    // Food sales with pending credit
+    Object.entries(allFood || {}).forEach(([date, dayData]) => {
+      Object.entries(dayData || {}).forEach(([id, raw]) => {
+        const r = foodSaleToLedger({ id, date, ...raw });
+        const pendingCredit = Math.max(0, (r.credit || 0) - (r.creditPaid || 0));
+        if (pendingCredit > 0) {
+          allCredits.push({
+            id,
+            date,
+            member: r.member,
+            amount: pendingCredit,
+            originalCredit: r.credit,
+            creditPaid: r.creditPaid || 0,
+            note: r.note,
+            createdAt: r.createdAt,
+            isNewFormat: true,
+            kind: "food"
           });
         }
       });
@@ -702,6 +781,8 @@ function loadAllOutstandingCredits() {
     renderAllOutstandingCredits(allCredits);
   });
 }
+
+window.loadAllOutstandingCredits = loadAllOutstandingCredits;
 
 function renderAllOutstandingCredits(credits) {
   if (!elements.outstandingSection) return;
@@ -744,6 +825,7 @@ function renderAllOutstandingCredits(credits) {
           <div class="flex-1">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="font-orbitron font-bold" style="color: #00f0ff;">${r.member}</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded" style="background: ${r.kind === "food" ? "rgba(255,107,0,0.2)" : "rgba(0,240,255,0.15)"}; color: ${r.kind === "food" ? "#ff6b00" : "#00f0ff"};">${r.kind === "food" ? "🍔 Food" : "🎮 Game"}</span>
               <span class="font-orbitron font-bold" style="color: #ff6b00;">₹${r.amount}</span>
               ${daysSince > 0 
                 ? `<span class="text-xs px-2 py-0.5 rounded" style="background: ${urgencyColor}20; color: ${urgencyColor};">${daysSince}d</span>` 
@@ -756,10 +838,10 @@ function renderAllOutstandingCredits(credits) {
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button onclick="collectCreditGlobal('${r.date}', '${r.id}', ${r.amount}, ${r.isNewFormat})" class="mark-paid-btn flex items-center gap-1">
+            <button onclick="collectCreditGlobal('${r.date}', '${r.id}', ${r.amount}, ${r.isNewFormat}, '${r.kind || "recharge"}')" class="mark-paid-btn flex items-center gap-1">
               💰 Collect
             </button>
-            <button onclick="deleteCreditGlobal('${r.date}', '${r.id}')" 
+            <button onclick="deleteCreditGlobal('${r.date}', '${r.id}', '${r.kind || "recharge"}')" 
               class="hover:scale-110 transition-transform p-1" style="color: #ff0044;">✖</button>
           </div>
         </div>
@@ -771,7 +853,25 @@ function renderAllOutstandingCredits(credits) {
 }
 
 // Global credit collection function - opens the modal
-window.collectCreditGlobal = (date, id, amount, isNewFormat) => {
+window.collectCreditGlobal = (date, id, amount, isNewFormat, kind = "recharge") => {
+  if (kind === "food") {
+    getAllFoodSalesTree().then(tree => {
+      const r = tree?.[date]?.[id];
+      if (!r) return;
+      const ledger = foodSaleToLedger({ id, date, ...r });
+      openCollectModal({
+        date,
+        id,
+        member: ledger.member,
+        pendingAmount: amount,
+        isNewFormat: true,
+        originalRecord: ledger,
+        kind: "food"
+      });
+    });
+    return;
+  }
+
   rechargeDb.ref(`recharges/${date}/${id}`).once("value").then(snap => {
     const r = snap.val();
     if (!r) return;
@@ -782,12 +882,21 @@ window.collectCreditGlobal = (date, id, amount, isNewFormat) => {
       member: r.member,
       pendingAmount: amount,
       isNewFormat: isNewFormat,
-      originalRecord: r
+      originalRecord: r,
+      kind: "recharge"
     });
   });
 };
 
-window.deleteCreditGlobal = async (date, id) => {
+window.deleteCreditGlobal = async (date, id, kind = "recharge") => {
+  if (kind === "food") {
+    if (typeof window.deleteFoodRecharge === "function") {
+      await window.deleteFoodRecharge(id, date);
+      loadAllOutstandingCredits();
+    }
+    return;
+  }
+
   const confirmed = await showConfirm("Delete this credit entry? This will remove the entire recharge record.", {
     title: "Delete Credit Entry",
     type: "error",
@@ -969,6 +1078,8 @@ window.addRecharge = () => {
 // ==================== RENDER LIST ====================
 
 let searchQuery = "";
+/** Base totals from last render() — used so credit-collection overlays don't double-count */
+let lastRenderTotals = { collected: 0, cash: 0, upi: 0, credit: 0, free: 0 };
 
 window.filterRechargeList = () => {
   const searchInput = document.getElementById("rechargeSearch");
@@ -977,6 +1088,7 @@ window.filterRechargeList = () => {
 };
 
 function render() {
+  if (!elements.listEl) return;
   elements.listEl.innerHTML = "";
   const countEl = document.getElementById("rechargeCount");
   const emptyEl = document.getElementById("rechargeEmptyState");
@@ -984,10 +1096,21 @@ function render() {
   
   let totalCollected = 0, cashTotal = 0, upiTotal = 0, creditPending = 0, freeTotal = 0;
 
-  // Sort by createdAt in descending order (newest first)
-  const sortedState = [...state].sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+  // Sync food state from module if available
+  if (typeof getFoodDayState === "function") {
+    foodState = getFoodDayState() || foodState;
+  }
+
+  // Unified list: gaming recharges + food sales
+  const unified = [
+    ...state.map(r => ({ ...r, entryType: r.entryType || "recharge" })),
+    ...foodState.map(f => ({ ...f, entryType: "food" }))
+  ];
+
+  // Sort by createdAt / timestamp descending
+  const sortedState = [...unified].sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : (a.timestamp ? new Date(a.timestamp) : new Date(0));
+    const dateB = b.createdAt ? new Date(b.createdAt) : (b.timestamp ? new Date(b.timestamp) : new Date(0));
     return dateB - dateA;
   });
 
@@ -997,65 +1120,52 @@ function render() {
     
     const memberMatch = r.member?.toLowerCase().includes(searchQuery);
     const noteMatch = r.note?.toLowerCase().includes(searchQuery);
-    const amountMatch = String(r.total || r.amount).includes(searchQuery);
-    const adminMatch = r.admin?.toLowerCase().includes(searchQuery);
+    const amountMatch = String(r.total || r.amount || "").includes(searchQuery);
+    const adminMatch = (r.admin || r.staffName || "").toLowerCase().includes(searchQuery);
+    const typeMatch = r.entryType === "food" && ("food".includes(searchQuery) || "snack".includes(searchQuery));
+    const itemsMatch = (r.items || []).some(i => (i.name || "").toLowerCase().includes(searchQuery));
     
-    return memberMatch || noteMatch || amountMatch || adminMatch;
+    return memberMatch || noteMatch || amountMatch || adminMatch || typeMatch || itemsMatch;
   });
 
-  // Calculate totals from all state (not filtered)
-  // IMPORTANT: Credit collections are counted on the DATE they were COLLECTED, not the original transaction date
-  state.forEach(r => {
+  // Calculate totals from all unified entries
+  unified.forEach(r => {
     if (r.total !== undefined) {
-      // New split payment format
-      // Direct cash and UPI payments (always count on original date)
       cashTotal += r.cash || 0;
       upiTotal += r.upi || 0;
       freeTotal += r.free || 0;
       
-      // For creditPaid: only count in total if paid on the SAME day (selectedDate)
-      // If paid on a different day, it will be counted via loadCreditCollectionsForDate
       let sameDayCreditPaid = 0;
       
-      // NEW: Check creditPayments history for same-day payments
       if (r.creditPayments && r.creditPayments[selectedDate]) {
         const todayPayment = r.creditPayments[selectedDate];
         sameDayCreditPaid = (todayPayment.cash || 0) + (todayPayment.upi || 0);
-      }
-      // FALLBACK: Old format with lastPaidAt (single payment)
-      else if (r.creditPaid > 0 && r.lastPaidAt && !r.creditPayments) {
+      } else if (r.creditPaid > 0 && r.lastPaidAt && !r.creditPayments) {
         const paidDate = r.lastPaidAt.split("T")[0];
         if (paidDate === selectedDate) {
           sameDayCreditPaid = r.creditPaid;
         }
-      } 
-      // LEGACY: No payment tracking - assume same day
-      else if (r.creditPaid > 0 && !r.lastPaidAt && !r.creditPayments) {
+      } else if (r.creditPaid > 0 && !r.lastPaidAt && !r.creditPayments) {
         sameDayCreditPaid = r.creditPaid;
       }
       
-      // Calculate totals: direct payments + same-day credit payments only
       const collected = (r.cash || 0) + (r.upi || 0) + sameDayCreditPaid;
       totalCollected += collected;
       creditPending += (r.credit || 0) - (r.creditPaid || 0);
     } else if (r.amount !== undefined) {
-      // Old single-mode format (backward compatibility)
       if (r.mode === "credit") {
         if (r.paid) {
-          // Check if paid on the same day
           let sameDayPaid = false;
           if (r.paidAt) {
             const paidDate = r.paidAt.split("T")[0];
             sameDayPaid = (paidDate === selectedDate);
           } else {
-            // No paidAt means assume same day
             sameDayPaid = true;
           }
           
           if (sameDayPaid) {
             totalCollected += r.amount;
           }
-          // If paid on different day, will be counted via loadCreditCollectionsForDate
         } else {
           creditPending += r.amount;
         }
@@ -1068,10 +1178,10 @@ function render() {
   });
 
   // Update count
-  if (countEl) countEl.textContent = state.length;
+  if (countEl) countEl.textContent = unified.length;
 
   // Handle empty states
-  if (state.length === 0) {
+  if (unified.length === 0) {
     if (emptyEl) emptyEl.classList.remove("hidden");
     if (noResultsEl) noResultsEl.classList.add("hidden");
   } else if (filteredState.length === 0) {
@@ -1085,21 +1195,22 @@ function render() {
   // Render table rows (with descending serial numbers)
   const totalEntries = filteredState.length;
   filteredState.forEach((r, index) => {
-    const serialNum = totalEntries - index; // Descending: 10, 9, 8, ... 1
+    const serialNum = totalEntries - index;
     const row = document.createElement("tr");
     row.className = "hover:bg-gray-800/30 transition-colors";
+    const isFood = r.entryType === "food";
     
-    // Determine if this entry has pending credit
     const hasPendingCredit = r.total !== undefined 
       ? ((r.credit || 0) - (r.creditPaid || 0)) > 0
       : (r.mode === "credit" && !r.paid);
     
     if (hasPendingCredit) {
       row.style.borderLeft = "3px solid #ff6b00";
+    } else if (isFood) {
+      row.style.borderLeft = "3px solid rgba(255,107,0,0.45)";
     }
 
-    // Format time from createdAt
-    const createdDate = r.createdAt ? new Date(r.createdAt) : null;
+    const createdDate = r.createdAt ? new Date(r.createdAt) : (r.timestamp ? new Date(r.timestamp) : null);
     const timeStr = createdDate 
       ? createdDate.toLocaleTimeString("en-IN", { timeZone: TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: true })
       : "-";
@@ -1111,40 +1222,31 @@ function render() {
     let paymentBadges = "";
     if (r.total !== undefined || r.free !== undefined) {
       const badges = [];
-      // Show direct cash payment
       if (r.cash > 0) badges.push(`<span class="payment-badge cash">💵 ₹${r.cash}</span>`);
-      // Show direct UPI payment
       if (r.upi > 0) badges.push(`<span class="payment-badge upi">📱 ₹${r.upi}</span>`);
-      // Show free recharge
       if (r.free > 0) badges.push(`<span class="payment-badge free">🎁 ₹${r.free}</span>`);
       
       if (r.credit > 0) {
         const remaining = (r.credit || 0) - (r.creditPaid || 0);
-        // Show pending credit
         if (remaining > 0) {
           badges.push(`<span class="payment-badge credit-pending">🔖 ₹${remaining}</span>`);
         }
-        // Show how the credit was settled (via cash/UPI) with collection date if different
         if (r.creditPaid > 0) {
-          // NEW: Show payment history from creditPayments
           if (r.creditPayments && Object.keys(r.creditPayments).length > 0) {
-            // Show each payment date's amounts
             Object.entries(r.creditPayments).forEach(([paymentDate, payment]) => {
               const isOtherDay = paymentDate !== selectedDate;
-              const dateStr = isOtherDay 
+              const collLabel = isOtherDay 
                 ? ` on ${new Date(paymentDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
                 : "";
               
               if (payment.cash > 0) {
-                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${dateStr}">✓ ₹${payment.cash} Cash${dateStr}</span>`);
+                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via Cash${collLabel}">✓ ₹${payment.cash} Cash${collLabel}</span>`);
               }
               if (payment.upi > 0) {
-                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${dateStr}">✓ ₹${payment.upi} UPI${dateStr}</span>`);
+                badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${collLabel}">✓ ₹${payment.upi} UPI${collLabel}</span>`);
               }
             });
-          }
-          // FALLBACK: Old format with lastPaidAt (single payment)
-          else if (r.lastPaidCash || r.lastPaidUpi) {
+          } else if (r.lastPaidCash || r.lastPaidUpi) {
             let collectionDateStr = "";
             if (r.lastPaidAt) {
               const collectionDate = r.lastPaidAt.split("T")[0];
@@ -1160,18 +1262,14 @@ function render() {
             if (r.lastPaidUpi > 0) {
               badges.push(`<span class="payment-badge credit-paid" title="Credit settled via UPI${collectionDateStr}">✓ ₹${r.lastPaidUpi} UPI${collectionDateStr}</span>`);
             }
-          }
-          // LEGACY: No payment details, just show total
-          else {
+          } else {
             badges.push(`<span class="payment-badge credit-paid">✓ ₹${r.creditPaid}</span>`);
           }
         }
       }
       paymentBadges = badges.join(" ");
     } else {
-      // Old single-mode format
       if (r.mode === "credit" && r.paid) {
-        // Show as settled via the payment method used, with collection date if different
         let collectionDateStr = "";
         if (r.paidAt) {
           const collectionDate = r.paidAt.split("T")[0];
@@ -1204,6 +1302,16 @@ function render() {
       ? (r.credit || 0) - (r.creditPaid || 0)
       : (r.mode === "credit" && !r.paid ? r.amount : 0);
 
+    const typeBadge = isFood
+      ? `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(255,107,0,0.2); color: var(--neon-orange);">🍔 Food</span>`
+      : `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(0,240,255,0.12); color: var(--neon-cyan);">🎮 Game</span>`;
+
+    const editFn = isFood ? `editFoodRecharge('${r.id}')` : `editRecharge('${r.id}')`;
+    const deleteFn = isFood ? `deleteFoodRecharge('${r.id}')` : `deleteRecharge('${r.id}')`;
+    const collectFn = isFood
+      ? `collectCredit('${r.id}', ${pendingCreditAmount}, 'food')`
+      : `collectCredit('${r.id}', ${pendingCreditAmount})`;
+
     row.innerHTML = `
       <td class="px-2 py-3 text-center">
         <span class="font-orbitron text-xs font-bold" style="color: var(--neon-red); opacity: 0.7;">${serialNum}</span>
@@ -1213,7 +1321,13 @@ function render() {
         <div class="text-xs text-gray-500">${dateStr}</div>
       </td>
       <td class="px-4 py-3">
-        <span class="font-orbitron font-bold" style="color: var(--neon-cyan);">${r.member}</span>
+        <div class="flex items-center flex-wrap gap-1">
+          <span class="font-orbitron font-bold" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${r.member || r.customerName || "—"}</span>
+          ${typeBadge}
+        </div>
+        ${isFood && (r.items || []).length
+          ? `<div class="text-[10px] text-gray-500 mt-0.5 max-w-[220px] truncate" title="${(r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ")}">${(r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ")}</div>`
+          : ""}
       </td>
       <td class="px-4 py-3 text-right">
         <span class="font-orbitron font-bold" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
@@ -1226,23 +1340,23 @@ function render() {
         ${r.note || "-"}
       </td>
       <td class="px-4 py-3 recharge-col-admin">
-        <span class="text-xs px-2 py-1 rounded" style="background: rgba(0,240,255,0.1); color: var(--neon-cyan);">${r.admin || "Admin"}</span>
+        <span class="text-xs px-2 py-1 rounded" style="background: rgba(0,240,255,0.1); color: var(--neon-cyan);">${r.admin || r.staffName || "Admin"}</span>
       </td>
       <td class="px-4 py-3 text-right">
         <div class="flex gap-1 justify-end items-center">
           ${pendingCreditAmount > 0 ? `
-            <button onclick="collectCredit('${r.id}', ${pendingCreditAmount})" 
+            <button onclick="${collectFn}" 
               class="text-xs px-2 py-1 rounded transition-all hover:scale-105"
               style="background: rgba(255,107,0,0.2); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);"
               title="Collect Credit">
               💰
             </button>
           ` : ''}
-          <button onclick="editRecharge('${r.id}')" 
+          <button onclick="${editFn}" 
             class="p-1 rounded transition-all hover:bg-cyan-500/20" style="color: var(--neon-cyan);" title="Edit">
             ✏️
           </button>
-          <button onclick="deleteRecharge('${r.id}')" 
+          <button onclick="${deleteFn}" 
             class="p-1 rounded transition-all hover:bg-red-500/20" style="color: #ff0044;" title="Delete">
             🗑️
           </button>
@@ -1258,6 +1372,14 @@ function render() {
   if (elements.upiEl) elements.upiEl.textContent = `₹${upiTotal}`;
   if (elements.creditEl) elements.creditEl.textContent = `₹${creditPending}`;
   if (elements.freeEl) elements.freeEl.textContent = `₹${freeTotal}`;
+
+  lastRenderTotals = {
+    collected: totalCollected,
+    cash: cashTotal,
+    upi: upiTotal,
+    credit: creditPending,
+    free: freeTotal
+  };
 }
 
 // ==================== CREDIT COLLECTION MODAL ====================
@@ -1265,13 +1387,30 @@ function render() {
 let collectModalData = null;
 
 // Open collect credit modal
-window.collectCredit = (id, pendingAmount) => {
+window.collectCredit = (id, pendingAmount, kind = "recharge") => {
   // Check if user can edit (Finance Manager cannot)
   if (!canEditData()) {
     notifyWarning("You have view-only access. Collecting credits is not allowed.");
     return;
   }
   
+  if (kind === "food") {
+    const r = (typeof getFoodDayState === "function" ? getFoodDayState() : foodState).find(x => x.id === id)
+      || foodState.find(x => x.id === id);
+    if (!r) return;
+
+    openCollectModal({
+      date: selectedDate,
+      id: id,
+      member: r.member || r.customerName,
+      pendingAmount: pendingAmount,
+      isNewFormat: true,
+      originalRecord: r,
+      kind: "food"
+    });
+    return;
+  }
+
   const r = state.find(x => x.id === id);
   if (!r) return;
 
@@ -1281,7 +1420,8 @@ window.collectCredit = (id, pendingAmount) => {
     member: r.member,
     pendingAmount: pendingAmount,
     isNewFormat: r.total !== undefined,
-    originalRecord: r
+    originalRecord: r,
+    kind: "recharge"
   });
 };
 
@@ -1291,8 +1431,9 @@ function openCollectModal(data) {
   const modal = document.getElementById("collectCreditModal");
   const infoEl = document.getElementById("collectModalInfo");
   const pendingEl = document.getElementById("collectPendingAmount");
+  const kindLabel = data.kind === "food" ? "🍔 Food credit" : "🎮 Gaming credit";
   
-  if (infoEl) infoEl.textContent = `Collecting credit from ${data.member}`;
+  if (infoEl) infoEl.textContent = `${kindLabel} from ${data.member}`;
   if (pendingEl) pendingEl.textContent = `₹${data.pendingAmount}`;
   
   // Reset inputs
@@ -1366,7 +1507,7 @@ window.collectAllUpi = () => {
   updateCollectRemaining();
 };
 
-window.confirmCollectCredit = () => {
+window.confirmCollectCredit = async () => {
   if (!collectModalData) return;
   
   const pending = collectModalData.pendingAmount;
@@ -1388,13 +1529,39 @@ window.confirmCollectCredit = () => {
     return;
   }
   
-  const { date, id, member, isNewFormat, originalRecord } = collectModalData;
+  const { date, id, member, isNewFormat, originalRecord, kind } = collectModalData;
   
   // Build payment description for audit
   const paymentParts = [];
   if (cash > 0) paymentParts.push(`₹${cash} Cash`);
   if (upi > 0) paymentParts.push(`₹${upi} UPI`);
   if (stillCredit > 0) paymentParts.push(`₹${stillCredit} still credit`);
+
+  // Food credit collection — same UX, food_sales ledger
+  if (kind === "food") {
+    try {
+      await collectFoodSaleCredit({
+        date,
+        id,
+        cash,
+        upi,
+        stillCredit,
+        collected,
+        adminName: getAdminName()
+      });
+      logAudit("FOOD_CREDIT_PAID", `${member}: ${paymentParts.join(", ")}`, collected);
+      SharedCache.invalidateFoodSales();
+      closeCollectModal();
+      loadAllOutstandingCredits();
+      if (date === selectedDate) {
+        loadFoodDay(selectedDate);
+      }
+      notifySuccess(`Collected ₹${collected} food credit from ${member}`);
+    } catch (err) {
+      notifyError("Food credit collection failed: " + err.message);
+    }
+    return;
+  }
   
   if (isNewFormat) {
     // New split format - update the record with payment history
@@ -1666,75 +1833,90 @@ window.loadMoreAudit = () => {
 
 // ==================== EXPORTS ====================
 
-window.exportMonthPDF = () => {
+window.exportMonthPDF = async () => {
   const ym = selectedDate.slice(0, 7);
   const monthName = new Date(selectedDate).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
-  rechargeDb.ref(FB_PATHS.RECHARGES).once("value").then(snap => {
+  try {
+    const [snap, allFood] = await Promise.all([
+      rechargeDb.ref(FB_PATHS.RECHARGES).once("value"),
+      getAllFoodSalesTree().catch(() => ({}))
+    ]);
     const allData = snap.val() || {};
     const rows = [];
     let totalCash = 0, totalUPI = 0, totalCredit = 0, totalFree = 0, grandTotal = 0;
 
+    const pushEntry = (d, r, kindLabel) => {
+      const cash = r.cash || 0;
+      const upi = r.upi || 0;
+      const credit = r.credit || 0;
+      const free = r.free || 0;
+      const total = (r.total || r.amount || 0) + free;
+
+      let mode = "Split";
+      if (r.mode) mode = r.mode.toUpperCase();
+      else if (cash > 0 && upi === 0 && credit === 0) mode = "Cash";
+      else if (upi > 0 && cash === 0 && credit === 0) mode = "UPI";
+      else if (credit > 0 && cash === 0 && upi === 0) mode = "Credit";
+
+      rows.push([
+        d,
+        kindLabel,
+        r.member || r.customerName || "-",
+        `Rs.${total}`,
+        mode,
+        r.admin || r.staffName || "Admin"
+      ]);
+
+      totalCash += cash + (r.lastPaidCash || 0);
+      totalUPI += upi + (r.lastPaidUpi || 0);
+      totalCredit += (credit - (r.creditPaid || 0));
+      totalFree += free;
+      grandTotal += total;
+    };
+
     Object.entries(allData).forEach(([d, v]) => {
       if (!d.startsWith(ym)) return;
-      Object.values(v).forEach(r => {
-        const cash = r.cash || 0;
-        const upi = r.upi || 0;
-        const credit = r.credit || 0;
-        const free = r.free || 0;
-        const total = (r.total || r.amount || 0) + free;
-        
-        // For old format
-        let mode = "Split";
-        if (r.mode) mode = r.mode.toUpperCase();
-        else if (cash > 0 && upi === 0 && credit === 0) mode = "Cash";
-        else if (upi > 0 && cash === 0 && credit === 0) mode = "UPI";
-        else if (credit > 0 && cash === 0 && upi === 0) mode = "Credit";
-        
-        rows.push([
-          d,
-          r.member || "-",
-          `Rs.${total}`,
-          mode,
-          r.admin || "Admin"
-        ]);
-        
-        totalCash += cash + (r.lastPaidCash || 0);
-        totalUPI += upi + (r.lastPaidUpi || 0);
-        totalCredit += (credit - (r.creditPaid || 0));
-        totalFree += free;
-        grandTotal += total;
+      Object.values(v).forEach(r => pushEntry(d, r, "Game"));
+    });
+
+    Object.entries(allFood || {}).forEach(([d, day]) => {
+      if (!d.startsWith(ym)) return;
+      Object.values(day || {}).forEach(raw => {
+        const r = foodSaleToLedger(raw);
+        pushEntry(d, r, "Food");
       });
     });
+
+    rows.sort((a, b) => String(b[0]).localeCompare(String(a[0])));
 
     if (rows.length === 0) {
       notifyWarning("No data to export for this month");
       return;
     }
 
-    // Create PDF
     const doc = PDFExport.createStyledPDF();
-    let y = PDFExport.addPDFHeader(doc, 'Monthly Recharges Report', monthName);
-    
-    // Summary stats
+    let y = PDFExport.addPDFHeader(doc, 'Monthly Gaming + Food Report', monthName);
+
     y = PDFExport.addPDFSummary(doc, [
       { label: 'Total', value: `Rs.${grandTotal}`, color: 'neonGreen' },
       { label: 'Cash', value: `Rs.${totalCash}`, color: 'neonCyan' },
       { label: 'UPI', value: `Rs.${totalUPI}`, color: 'neonPurple' },
       { label: 'Credit Pending', value: `Rs.${totalCredit}`, color: 'neonOrange' },
     ], y);
-    
-    // Table
-    PDFExport.addPDFTable(doc, 
-      ['Date', 'Member', 'Amount', 'Mode', 'Admin'],
+
+    PDFExport.addPDFTable(doc,
+      ['Date', 'Type', 'Member', 'Amount', 'Mode', 'Admin'],
       rows,
       y,
-      { statusColumn: 3 }
+      { statusColumn: 4 }
     );
-    
-    PDFExport.savePDF(doc, `recharges_${ym}`);
-    notifySuccess("Monthly report exported as PDF");
-  });
+
+    PDFExport.savePDF(doc, `recharges_food_${ym}`);
+    notifySuccess("Monthly gaming + food report exported as PDF");
+  } catch (err) {
+    notifyError("Export failed: " + (err.message || err));
+  }
 };
 
 // Keep old function name for backward compatibility

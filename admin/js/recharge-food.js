@@ -1,8 +1,8 @@
 /**
  * OceanZ Gaming Cafe - Food / Snacks on Recharges Page
  *
- * Allows logging food sales against a member or PC from the recharges screen.
- * Writes to the same food_sales / food_credits paths as Counter POS.
+ * Food sales use the same cash/upi/credit ledger shape as gaming recharges.
+ * Today's Transactions (recharges.js) merges and renders both entry types.
  */
 
 import {
@@ -19,10 +19,9 @@ import { getStaffSession, canEditData } from "./permissions.js";
 import {
   FOOD_CUSTOMER_TYPES,
   FOOD_SALE_SOURCES,
-  buildFoodSalePayload,
+  buildFoodLedgerSale,
   foodCreditKey,
-  normalizeFoodSale,
-  getSaleCollectedAmounts
+  foodSaleToLedger
 } from "../../shared/food-stats.js";
 
 // ==================== FIREBASE ====================
@@ -74,13 +73,15 @@ const $ = id => document.getElementById(id);
 
 let foodMenu = [];
 let foodCart = [];
-let foodPaymentMode = "cash";
-let foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER; // member | pc
+let foodPaymentMode = "cash"; // cash | upi | split | credit — UI mode
+let foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
 let selectedMemberName = "";
 let selectedPcName = "";
-let dayFoodSales = [];
+let foodEditId = null;
+let foodDayState = [];
 let foodSalesListener = null;
 let currentFoodDate = null;
+let onFoodStateChange = null;
 
 function getTodayISTString() {
   const now = getISTDate();
@@ -98,6 +99,76 @@ function toast(type, message) {
   alert(message);
 }
 
+function getAdminName() {
+  const session = getStaffSession();
+  return session?.name || session?.email?.split("@")[0] || "Admin";
+}
+
+// ==================== PUBLIC API (used by recharges.js) ====================
+
+export function getFoodDayState() {
+  return foodDayState;
+}
+
+export function onFoodDayChange(callback) {
+  onFoodStateChange = callback;
+}
+
+export async function loadFoodDay(dateStr) {
+  const ready = await initFoodFirebase();
+  if (!ready || !bookingDb) return [];
+
+  currentFoodDate = dateStr;
+
+  if (foodSalesListener) {
+    foodSalesListener.off();
+    foodSalesListener = null;
+  }
+
+  return new Promise(resolve => {
+    const ref = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}`);
+    foodSalesListener = ref;
+    ref.on("value", snap => {
+      const data = snap.val() || {};
+      foodDayState = Object.entries(data).map(([id, sale]) =>
+        foodSaleToLedger({ id, date: dateStr, ...sale })
+      );
+      if (typeof onFoodStateChange === "function") onFoodStateChange(foodDayState);
+      // Hide legacy separate food block if still in DOM
+      hideLegacyFoodBlock();
+      resolve(foodDayState);
+    }, err => {
+      console.error("❌ RechargeFood: day listen failed", err);
+      foodDayState = [];
+      if (typeof onFoodStateChange === "function") onFoodStateChange(foodDayState);
+      resolve([]);
+    });
+  });
+}
+
+function hideLegacyFoodBlock() {
+  const block = $("foodRechargeList")?.closest(".neon-card");
+  // Prefer hiding the dedicated food section card (has foodDayTotal)
+  const dayTotal = $("foodDayTotal");
+  if (dayTotal) {
+    const section = dayTotal.closest(".neon-card");
+    if (section) section.classList.add("hidden");
+  }
+}
+
+export async function getAllFoodSalesTree() {
+  await initFoodFirebase();
+  try {
+    return await SharedCache.getFoodSales(bookingDb, FB_PATHS.FOOD_SALES);
+  } catch (e) {
+    return {};
+  }
+}
+
+export function getBookingDb() {
+  return bookingDb;
+}
+
 // ==================== INIT ====================
 
 export async function initRechargeFood() {
@@ -106,7 +177,7 @@ export async function initRechargeFood() {
   setupFoodMemberAutocomplete();
   bindDatePickerHook();
   await loadFoodMenuItems();
-  await loadDayFoodSales(getSelectedRechargeDate());
+  await loadFoodDay(getSelectedRechargeDate());
   console.log("✅ RechargeFood: initialized");
 }
 
@@ -115,7 +186,7 @@ function bindDatePickerHook() {
   if (!picker || picker.dataset.foodHooked === "1") return;
   picker.dataset.foodHooked = "1";
   picker.addEventListener("change", () => {
-    loadDayFoodSales(picker.value);
+    loadFoodDay(picker.value);
   });
 }
 
@@ -373,7 +444,24 @@ window.setFoodRechargePaymentMode = function(mode) {
   });
 
   const splitBox = $("foodRechargeSplitFields");
-  if (splitBox) splitBox.classList.toggle("hidden", mode !== "split");
+  // Always show split fields so cash/upi/credit can be set like recharges
+  if (splitBox) splitBox.classList.remove("hidden");
+
+  // Auto-fill based on mode
+  const total = getFoodCartTotal();
+  if (mode === "cash") {
+    if ($("foodRechargeCash")) $("foodRechargeCash").value = total || "";
+    if ($("foodRechargeUpi")) $("foodRechargeUpi").value = "";
+    if ($("foodRechargeCredit")) $("foodRechargeCredit").value = "";
+  } else if (mode === "upi") {
+    if ($("foodRechargeCash")) $("foodRechargeCash").value = "";
+    if ($("foodRechargeUpi")) $("foodRechargeUpi").value = total || "";
+    if ($("foodRechargeCredit")) $("foodRechargeCredit").value = "";
+  } else if (mode === "credit") {
+    if ($("foodRechargeCash")) $("foodRechargeCash").value = "";
+    if ($("foodRechargeUpi")) $("foodRechargeUpi").value = "";
+    if ($("foodRechargeCredit")) $("foodRechargeCredit").value = total || "";
+  }
   updateFoodSplitRemaining();
 };
 
@@ -385,16 +473,14 @@ function updateFoodSplitRemaining() {
   const el = $("foodRechargeSplitRemaining");
   if (!el) return;
   const total = getFoodCartTotal();
-  if (foodPaymentMode !== "split") {
-    el.textContent = foodPaymentMode === "credit" ? "On credit" : `Total ₹${total}`;
-    el.style.color = "var(--neon-orange)";
-    return;
-  }
   const cash = Number($("foodRechargeCash")?.value) || 0;
   const upi = Number($("foodRechargeUpi")?.value) || 0;
   const credit = Number($("foodRechargeCredit")?.value) || 0;
   const remaining = total - (cash + upi + credit);
-  if (remaining === 0) {
+  if (total === 0) {
+    el.textContent = "Add items first";
+    el.style.color = "var(--neon-orange)";
+  } else if (remaining === 0) {
     el.textContent = "Split OK";
     el.style.color = "var(--neon-green)";
   } else {
@@ -405,15 +491,19 @@ function updateFoodSplitRemaining() {
 
 // ==================== MODAL ====================
 
-window.openAddFoodRechargeModal = async function() {
+window.openAddFoodRechargeModal = async function(isEdit = false) {
   if (!canEditData()) {
     toast("warning", "You have view-only access. Editing is not allowed.");
     return;
   }
 
   await loadFoodMenuItems();
-  resetFoodForm();
+  if (!isEdit) resetFoodForm();
+
   const modal = $("addFoodRechargeModal");
+  const title = modal?.querySelector("h3");
+  if (title) title.innerHTML = isEdit ? "✏️ EDIT FOOD / SNACKS" : "🍔 ADD FOOD / SNACKS";
+
   if (modal) {
     modal.classList.remove("hidden");
     modal.classList.add("flex");
@@ -436,6 +526,7 @@ function resetFoodForm() {
   foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
   selectedMemberName = "";
   selectedPcName = "";
+  foodEditId = null;
   if ($("foodMemberInput")) $("foodMemberInput").value = "";
   if ($("foodGuestTerminalSelect")) $("foodGuestTerminalSelect").value = "";
   if ($("foodRechargeNote")) $("foodRechargeNote").value = "";
@@ -445,6 +536,146 @@ function resetFoodForm() {
   setFoodRechargePaymentMode("cash");
   renderFoodCart();
   updateFoodCustomerBadge();
+}
+
+window.editFoodRecharge = async function(id) {
+  if (!canEditData()) {
+    toast("warning", "You have view-only access.");
+    return;
+  }
+
+  const sale = foodDayState.find(s => s.id === id);
+  if (!sale) {
+    toast("error", "Food entry not found");
+    return;
+  }
+
+  await loadFoodMenuItems();
+  foodEditId = id;
+  foodCart = (sale.items || []).map(i => ({
+    id: i.id,
+    name: i.name,
+    price: Number(i.price) || 0,
+    qty: Number(i.qty) || 1
+  }));
+
+  const name = sale.member || sale.customerName || "";
+  if ($("foodMemberInput")) $("foodMemberInput").value = name;
+
+  if (sale.customerType === FOOD_CUSTOMER_TYPES.PC || CONSTANTS.GUEST_TERMINALS.includes(name)) {
+    foodCustomerType = FOOD_CUSTOMER_TYPES.PC;
+    selectedPcName = name;
+    selectedMemberName = "";
+    if ($("foodGuestTerminalSelect")) $("foodGuestTerminalSelect").value = name;
+  } else {
+    foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
+    selectedMemberName = name;
+    selectedPcName = "";
+  }
+
+  if ($("foodRechargeNote")) $("foodRechargeNote").value = sale.note || "";
+
+  // Show remaining credit as editable credit portion
+  const pendingCredit = Math.max(0, (sale.credit || 0) - (sale.creditPaid || 0));
+  const actualCash = (sale.cash || 0) + (sale.lastPaidCash || 0);
+  const actualUpi = (sale.upi || 0) + (sale.lastPaidUpi || 0);
+
+  if ($("foodRechargeCash")) $("foodRechargeCash").value = actualCash || "";
+  if ($("foodRechargeUpi")) $("foodRechargeUpi").value = actualUpi || "";
+  if ($("foodRechargeCredit")) $("foodRechargeCredit").value = pendingCredit || "";
+
+  if (pendingCredit > 0 && actualCash === 0 && actualUpi === 0) foodPaymentMode = "credit";
+  else if (pendingCredit > 0 || (actualCash > 0 && actualUpi > 0)) foodPaymentMode = "split";
+  else if (actualUpi > 0 && actualCash === 0) foodPaymentMode = "upi";
+  else foodPaymentMode = "cash";
+
+  setFoodRechargePaymentMode(foodPaymentMode);
+  // Restore amounts after mode auto-fill
+  if ($("foodRechargeCash")) $("foodRechargeCash").value = actualCash || "";
+  if ($("foodRechargeUpi")) $("foodRechargeUpi").value = actualUpi || "";
+  if ($("foodRechargeCredit")) $("foodRechargeCredit").value = pendingCredit || "";
+
+  renderFoodCart();
+  updateFoodCustomerBadge();
+  openAddFoodRechargeModal(true);
+};
+
+window.deleteFoodRecharge = async function(id, dateOverride) {
+  if (!canEditData()) {
+    toast("warning", "You have view-only access.");
+    return;
+  }
+
+  const dateStr = dateOverride || currentFoodDate || getSelectedRechargeDate();
+  let sale = null;
+  if ((!dateOverride || dateOverride === currentFoodDate) && foodDayState.find(s => s.id === id)) {
+    sale = foodDayState.find(s => s.id === id);
+  } else {
+    const raw = await fetchFoodSale(dateStr, id);
+    if (raw) sale = foodSaleToLedger({ id, date: dateStr, ...raw });
+  }
+
+  if (!sale) {
+    toast("error", "Food entry not found");
+    return;
+  }
+
+  const confirmed = typeof showConfirm === "function"
+    ? await showConfirm("Delete this food entry? Pending food credit for this sale will be reduced.", {
+        title: "Delete Food Entry",
+        type: "error",
+        confirmText: "Delete",
+        cancelText: "Cancel"
+      })
+    : confirm("Delete this food entry?");
+
+  if (!confirmed) return;
+
+  try {
+    await initFoodFirebase();
+    const pending = Math.max(0, (sale.credit || 0) - (sale.creditPaid || 0));
+    await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).remove();
+
+    if (pending > 0 && sale.member) {
+      await adjustFoodCreditLedger(sale.member, -pending, sale.customerType, sale);
+    }
+
+    SharedCache.invalidateFoodSales();
+    toast("success", "Food entry deleted");
+    if (typeof window.loadAllOutstandingCredits === "function") {
+      window.loadAllOutstandingCredits();
+    }
+  } catch (err) {
+    toast("error", "Delete failed: " + err.message);
+  }
+};
+
+async function fetchFoodSale(dateStr, id) {
+  await initFoodFirebase();
+  const snap = await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).once("value");
+  return snap.val();
+}
+
+async function adjustFoodCreditLedger(customerName, delta, customerType, sale = {}) {
+  if (!customerName || !delta) return;
+  const key = foodCreditKey(customerName);
+  const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${key}`);
+  const snap = await creditRef.once("value");
+  const existing = snap.val() || { outstanding: 0 };
+  const next = Math.max(0, (existing.outstanding || 0) + delta);
+
+  if (next <= 0) {
+    await creditRef.remove();
+  } else {
+    await creditRef.update({
+      customerName,
+      customerType: customerType || existing.customerType || FOOD_CUSTOMER_TYPES.WALKIN,
+      memberId: sale.memberId || existing.memberId || null,
+      pcName: sale.pcName || existing.pcName || null,
+      outstanding: next,
+      lastUpdated: Date.now()
+    });
+  }
 }
 
 window.saveFoodRechargeSale = async function() {
@@ -464,24 +695,13 @@ window.saveFoodRechargeSale = async function() {
   }
 
   const total = getFoodCartTotal();
-  let cashAmount = 0;
-  let upiAmount = 0;
-  let creditAmount = 0;
+  const cash = Number($("foodRechargeCash")?.value) || 0;
+  const upi = Number($("foodRechargeUpi")?.value) || 0;
+  const credit = Number($("foodRechargeCredit")?.value) || 0;
 
-  if (foodPaymentMode === "cash") {
-    cashAmount = total;
-  } else if (foodPaymentMode === "upi") {
-    upiAmount = total;
-  } else if (foodPaymentMode === "credit") {
-    creditAmount = total;
-  } else if (foodPaymentMode === "split") {
-    cashAmount = Number($("foodRechargeCash")?.value) || 0;
-    upiAmount = Number($("foodRechargeUpi")?.value) || 0;
-    creditAmount = Number($("foodRechargeCredit")?.value) || 0;
-    if (cashAmount + upiAmount + creditAmount !== total) {
-      toast("warning", `Split (₹${cashAmount + upiAmount + creditAmount}) must equal total (₹${total})`);
-      return;
-    }
+  if (cash + upi + credit !== total) {
+    toast("warning", `Split (₹${cash + upi + credit}) must equal total (₹${total})`);
+    return;
   }
 
   const isPc = foodCustomerType === FOOD_CUSTOMER_TYPES.PC ||
@@ -490,7 +710,14 @@ window.saveFoodRechargeSale = async function() {
   const session = getStaffSession();
   const saleDate = getSelectedRechargeDate();
 
-  const saleData = buildFoodSalePayload({
+  const previous = foodEditId
+    ? foodDayState.find(s => s.id === foodEditId)
+    : null;
+  const previousPending = previous
+    ? Math.max(0, (previous.credit || 0) - (previous.creditPaid || 0))
+    : 0;
+
+  const saleData = buildFoodLedgerSale({
     customerName: customerInput,
     customerType,
     memberId: customerType === FOOD_CUSTOMER_TYPES.MEMBER ? customerInput : null,
@@ -499,208 +726,127 @@ window.saveFoodRechargeSale = async function() {
     source: FOOD_SALE_SOURCES.RECHARGES,
     items: foodCart,
     total,
-    paymentMode: foodPaymentMode === "split" && creditAmount > 0 && cashAmount + upiAmount + creditAmount === total
-      ? (creditAmount === total ? "credit" : "split")
-      : foodPaymentMode,
-    cashAmount,
-    upiAmount,
-    creditAmount,
+    cash,
+    upi,
+    credit,
+    note: ($("foodRechargeNote")?.value || "").trim(),
+    admin: getAdminName(),
     staffId: session?.id || "unknown",
     staffName: session?.name || session?.email || "Admin",
-    note: ($("foodRechargeNote")?.value || "").trim(),
-    timestamp: Date.now()
+    timestamp: previous?.timestamp || Date.now(),
+    // Preserve collected credit history on edit
+    creditPaid: foodEditId ? (previous?.creditPaid || 0) : 0,
+    creditPayments: foodEditId ? (previous?.creditPayments || {}) : {}
   });
 
-  // If split includes credit, keep paymentMode as split
-  if (foodPaymentMode === "split") {
-    saleData.paymentMode = "split";
-    saleData.cashAmount = cashAmount;
-    saleData.upiAmount = upiAmount;
-    if (creditAmount > 0) saleData.creditAmount = creditAmount;
+  // If editing and reducing credit below already paid, clamp
+  if (saleData.creditPaid > saleData.credit) {
+    saleData.creditPaid = saleData.credit;
   }
 
   try {
     const ready = await initFoodFirebase();
     if (!ready) throw new Error("Database not ready");
 
-    const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
-    await saleRef.set(saleData);
-
-    // Credit ledger (only when credit portion exists)
-    const creditPart = saleData.paymentMode === "credit"
-      ? total
-      : (saleData.creditAmount || 0);
-
-    if (creditPart > 0) {
-      const key = foodCreditKey(customerInput);
-      const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${key}`);
-      const creditSnap = await creditRef.once("value");
-      const existing = creditSnap.val() || { outstanding: 0 };
-      await creditRef.update({
-        customerName: customerInput,
-        customerType,
-        memberId: saleData.memberId,
-        pcName: saleData.pcName,
-        outstanding: (existing.outstanding || 0) + creditPart,
-        lastUpdated: Date.now()
-      });
+    if (foodEditId) {
+      await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}/${foodEditId}`).update(saleData);
+    } else {
+      const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
+      await saleRef.set(saleData);
     }
 
-    // Stock updates
-    for (const item of foodCart) {
-      const menuItem = foodMenu.find(m => m.id === item.id);
-      if (menuItem && menuItem.stock !== null && menuItem.stock !== undefined) {
-        const newStock = Math.max(0, Number(menuItem.stock) - item.qty);
-        await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
+    // Sync aggregate food credit ledger by delta of pending credit
+    const newPending = Math.max(0, saleData.credit - (saleData.creditPaid || 0));
+    const creditDelta = newPending - previousPending;
+    if (creditDelta !== 0) {
+      await adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData);
+    }
+
+    // Stock: only adjust on create (simple & safe). Edit does not re-adjust stock.
+    if (!foodEditId) {
+      for (const item of foodCart) {
+        const menuItem = foodMenu.find(m => m.id === item.id);
+        if (menuItem && menuItem.stock !== null && menuItem.stock !== undefined) {
+          const newStock = Math.max(0, Number(menuItem.stock) - item.qty);
+          await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
+        }
       }
     }
 
     SharedCache.invalidateFoodSales();
-    toast("success", `Food sale saved: ₹${total}`);
+    toast("success", foodEditId ? `Food sale updated: ₹${total}` : `Food sale saved: ₹${total}`);
     closeAddFoodRechargeModal();
     await loadFoodMenuItems();
-    await loadDayFoodSales(saleDate);
+    if (typeof window.loadAllOutstandingCredits === "function") {
+      window.loadAllOutstandingCredits();
+    }
   } catch (err) {
     console.error("❌ RechargeFood: save failed", err);
     toast("error", "Failed to save food sale: " + err.message);
   }
 };
 
-// ==================== DAY LIST ====================
+/**
+ * Collect food credit against a specific food_sales entry (same UX as gaming).
+ */
+export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, collected, adminName }) {
+  await initFoodFirebase();
+  const ref = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${date}/${id}`);
+  const snap = await ref.once("value");
+  const original = snap.val();
+  if (!original) throw new Error("Food sale not found");
 
-async function loadDayFoodSales(dateStr) {
-  const ready = await initFoodFirebase();
-  if (!ready || !bookingDb) return;
+  const ledger = foodSaleToLedger({ id, date, ...original });
+  const today = getTodayISTString();
+  const now = new Date().toISOString();
+  const newCreditPaid = (ledger.creditPaid || 0) + collected;
 
-  currentFoodDate = dateStr;
+  const existingPayments = ledger.creditPayments || {};
+  const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
+  const updatedPayments = {
+    ...existingPayments,
+    [today]: {
+      cash: (todayPayment.cash || 0) + cash,
+      upi: (todayPayment.upi || 0) + upi,
+      at: now,
+      by: adminName || getAdminName()
+    }
+  };
 
-  if (foodSalesListener) {
-    foodSalesListener.off();
-    foodSalesListener = null;
-  }
-
-  const ref = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}`);
-  foodSalesListener = ref;
-  ref.on("value", snap => {
-    const data = snap.val() || {};
-    dayFoodSales = Object.entries(data).map(([id, sale]) =>
-      normalizeFoodSale({ id, date: dateStr, ...sale })
-    ).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    renderDayFoodSales();
-  }, err => {
-    console.error("❌ RechargeFood: day listen failed", err);
-    dayFoodSales = [];
-    renderDayFoodSales();
-  });
-}
-
-function renderDayFoodSales() {
-  const listEl = $("foodRechargeList");
-  const emptyEl = $("foodRechargeEmptyState");
-  const countEl = $("foodRechargeCount");
-  const totalEl = $("foodDayTotal");
-  const cashEl = $("foodDayCash");
-  const upiEl = $("foodDayUpi");
-  const creditEl = $("foodDayCredit");
-
-  let cash = 0, upi = 0, credit = 0, total = 0;
-  dayFoodSales.forEach(sale => {
-    const amounts = getSaleCollectedAmounts(sale);
-    cash += amounts.cash;
-    upi += amounts.upi;
-    credit += amounts.credit;
-    total += amounts.total;
+  await ref.update({
+    creditPaid: newCreditPaid,
+    creditPayments: updatedPayments,
+    lastPaidAt: now,
+    lastPaidCash: cash,
+    lastPaidUpi: upi,
+    lastPaidBy: adminName || getAdminName()
   });
 
-  if (countEl) countEl.textContent = String(dayFoodSales.length);
-  if (totalEl) totalEl.textContent = `₹${total}`;
-  if (cashEl) cashEl.textContent = `₹${cash}`;
-  if (upiEl) upiEl.textContent = `₹${upi}`;
-  if (creditEl) creditEl.textContent = `₹${credit}`;
-
-  if (!listEl) return;
-
-  if (dayFoodSales.length === 0) {
-    listEl.innerHTML = "";
-    emptyEl?.classList.remove("hidden");
-    return;
+  // Also log in food_credit_payments + reduce food_credits outstanding
+  if (collected > 0) {
+    await bookingDb.ref(`${FB_PATHS.FOOD_CREDIT_PAYMENTS}/${today}`).push({
+      saleId: id,
+      saleDate: date,
+      customerId: foodCreditKey(ledger.member),
+      customerName: ledger.member,
+      cash,
+      upi,
+      total: collected,
+      timestamp: Date.now(),
+      by: adminName || getAdminName()
+    });
+    await adjustFoodCreditLedger(ledger.member, -collected, ledger.customerType, ledger);
   }
 
-  emptyEl?.classList.add("hidden");
-
-  const query = ($("foodRechargeSearch")?.value || "").trim().toLowerCase();
-  const filtered = query
-    ? dayFoodSales.filter(s => {
-        const hay = [
-          s.customerName,
-          s.memberName,
-          s.pcName,
-          s.note,
-          s.staffName,
-          ...(s.items || []).map(i => i.name)
-        ].join(" ").toLowerCase();
-        return hay.includes(query);
-      })
-    : dayFoodSales;
-
-  if (filtered.length === 0) {
-    listEl.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-gray-500">No matching food sales</td></tr>`;
-    return;
-  }
-
-  listEl.innerHTML = filtered.map((sale, idx) => {
-    const time = sale.timestamp
-      ? new Date(sale.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-      : "—";
-    const itemsText = (sale.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ");
-    const typeBadge = sale.customerType === FOOD_CUSTOMER_TYPES.PC
-      ? `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(0,240,255,0.15); color: var(--neon-cyan);">PC</span>`
-      : `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(0,255,136,0.15); color: var(--neon-green);">Member</span>`;
-    const modeLabel = sale.paymentMode || "cash";
-    const sourceLabel = sale.source === FOOD_SALE_SOURCES.RECHARGES ? "Recharges" : "POS";
-
-    return `
-      <tr class="hover:bg-gray-900/40">
-        <td class="px-2 py-3 text-center text-gray-500 text-xs">${idx + 1}</td>
-        <td class="px-3 py-3 text-xs text-gray-400">${time}</td>
-        <td class="px-3 py-3">
-          <div class="text-sm text-white font-medium">${sale.customerName || "—"} ${typeBadge}</div>
-          <div class="text-xs text-gray-500 truncate max-w-[220px]">${itemsText || "—"}</div>
-        </td>
-        <td class="px-3 py-3 text-right font-orbitron text-sm" style="color: var(--neon-orange);">₹${sale.total || 0}</td>
-        <td class="px-3 py-3 text-xs text-gray-400 capitalize">${modeLabel}<div class="text-[10px] text-gray-600">${sourceLabel}</div></td>
-        <td class="px-3 py-3 text-right">
-          <button type="button" onclick="deleteFoodRechargeSale('${sale.id}')" class="text-xs px-2 py-1 rounded text-red-400 hover:bg-red-500/10" title="Delete">🗑</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
+  SharedCache.invalidateFoodSales();
+  return true;
 }
 
-window.filterFoodRechargeList = function() {
-  renderDayFoodSales();
-};
-
-window.deleteFoodRechargeSale = async function(saleId) {
-  if (!canEditData()) {
-    toast("warning", "You have view-only access.");
-    return;
-  }
-  if (!confirm("Delete this food sale? Stock will not be restored automatically.")) return;
-
-  try {
-    const dateStr = currentFoodDate || getSelectedRechargeDate();
-    await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${saleId}`).remove();
-    SharedCache.invalidateFoodSales();
-    toast("success", "Food sale deleted");
-  } catch (err) {
-    toast("error", "Delete failed: " + err.message);
-  }
-};
-
-// Auto-init when DOM ready
+// Auto-init
 document.addEventListener("DOMContentLoaded", () => {
   initRechargeFood().catch(err => console.error(err));
 });
 
 window.initRechargeFood = initRechargeFood;
+window.getFoodDayState = getFoodDayState;
+window.loadFoodDay = loadFoodDay;
