@@ -9,23 +9,21 @@ import {
   BOOKING_APP_NAME, 
   FDB_APP_NAME,
   FB_PATHS,
+  EXPENSE_CATEGORIES,
+  FOOD_EXPENSE_CATEGORY_IDS,
   getISTDate,
   SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, hasPermission, canEditData } from "./permissions.js";
+import {
+  flattenFoodSalesByDate,
+  flattenFoodCreditPayments,
+  aggregateFoodStats,
+  sumFoodExpenses
+} from "../../shared/food-stats.js";
 
 // ==================== CONSTANTS ====================
-
-const EXPENSE_CATEGORIES = [
-  { id: "rent", name: "Rent", icon: "🏠", color: "#ff6b6b" },
-  { id: "electricity", name: "Electricity", icon: "⚡", color: "#ffd93d" },
-  { id: "internet", name: "Internet", icon: "🌐", color: "#6bcb77" },
-  { id: "salary", name: "Staff Salary", icon: "👥", color: "#4d96ff" },
-  { id: "maintenance", name: "Maintenance", icon: "🔧", color: "#ff922b" },
-  { id: "supplies", name: "Supplies", icon: "📦", color: "#845ef7" },
-  { id: "equipment", name: "Equipment", icon: "🖥️", color: "#20c997" },
-  { id: "other", name: "Other", icon: "📋", color: "#868e96" }
-];
+// EXPENSE_CATEGORIES imported from shared/config.js (includes food categories)
 
 // ==================== STATE ====================
 
@@ -34,6 +32,9 @@ let financeState = {
   selectedDate: new Date(),
   expenses: [],
   recharges: {},
+  foodSales: {},
+  foodCreditPayments: {},
+  foodCredits: [],
   members: [],
   dailySummaries: {},
   currentFilter: "all",
@@ -149,6 +150,7 @@ async function loadFinanceData() {
     await Promise.all([
       loadExpenses(),
       loadRecharges(),
+      loadFoodFinanceData(),
       loadMembers(),
       loadDailySummaries()
     ]);
@@ -198,6 +200,31 @@ async function loadRecharges() {
   }
 }
 
+async function loadFoodFinanceData() {
+  try {
+    const [salesTree, paymentsTree, creditsSnap] = await Promise.all([
+      SharedCache.getFoodSales(bookingDb, FB_PATHS.FOOD_SALES),
+      SharedCache.getFoodCreditPayments(bookingDb, FB_PATHS.FOOD_CREDIT_PAYMENTS),
+      bookingDb.ref(FB_PATHS.FOOD_CREDITS).once("value")
+    ]);
+
+    financeState.foodSales = salesTree || {};
+    financeState.foodCreditPayments = paymentsTree || {};
+
+    const creditsVal = creditsSnap.val() || {};
+    financeState.foodCredits = Object.entries(creditsVal)
+      .map(([id, data]) => ({ id, ...data }))
+      .filter(c => (c.outstanding || 0) > 0);
+
+    console.log(`✅ Loaded food finance data`);
+  } catch (error) {
+    console.error("Error loading food finance data:", error);
+    financeState.foodSales = {};
+    financeState.foodCreditPayments = {};
+    financeState.foodCredits = [];
+  }
+}
+
 async function loadMembers() {
   try {
     financeState.members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
@@ -234,11 +261,11 @@ async function loadDailySummaries() {
 
 function calculateSummary() {
   const { startDate, endDate } = getDateRange();
-  const { recharges, expenses, members, dailySummaries } = financeState;
+  const { recharges, expenses, members, dailySummaries, foodSales, foodCreditPayments, foodCredits } = financeState;
 
-  // Revenue from recharges (excluding offers/free)
+  // Gaming revenue from recharges (excluding offers/free)
   // Count: direct cash, direct UPI, and credit collections (cash/UPI from collected credits)
-  let totalRevenue = 0, cashTotal = 0, upiTotal = 0;
+  let gamingCash = 0, gamingUpi = 0;
 
   // First pass: count direct cash and UPI payments (not credit given, not free)
   Object.entries(recharges).forEach(([date, dayData]) => {
@@ -246,12 +273,12 @@ function calculateSummary() {
       Object.values(dayData).forEach(r => {
         if (r.total !== undefined) {
           // New split payment format - count direct cash and UPI only
-          cashTotal += r.cash || 0;
-          upiTotal += r.upi || 0;
+          gamingCash += r.cash || 0;
+          gamingUpi += r.upi || 0;
         } else if (r.amount !== undefined && r.mode !== "credit") {
           // Old single-mode format - count cash and UPI (not credit given)
-          if (r.mode === "cash") cashTotal += r.amount || 0;
-          else if (r.mode === "upi") upiTotal += r.amount || 0;
+          if (r.mode === "cash") gamingCash += r.amount || 0;
+          else if (r.mode === "upi") gamingUpi += r.amount || 0;
         }
       });
     }
@@ -266,8 +293,8 @@ function calculateSummary() {
         Object.entries(r.creditPayments).forEach(([paymentDate, payment]) => {
           // Only count if the payment was made within our period
           if (paymentDate >= startDate && paymentDate <= endDate) {
-            cashTotal += payment.cash || 0;
-            upiTotal += payment.upi || 0;
+            gamingCash += payment.cash || 0;
+            gamingUpi += payment.upi || 0;
           }
         });
       }
@@ -275,8 +302,8 @@ function calculateSummary() {
       else if (r.lastPaidAt && (r.lastPaidCash || r.lastPaidUpi)) {
         const paidDate = r.lastPaidAt.split("T")[0];
         if (paidDate >= startDate && paidDate <= endDate) {
-          cashTotal += r.lastPaidCash || 0;
-          upiTotal += r.lastPaidUpi || 0;
+          gamingCash += r.lastPaidCash || 0;
+          gamingUpi += r.lastPaidUpi || 0;
         }
       }
       // LEGACY FORMAT: paidAt with paidVia
@@ -284,17 +311,28 @@ function calculateSummary() {
         const paidDate = r.paidAt.split("T")[0];
         if (paidDate >= startDate && paidDate <= endDate) {
           if (r.paidVia === "cash" || r.paidVia.includes("cash")) {
-            cashTotal += r.amount || 0;
+            gamingCash += r.amount || 0;
           } else if (r.paidVia === "upi") {
-            upiTotal += r.amount || 0;
+            gamingUpi += r.amount || 0;
           }
         }
       }
     });
   });
 
-  // Total revenue = all cash collected + all UPI collected
-  totalRevenue = cashTotal + upiTotal;
+  const gamingRevenue = gamingCash + gamingUpi;
+
+  // Food revenue (same math as Food Analytics)
+  const foodSalesList = flattenFoodSalesByDate(foodSales, startDate, endDate);
+  const foodPaymentsList = flattenFoodCreditPayments(foodCreditPayments, startDate, endDate);
+  const foodStats = aggregateFoodStats(foodSalesList, foodPaymentsList, foodCredits);
+  const foodCash = foodStats.cashCollected;
+  const foodUpi = foodStats.upiCollected;
+  const foodRevenue = foodCash + foodUpi;
+
+  const cashTotal = gamingCash + foodCash;
+  const upiTotal = gamingUpi + foodUpi;
+  const totalRevenue = cashTotal + upiTotal;
 
   // Expenses - track by payment mode
   let totalExpenses = 0, expenseCash = 0, expenseOnline = 0;
@@ -316,6 +354,9 @@ function calculateSummary() {
       expenseCash += amount;
     }
   });
+
+  const foodExpenseTotals = sumFoodExpenses(expenses, FOOD_EXPENSE_CATEGORY_IDS);
+  const foodMargin = foodRevenue - foodExpenseTotals.total;
 
   const profit = totalRevenue - totalExpenses;
   const cashProfit = cashTotal - expenseCash;
@@ -366,6 +407,23 @@ function calculateSummary() {
   
   const profitEl = $("finProfit");
   profitEl.style.color = profit < 0 ? "var(--neon-red)" : "var(--neon-cyan)";
+
+  if ($("finRevenueChange")) {
+    $("finRevenueChange").textContent = `Gaming ₹${formatNumber(gamingRevenue)} · Food ₹${formatNumber(foodRevenue)}`;
+  }
+  if ($("finGamingRevenue")) $("finGamingRevenue").textContent = `₹${formatNumber(gamingRevenue)}`;
+  if ($("finGamingSplit")) $("finGamingSplit").textContent = `Cash ₹${formatNumber(gamingCash)} · UPI ₹${formatNumber(gamingUpi)}`;
+  if ($("finFoodRevenue")) $("finFoodRevenue").textContent = `₹${formatNumber(foodRevenue)}`;
+  if ($("finFoodSplit")) {
+    $("finFoodSplit").textContent = `Cash ₹${formatNumber(foodCash)} · UPI ₹${formatNumber(foodUpi)} · Credit out ₹${formatNumber(foodStats.creditsOutstanding)}`;
+  }
+  if ($("finFoodMargin")) {
+    $("finFoodMargin").textContent = `₹${formatNumber(foodMargin)}`;
+    $("finFoodMargin").style.color = foodMargin < 0 ? "var(--neon-red)" : "#ffd93d";
+  }
+  if ($("finFoodMarginDetail")) {
+    $("finFoodMarginDetail").textContent = `Sales ₹${formatNumber(foodRevenue)} − expenses ₹${formatNumber(foodExpenseTotals.total)}`;
+  }
 
   const hours = Math.floor(totalMinutes / 60);
   $("finMinutes").textContent = `${formatNumber(hours)}h`;
@@ -708,7 +766,7 @@ function renderExpenses() {
 
   // Generate expense items (works on both mobile and desktop)
   const expenseItems = filtered.map(exp => {
-    const cat = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES[7];
+    const cat = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES.find(c => c.id === "other") || EXPENSE_CATEGORIES[0];
     const dateStr = new Date(exp.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
     const actions = canEdit ? `
       <button onclick="openFinanceExpenseModal('${exp.id}')" class="p-2 rounded-lg hover:bg-cyan-500/20 transition-colors" style="color: var(--neon-cyan);">
@@ -786,52 +844,70 @@ function renderRevenueChart() {
   if (!ctx) return;
 
   const labels = [];
-  const data = [];
-  const { recharges } = financeState;
+  const gamingData = [];
+  const foodData = [];
+  const { recharges, foodSales, foodCreditPayments } = financeState;
 
+  const periods = [];
   if (financeState.period === "month") {
-    // Last 6 months
     for (let i = 5; i >= 0; i--) {
       const month = new Date(financeState.selectedDate);
       month.setMonth(month.getMonth() - i);
       const year = month.getFullYear();
       const m = String(month.getMonth() + 1).padStart(2, "0");
-      const start = `${year}-${m}-01`;
-      const end = `${year}-${m}-31`;
-
-      labels.push(month.toLocaleDateString("en-IN", { month: "short" }));
-
-      let revenue = 0;
-      Object.entries(recharges).forEach(([date, dayData]) => {
-        if (date >= start && date <= end) {
-          Object.values(dayData).forEach(r => {
-            revenue += (r.total || r.amount || 0) + (r.free || 0);
-          });
-        }
+      periods.push({
+        label: month.toLocaleDateString("en-IN", { month: "short" }),
+        start: `${year}-${m}-01`,
+        end: `${year}-${m}-31`
       });
-      data.push(revenue);
     }
   } else {
-    // Last 12 months of the year
     const year = financeState.selectedDate.getFullYear();
     for (let m = 1; m <= 12; m++) {
       const monthStr = String(m).padStart(2, "0");
-      const start = `${year}-${monthStr}-01`;
-      const end = `${year}-${monthStr}-31`;
-      
-      labels.push(new Date(year, m - 1).toLocaleDateString("en-IN", { month: "short" }));
+      periods.push({
+        label: new Date(year, m - 1).toLocaleDateString("en-IN", { month: "short" }),
+        start: `${year}-${monthStr}-01`,
+        end: `${year}-${monthStr}-31`
+      });
+    }
+  }
 
-      let revenue = 0;
-      Object.entries(recharges).forEach(([date, dayData]) => {
-        if (date >= start && date <= end) {
-          Object.values(dayData).forEach(r => {
-            revenue += (r.total || r.amount || 0) + (r.free || 0);
+  periods.forEach(({ label, start, end }) => {
+    labels.push(label);
+
+    let gaming = 0;
+    Object.entries(recharges).forEach(([date, dayData]) => {
+      if (date >= start && date <= end) {
+        Object.values(dayData).forEach(r => {
+          gaming += (r.cash || 0) + (r.upi || 0);
+          if (r.total === undefined && r.amount !== undefined && r.mode !== "credit") {
+            if (r.mode === "cash" || r.mode === "upi") gaming += r.amount || 0;
+          }
+        });
+      }
+    });
+
+    // Include credit collections in gaming chart for the payment month
+    Object.values(recharges).forEach(dayData => {
+      Object.values(dayData || {}).forEach(r => {
+        if (r.creditPayments) {
+          Object.entries(r.creditPayments).forEach(([paymentDate, payment]) => {
+            if (paymentDate >= start && paymentDate <= end) {
+              gaming += (payment.cash || 0) + (payment.upi || 0);
+            }
           });
         }
       });
-      data.push(revenue);
-    }
-  }
+    });
+
+    const foodList = flattenFoodSalesByDate(foodSales, start, end);
+    const foodPays = flattenFoodCreditPayments(foodCreditPayments, start, end);
+    const foodStats = aggregateFoodStats(foodList, foodPays, []);
+
+    gamingData.push(gaming);
+    foodData.push(foodStats.collectedTotal);
+  });
 
   if (financeState.revenueChart) financeState.revenueChart.destroy();
 
@@ -839,25 +915,40 @@ function renderRevenueChart() {
     type: "line",
     data: {
       labels,
-      datasets: [{
-        label: "Revenue",
-        data,
-        borderColor: "#00ff88",
-        backgroundColor: "rgba(0, 255, 136, 0.1)",
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: "#00ff88",
-        pointRadius: 3
-      }]
+      datasets: [
+        {
+          label: "Gaming",
+          data: gamingData,
+          borderColor: "#00ff88",
+          backgroundColor: "rgba(0, 255, 136, 0.08)",
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: "#00ff88",
+          pointRadius: 3
+        },
+        {
+          label: "Food",
+          data: foodData,
+          borderColor: "#ff6b00",
+          backgroundColor: "rgba(255, 107, 0, 0.08)",
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: "#ff6b00",
+          pointRadius: 3
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          labels: { color: "#aaa", boxWidth: 12 }
+        },
         tooltip: {
           backgroundColor: "rgba(0, 0, 0, 0.8)",
-          callbacks: { label: ctx => `₹${formatNumber(ctx.parsed.y)}` }
+          callbacks: { label: ctx => `${ctx.dataset.label}: ₹${formatNumber(ctx.parsed.y)}` }
         }
       },
       scales: {

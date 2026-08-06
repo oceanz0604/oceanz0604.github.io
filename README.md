@@ -27,6 +27,12 @@ A modern, full-featured management system for gaming cafes built with vanilla Ja
 - **Activity History** - Detailed session and transaction history
 - **Charts & Analytics** - Personal usage patterns and spending
 
+### 🍔 Food / Snacks
+- **Recharges page** - Add food sales against a **member or PC name** (same ledger as POS)
+- **Counter POS** - Quick walk-in / counter food sales
+- **Food Analytics** - Sales, cash/UPI, credits, top items
+- **Finance & Analytics** - Food revenue folded into cafe totals; food stock expenses (`food_purchase`, `food_supplies`) with food margin
+
 ### 🔄 Sync Service (Python)
 - **Automatic Sync** - Syncs PanCafe Firebird database to Firebase
 - **Terminal Status** - Real-time PC status every 2 minutes

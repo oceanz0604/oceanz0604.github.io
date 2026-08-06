@@ -125,6 +125,25 @@ export const FB_PATHS = {
   FOOD_CREDIT_PAYMENTS: "food_credit_payments" // /food_credit_payments/{YYYY-MM-DD}/{payment_id}
 };
 
+/**
+ * Expense categories used by Finance dashboard.
+ * Food categories track snack/stock purchases for food margin.
+ */
+export const EXPENSE_CATEGORIES = [
+  { id: "rent", name: "Rent", icon: "🏠", color: "#ff6b6b" },
+  { id: "electricity", name: "Electricity", icon: "⚡", color: "#ffd93d" },
+  { id: "internet", name: "Internet", icon: "🌐", color: "#6bcb77" },
+  { id: "salary", name: "Staff Salary", icon: "👥", color: "#4d96ff" },
+  { id: "maintenance", name: "Maintenance", icon: "🔧", color: "#ff922b" },
+  { id: "supplies", name: "Supplies", icon: "📦", color: "#845ef7" },
+  { id: "equipment", name: "Equipment", icon: "🖥️", color: "#20c997" },
+  { id: "food_purchase", name: "Food Purchase", icon: "🍔", color: "#ff922b" },
+  { id: "food_supplies", name: "Food Supplies", icon: "🥤", color: "#fcc419" },
+  { id: "other", name: "Other", icon: "📋", color: "#868e96" }
+];
+
+export const FOOD_EXPENSE_CATEGORY_IDS = ["food_purchase", "food_supplies"];
+
 // ==================== APP CONSTANTS ====================
 
 export const CONSTANTS = {
@@ -443,6 +462,14 @@ export const SharedCache = {
   // Recharges cache (3 min TTL) - shared across recharges, analytics, cash-register
   _rechargesCache: new DataCache(3 * 60 * 1000),
   _rechargesPromise: null,
+
+  // Food sales cache (3 min TTL) - shared across finance, analytics, recharges
+  _foodSalesCache: new DataCache(3 * 60 * 1000),
+  _foodSalesPromise: null,
+
+  // Food credit payments cache (3 min TTL)
+  _foodCreditPaymentsCache: new DataCache(3 * 60 * 1000),
+  _foodCreditPaymentsPromise: null,
   
   /**
    * Get all members from Firebase with caching.
@@ -558,6 +585,74 @@ export const SharedCache = {
     this._rechargesCache.invalidate();
     this._rechargesPromise = null;
     console.log("🗑️ SharedCache: Recharges cache invalidated");
+  },
+
+  /**
+   * Get all food sales from Firebase with caching.
+   * @param {object} dbWrapper - Firebase database wrapper { ref, get } or compat db
+   * @param {string} path - Firebase path (FB_PATHS.FOOD_SALES)
+   * @returns {Promise<Object>} Food sales keyed by date
+   */
+  async getFoodSales(dbWrapper, path = "food_sales") {
+    if (this._foodSalesCache.isValid()) {
+      console.log("📦 SharedCache: Using cached food sales");
+      return this._foodSalesCache.data;
+    }
+
+    if (this._foodSalesPromise) {
+      console.log("⏳ SharedCache: Waiting for pending food sales fetch");
+      return this._foodSalesPromise;
+    }
+
+    console.log("🔄 SharedCache: Fetching food sales from Firebase");
+    this._foodSalesPromise = fetchFirebaseData(dbWrapper, path)
+      .then(data => {
+        this._foodSalesCache.set(data);
+        this._foodSalesPromise = null;
+        console.log(`✅ SharedCache: Loaded food sales for ${Object.keys(data).length} dates`);
+        return data;
+      })
+      .catch(err => {
+        this._foodSalesPromise = null;
+        console.error("❌ SharedCache: Failed to load food sales", err);
+        throw err;
+      });
+
+    return this._foodSalesPromise;
+  },
+
+  /**
+   * Get food credit payments tree with caching.
+   */
+  async getFoodCreditPayments(dbWrapper, path = "food_credit_payments") {
+    if (this._foodCreditPaymentsCache.isValid()) {
+      return this._foodCreditPaymentsCache.data;
+    }
+
+    if (this._foodCreditPaymentsPromise) {
+      return this._foodCreditPaymentsPromise;
+    }
+
+    this._foodCreditPaymentsPromise = fetchFirebaseData(dbWrapper, path)
+      .then(data => {
+        this._foodCreditPaymentsCache.set(data);
+        this._foodCreditPaymentsPromise = null;
+        return data;
+      })
+      .catch(err => {
+        this._foodCreditPaymentsPromise = null;
+        throw err;
+      });
+
+    return this._foodCreditPaymentsPromise;
+  },
+
+  invalidateFoodSales() {
+    this._foodSalesCache.invalidate();
+    this._foodSalesPromise = null;
+    this._foodCreditPaymentsCache.invalidate();
+    this._foodCreditPaymentsPromise = null;
+    console.log("🗑️ SharedCache: Food sales cache invalidated");
   },
   
   /**

@@ -1230,9 +1230,12 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <button onclick="openAddRechargeModal()" class="neon-btn neon-btn-green w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
                 <span class="text-2xl">➕</span> ADD RECHARGE
+              </button>
+              <button onclick="openAddFoodRechargeModal()" class="neon-btn w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3" style="border-color: rgba(255,107,0,0.5); color: var(--neon-orange);">
+                <span class="text-2xl">🍔</span> ADD FOOD
               </button>
               <button onclick="openSyncModal()" class="neon-btn neon-btn-cyan w-full rounded-xl px-6 py-4 font-orbitron text-lg flex items-center justify-center gap-3">
                 <span class="text-2xl">🔄</span> SYNC WITH PANCAFE
@@ -1339,6 +1342,61 @@
               <div id="rechargeNoResults" class="hidden text-center py-8 text-gray-500">
                 <span class="text-2xl block mb-2">🔍</span>
                 <p>No matching transactions found</p>
+              </div>
+            </div>
+
+            <!-- Food / Snacks Sales for Selected Date -->
+            <div class="neon-card rounded-xl overflow-hidden w-full" style="border-color: rgba(255,107,0,0.25);">
+              <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3">
+                <h3 class="font-orbitron text-sm font-bold flex items-center gap-2" style="color: var(--neon-orange);">
+                  🍔 FOOD / SNACKS
+                  <span id="foodRechargeCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2);">0</span>
+                </h3>
+                <div class="relative">
+                  <input type="text" id="foodRechargeSearch" placeholder="Search member / PC / item"
+                    class="neon-input px-4 py-2 pl-10 rounded-lg text-sm w-full sm:w-64"
+                    oninput="filterFoodRechargeList()"/>
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-b border-gray-800/60">
+                <div class="text-center p-2 rounded-lg bg-black/30">
+                  <div class="text-[10px] text-gray-500 uppercase">Food Total</div>
+                  <div id="foodDayTotal" class="font-orbitron text-lg" style="color: var(--neon-orange);">₹0</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-black/30">
+                  <div class="text-[10px] text-gray-500 uppercase">Cash</div>
+                  <div id="foodDayCash" class="font-orbitron text-lg" style="color: var(--neon-cyan);">₹0</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-black/30">
+                  <div class="text-[10px] text-gray-500 uppercase">UPI</div>
+                  <div id="foodDayUpi" class="font-orbitron text-lg" style="color: var(--neon-purple);">₹0</div>
+                </div>
+                <div class="text-center p-2 rounded-lg bg-black/30">
+                  <div class="text-[10px] text-gray-500 uppercase">Credit</div>
+                  <div id="foodDayCredit" class="font-orbitron text-lg" style="color: var(--neon-orange);">₹0</div>
+                </div>
+              </div>
+
+              <div class="recharge-table-wrapper w-full">
+                <table class="w-full text-sm" style="width: 100% !important;">
+                  <thead class="bg-gray-900/50">
+                    <tr class="text-left">
+                      <th class="px-2 py-3 font-orbitron text-xs uppercase tracking-wider text-center text-gray-500" style="width: 40px;">#</th>
+                      <th class="px-3 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Time</th>
+                      <th class="px-3 py-3 font-orbitron text-xs uppercase tracking-wider" style="color: var(--neon-orange);">Customer / Items</th>
+                      <th class="px-3 py-3 font-orbitron text-xs uppercase tracking-wider text-right" style="color: var(--neon-green);">Amt</th>
+                      <th class="px-3 py-3 font-orbitron text-xs uppercase tracking-wider text-gray-500">Pay</th>
+                      <th class="px-3 py-3 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="foodRechargeList" class="divide-y divide-gray-800/50"></tbody>
+                </table>
+              </div>
+              <div id="foodRechargeEmptyState" class="text-center py-10 text-gray-500">
+                <span class="text-3xl block mb-2">🍔</span>
+                <p class="text-sm">No food sales for this date</p>
               </div>
             </div>
 
@@ -1509,13 +1567,13 @@
           </div>
 
           <!-- Summary Cards -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-green);">
               <div class="flex items-center gap-2 mb-2">
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 255, 136, 0.2);">
                   <i data-lucide="trending-up" class="w-4 h-4" style="color: var(--neon-green);"></i>
                 </div>
-                <span class="text-xs text-gray-400 uppercase">Revenue</span>
+                <span class="text-xs text-gray-400 uppercase">Total Revenue</span>
               </div>
               <div class="font-orbitron text-xl md:text-2xl font-bold" id="finRevenue" style="color: var(--neon-green);">₹0</div>
               <div class="text-xs text-gray-500 mt-1" id="finRevenueChange">-</div>
@@ -1552,6 +1610,25 @@
               </div>
               <div class="font-orbitron text-xl md:text-2xl font-bold" id="finMinutes" style="color: var(--neon-purple);">0h</div>
               <div class="text-xs text-gray-500 mt-1" id="finSessions">0 sessions</div>
+            </div>
+          </div>
+
+          <!-- Gaming vs Food breakdown -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="neon-card rounded-xl p-4" style="border-color: rgba(0,255,136,0.25);">
+              <div class="text-xs text-gray-500 uppercase mb-1">Gaming Revenue</div>
+              <div class="font-orbitron text-xl font-bold" id="finGamingRevenue" style="color: var(--neon-green);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finGamingSplit">Cash ₹0 · UPI ₹0</div>
+            </div>
+            <div class="neon-card rounded-xl p-4" style="border-color: rgba(255,107,0,0.25);">
+              <div class="text-xs text-gray-500 uppercase mb-1">Food Revenue</div>
+              <div class="font-orbitron text-xl font-bold" id="finFoodRevenue" style="color: var(--neon-orange);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finFoodSplit">Cash ₹0 · UPI ₹0</div>
+            </div>
+            <div class="neon-card rounded-xl p-4" style="border-color: rgba(255,217,61,0.25);">
+              <div class="text-xs text-gray-500 uppercase mb-1">Food Margin</div>
+              <div class="font-orbitron text-xl font-bold" id="finFoodMargin" style="color: #ffd93d;">₹0</div>
+              <div class="text-xs text-gray-500 mt-1" id="finFoodMarginDetail">Sales − food expenses</div>
             </div>
           </div>
 
@@ -1599,6 +1676,8 @@
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="maintenance" onclick="filterFinanceExpenses('maintenance')">🔧 Maint.</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="supplies" onclick="filterFinanceExpenses('supplies')">📦 Supplies</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="equipment" onclick="filterFinanceExpenses('equipment')">🖥️ Equip.</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="food_purchase" onclick="filterFinanceExpenses('food_purchase')">🍔 Food Stock</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="food_supplies" onclick="filterFinanceExpenses('food_supplies')">🥤 Food Supplies</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="other" onclick="filterFinanceExpenses('other')">📋 Other</button>
             </div>
 
@@ -1701,7 +1780,7 @@
               
               <div>
                 <label class="text-xs text-gray-400 uppercase block mb-2">Category</label>
-                <div class="grid grid-cols-4 gap-2" id="finCategoryGrid">
+                <div class="grid grid-cols-5 gap-2" id="finCategoryGrid">
                   <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="rent" onclick="selectFinanceCategory('rent')">
                     <div class="text-xl">🏠</div><div class="text-xs text-gray-500">Rent</div>
                   </button>
@@ -1722,6 +1801,12 @@
                   </button>
                   <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="equipment" onclick="selectFinanceCategory('equipment')">
                     <div class="text-xl">🖥️</div><div class="text-xs text-gray-500">Equip.</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="food_purchase" onclick="selectFinanceCategory('food_purchase')">
+                    <div class="text-xl">🍔</div><div class="text-xs text-gray-500">Food</div>
+                  </button>
+                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="food_supplies" onclick="selectFinanceCategory('food_supplies')">
+                    <div class="text-xl">🥤</div><div class="text-xs text-gray-500">F.Supply</div>
                   </button>
                   <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="other" onclick="selectFinanceCategory('other')">
                     <div class="text-xl">📋</div><div class="text-xs text-gray-500">Other</div>
@@ -2319,6 +2404,83 @@
     </div>
   </div>
 
+  <!-- Add Food / Snacks Modal (from Recharges page) -->
+  <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+    <div class="neon-card rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
+      <button onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
+
+      <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">🍔 ADD FOOD / SNACKS</h3>
+      <p class="text-xs text-gray-500 mb-4">Log food against a member or PC — same ledger as POS</p>
+
+      <div class="space-y-4">
+        <div class="relative">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs text-gray-500">Member / PC</label>
+            <span id="foodCustomerTypeBadge" class="text-[10px] font-orbitron" style="color: var(--neon-green);">Member</span>
+          </div>
+          <div class="flex gap-2">
+            <input id="foodMemberInput" placeholder="Search member or type name..." class="neon-input flex-1 px-3 py-2 rounded-lg text-white"/>
+            <select id="foodGuestTerminalSelect" class="neon-input px-2 py-2 rounded-lg text-white text-xs" style="width: auto; min-width: 110px;" onchange="selectFoodRechargeTerminal(this)">
+              <option value="">PC / Guest ▾</option>
+            </select>
+          </div>
+          <div id="foodMemberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
+        </div>
+
+        <div>
+          <label class="text-xs text-gray-500 mb-2 block">Menu Items</label>
+          <div id="foodRechargeMenuGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1"></div>
+        </div>
+
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Cart</label>
+          <div id="foodRechargeCart" class="rounded-lg p-2 max-h-40 overflow-y-auto" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,107,0,0.25);"></div>
+          <div class="flex items-center justify-between mt-2">
+            <span class="text-xs text-gray-500">Total</span>
+            <span id="foodRechargeTotal" class="font-orbitron text-xl" style="color: var(--neon-orange);">₹0</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs text-gray-400 uppercase tracking-wider">Payment</span>
+            <span id="foodRechargeSplitRemaining" class="text-xs font-orbitron" style="color: var(--neon-orange);">Total ₹0</span>
+          </div>
+          <div class="grid grid-cols-4 gap-2 mb-3">
+            <button type="button" class="food-recharge-pay-btn active px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="cash" onclick="setFoodRechargePaymentMode('cash')" style="border: 1px solid var(--neon-orange); background: rgba(255,107,0,0.15); color: var(--neon-orange);">Cash</button>
+            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="upi" onclick="setFoodRechargePaymentMode('upi')" style="border: 1px solid #374151; color: #9ca3af;">UPI</button>
+            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="split" onclick="setFoodRechargePaymentMode('split')" style="border: 1px solid #374151; color: #9ca3af;">Split</button>
+            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="credit" onclick="setFoodRechargePaymentMode('credit')" style="border: 1px solid #374151; color: #9ca3af;">Credit</button>
+          </div>
+          <div id="foodRechargeSplitFields" class="hidden grid grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs mb-1 block" style="color: #00f0ff;">💵 Cash</label>
+              <input id="foodRechargeCash" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 block" style="color: #b829ff;">📱 UPI</label>
+              <input id="foodRechargeUpi" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+            </div>
+            <div>
+              <label class="text-xs mb-1 block" style="color: #ff6b00;">🔖 Credit</label>
+              <input id="foodRechargeCredit" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
+          <input id="foodRechargeNote" placeholder="Add a note..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button onclick="closeAddFoodRechargeModal()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: rgba(255,255,255,0.05); color: #888;">Cancel</button>
+          <button onclick="saveFoodRechargeSale()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: linear-gradient(135deg, rgba(255,107,0,0.3), rgba(255,107,0,0.15)); border: 1px solid var(--neon-orange); color: var(--neon-orange);">💾 Save Food Sale</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Credit Collection Modal -->
   <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
     <div class="neon-card rounded-2xl w-full max-w-md p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
@@ -2773,6 +2935,7 @@
   <script type="module" src="js/finance.js"></script>
   <script type="module" src="js/food-menu.js"></script>
   <script type="module" src="js/food-analytics.js"></script>
+  <script type="module" src="js/recharge-food.js"></script>
   
   <!-- Leaderboard handlers -->
   <script type="module">

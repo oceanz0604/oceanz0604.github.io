@@ -6,6 +6,10 @@
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, get, set, push, update, remove, onValue, off, query, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { BOOKING_DB_CONFIG, FB_PATHS } from "../../shared/config.js";
+import {
+  aggregateFoodStats,
+  normalizeFoodSale
+} from "../../shared/food-stats.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -65,11 +69,11 @@ async function loadFoodSales(dates) {
       const snapshot = await get(ref(db, `${FB_PATHS.FOOD_SALES}/${dateStr}`));
       if (snapshot.exists()) {
         snapshot.forEach(child => {
-          allFoodSales.push({
+          allFoodSales.push(normalizeFoodSale({
             id: child.key,
             date: dateStr,
             ...child.val()
-          });
+          }));
         });
       }
     } catch (err) {
@@ -129,42 +133,16 @@ async function loadCreditPayments(dates) {
 // ==================== CALCULATIONS ====================
 
 function calculateAndRender() {
-  let totalSales = 0;
-  let cashCollected = 0;
-  let upiCollected = 0;
-  
-  // Process food sales
-  allFoodSales.forEach(sale => {
-    totalSales += sale.total || 0;
-    
-    if (sale.paymentMode === "cash") {
-      cashCollected += sale.total || 0;
-    } else if (sale.paymentMode === "upi") {
-      upiCollected += sale.total || 0;
-    } else if (sale.paymentMode === "split") {
-      cashCollected += sale.cashAmount || 0;
-      upiCollected += sale.upiAmount || 0;
-    }
-    // Credits not counted in collected until paid
-  });
-  
-  // Add credit payments to collected amounts
-  allCreditPayments.forEach(payment => {
-    cashCollected += payment.cash || 0;
-    upiCollected += payment.upi || 0;
-  });
-  
-  // Calculate outstanding credits
-  let creditsOutstanding = allFoodCredits.reduce((sum, c) => sum + (c.outstanding || 0), 0);
-  
+  const stats = aggregateFoodStats(allFoodSales, allCreditPayments, allFoodCredits);
+
   // Update UI
-  document.getElementById("foodTotalSales").textContent = `₹${totalSales.toLocaleString()}`;
-  document.getElementById("foodCashCollected").textContent = `₹${cashCollected.toLocaleString()}`;
-  document.getElementById("foodUpiCollected").textContent = `₹${upiCollected.toLocaleString()}`;
-  document.getElementById("foodCreditsOutstanding").textContent = `₹${creditsOutstanding.toLocaleString()}`;
+  document.getElementById("foodTotalSales").textContent = `₹${stats.totalSales.toLocaleString()}`;
+  document.getElementById("foodCashCollected").textContent = `₹${stats.cashCollected.toLocaleString()}`;
+  document.getElementById("foodUpiCollected").textContent = `₹${stats.upiCollected.toLocaleString()}`;
+  document.getElementById("foodCreditsOutstanding").textContent = `₹${stats.creditsOutstanding.toLocaleString()}`;
   
   renderSalesChart();
-  renderTopItems();
+  renderTopItems(stats.topItems);
   renderCreditsList();
   renderRecentSales();
 }
@@ -234,28 +212,11 @@ function renderSalesChart() {
   }
 }
 
-function renderTopItems() {
+function renderTopItems(precomputedTopItems) {
   const container = document.getElementById("foodTopItems");
   if (!container) return;
   
-  // Aggregate items by name
-  const itemCounts = {};
-  allFoodSales.forEach(sale => {
-    if (sale.items) {
-      sale.items.forEach(item => {
-        const key = item.name;
-        if (!itemCounts[key]) {
-          itemCounts[key] = { name: key, qty: 0, revenue: 0 };
-        }
-        itemCounts[key].qty += item.qty || 1;
-        itemCounts[key].revenue += (item.price || 0) * (item.qty || 1);
-      });
-    }
-  });
-  
-  const sorted = Object.values(itemCounts)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+  const sorted = (precomputedTopItems || []).slice(0, 5);
   
   if (sorted.length === 0) {
     container.innerHTML = `
@@ -345,11 +306,13 @@ function renderRecentSales() {
     const modeIcon = sale.paymentMode === "cash" ? "💵" : sale.paymentMode === "upi" ? "📱" : sale.paymentMode === "split" ? "✂️" : "⏰";
     const itemsText = sale.items ? sale.items.map(i => `${i.qty || 1}x ${i.name}`).join(", ") : "—";
     const time = sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+    const typeLabel = sale.customerType === "pc" ? "PC" : sale.customerType === "member" ? "Member" : "Walk-in";
+    const sourceLabel = sale.source === "recharges" ? "Recharges" : "POS";
     
     return `
       <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-gray-800">
         <div class="flex-1 min-w-0">
-          <div class="font-semibold text-white text-sm truncate">${sale.customerName || "Walk-in"}</div>
+          <div class="font-semibold text-white text-sm truncate">${sale.customerName || "Walk-in"} <span class="text-[10px] text-gray-500">${typeLabel} · ${sourceLabel}</span></div>
           <div class="text-xs text-gray-500 truncate">${itemsText}</div>
         </div>
         <div class="text-right ml-3 flex-shrink-0">
@@ -456,7 +419,7 @@ function exportFoodSales() {
     return;
   }
   
-  const headers = ["Date", "Time", "Customer", "Items", "Total", "Payment Mode", "Staff"];
+  const headers = ["Date", "Time", "Customer", "Type", "Source", "PC", "Items", "Total", "Payment Mode", "Staff", "Note"];
   const rows = allFoodSales.map(sale => {
     const time = sale.timestamp ? new Date(sale.timestamp).toLocaleTimeString("en-IN") : "";
     const items = sale.items ? sale.items.map(i => `${i.qty || 1}x ${i.name}`).join("; ") : "";
@@ -464,10 +427,14 @@ function exportFoodSales() {
       sale.date,
       time,
       sale.customerName || "Walk-in",
+      sale.customerType || "",
+      sale.source || "pos",
+      sale.pcName || "",
       items,
       sale.total || 0,
       sale.paymentMode || "—",
-      sale.staffName || "—"
+      sale.staffName || "—",
+      sale.note || ""
     ];
   });
   

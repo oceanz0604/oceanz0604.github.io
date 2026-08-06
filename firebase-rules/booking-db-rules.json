@@ -4,23 +4,25 @@
       ".read": "auth != null",
       ".write": "auth != null",
       "$bookingId": {
-        ".validate": "newData.hasChildren(['date', 'pc', 'username'])"
+        ".validate": "newData.hasChildren(['date', 'pc', 'username']) || newData.hasChildren(['name', 'deviceType', 'start', 'end'])"
       }
     },
-    
+
     "recharges": {
       ".read": "auth != null",
       ".write": "auth != null",
-      "$rechargeId": {
-        ".validate": "newData.hasChildren(['member', 'amount', 'date'])"
+      "$date": {
+        "$entryId": {
+          ".validate": "newData.hasChildren(['member']) && (newData.hasChild('total') || newData.hasChild('amount'))"
+        }
       }
     },
-    
+
     "cash_register": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    
+
     "staff": {
       ".read": "auth != null",
       ".write": "auth != null",
@@ -28,19 +30,58 @@
         ".validate": "newData.hasChildren(['email', 'role'])"
       }
     },
-    
+
     "activity_log": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    
+
     "recharge_audit": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
-    
+
+    "expenses": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "expense_audit": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "finance_monthly": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "food_menu": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "food_sales": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$date": {
+        "$saleId": {
+          ".validate": "newData.hasChildren(['customerName', 'total', 'paymentMode', 'items'])"
+        }
+      }
+    },
+
+    "food_credits": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "food_credit_payments": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
     ".read": false,
     ".write": false
   }
 }
-

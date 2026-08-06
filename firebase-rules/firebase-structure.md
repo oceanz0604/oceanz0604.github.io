@@ -699,6 +699,36 @@ Same structure as monthly.
 
 ---
 
+## 🍔 Booking DB — Food Sales (`food_sales/{YYYY-MM-DD}/{sale_id}`)
+
+Written by Counter POS (`source: "pos"`) and Recharges page (`source: "recharges"`).
+
+```json
+{
+  "customerName": "CT-ROOM-1",
+  "customerType": "pc",
+  "memberId": null,
+  "memberName": null,
+  "pcName": "CT-ROOM-1",
+  "source": "recharges",
+  "items": [{ "id": "-abc", "name": "Chips", "price": 20, "qty": 2 }],
+  "total": 40,
+  "paymentMode": "cash",
+  "cashAmount": 40,
+  "upiAmount": 0,
+  "creditAmount": 0,
+  "timestamp": 1710000000000,
+  "staffId": "uid",
+  "staffName": "Admin",
+  "note": ""
+}
+```
+
+Related paths: `food_menu`, `food_credits`, `food_credit_payments`.  
+Expense categories for food stock: `food_purchase`, `food_supplies` under `expenses/{date}`.
+
+---
+
 ## 💾 Estimated Data Sizes
 
 | Path | Entries | Est. Size |

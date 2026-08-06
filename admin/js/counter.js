@@ -18,6 +18,12 @@ import { getISTDate, getTodayIST, getISTTimestamp } from "../../shared/utils.js"
 import { getStaffSession, clearStaffSession, logStaffActivity } from "./permissions.js";
 import { notifySuccess, notifyError, notifyWarning, showConfirm } from "../../shared/notify.js";
 import { MemberSearch } from "../../shared/member-search.js";
+import {
+  FOOD_CUSTOMER_TYPES,
+  FOOD_SALE_SOURCES,
+  buildFoodSalePayload,
+  foodCreditKey
+} from "../../shared/food-stats.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -1259,32 +1265,40 @@ window.completeFoodSale = async function() {
   
   const today = getTodayIST();
   const session = getStaffSession();
-  
-  const saleData = {
+
+  // Infer customer type from name / quick buttons
+  let customerType = FOOD_CUSTOMER_TYPES.WALKIN;
+  const customerLower = String(foodCustomer || "").toLowerCase();
+  if (CONSTANTS.GUEST_TERMINALS.some(t => t.toLowerCase() === customerLower)) {
+    customerType = FOOD_CUSTOMER_TYPES.PC;
+  } else if (foodCustomer && foodCustomer !== "Counter" && foodCustomer !== "Walk-in") {
+    // Prefer member when a real name was selected from search
+    customerType = FOOD_CUSTOMER_TYPES.MEMBER;
+  }
+
+  const cashAmount = foodPaymentMode === "cash" ? total
+    : foodPaymentMode === "split" ? (parseFloat($("foodSplitCash")?.value) || 0) : 0;
+  const upiAmount = foodPaymentMode === "upi" ? total
+    : foodPaymentMode === "split" ? (parseFloat($("foodSplitUpi")?.value) || 0) : 0;
+  const creditAmount = foodPaymentMode === "credit" ? total : 0;
+
+  const saleData = buildFoodSalePayload({
     customerName: foodCustomer,
-    items: foodCart.map(item => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      qty: item.qty
-    })),
+    customerType,
+    memberId: customerType === FOOD_CUSTOMER_TYPES.MEMBER ? foodCustomer : null,
+    memberName: customerType === FOOD_CUSTOMER_TYPES.MEMBER ? foodCustomer : null,
+    pcName: customerType === FOOD_CUSTOMER_TYPES.PC ? foodCustomer : null,
+    source: FOOD_SALE_SOURCES.POS,
+    items: foodCart,
     total,
     paymentMode: foodPaymentMode,
-    timestamp: Date.now(),
+    cashAmount,
+    upiAmount,
+    creditAmount,
     staffId: session?.id || "unknown",
-    staffName: session?.name || "Unknown"
-  };
-  
-  // Add split amounts if applicable
-  if (foodPaymentMode === "split") {
-    saleData.cashAmount = parseFloat($("foodSplitCash")?.value) || 0;
-    saleData.upiAmount = parseFloat($("foodSplitUpi")?.value) || 0;
-  }
-  
-  // For credit sales, track the outstanding amount
-  if (foodPaymentMode === "credit") {
-    saleData.creditAmount = total;
-  }
+    staffName: session?.name || "Unknown",
+    timestamp: Date.now()
+  });
   
   try {
     // Save sale to food_sales
@@ -1293,12 +1307,13 @@ window.completeFoodSale = async function() {
     
     // If credit, also update food_credits for the customer
     if (foodPaymentMode === "credit" && foodCustomer) {
-      const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${encodeURIComponent(foodCustomer)}`);
+      const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${foodCreditKey(foodCustomer)}`);
       const creditSnap = await creditRef.once("value");
       const existing = creditSnap.val() || { outstanding: 0 };
       
       await creditRef.update({
         customerName: foodCustomer,
+        customerType,
         outstanding: (existing.outstanding || 0) + total,
         lastUpdated: Date.now()
       });
@@ -1312,6 +1327,8 @@ window.completeFoodSale = async function() {
         await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
       }
     }
+
+    SharedCache.invalidateFoodSales();
     
     notifySuccess(`Sale completed: ₹${total}`);
     

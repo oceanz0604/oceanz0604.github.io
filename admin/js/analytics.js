@@ -4,6 +4,11 @@
  */
 
 import { BOOKING_DB_CONFIG, FDB_DATASET_CONFIG, BOOKING_APP_NAME, FDB_APP_NAME, FB_PATHS, SharedCache } from "../../shared/config.js";
+import {
+  flattenFoodSalesByDate,
+  flattenFoodCreditPayments,
+  aggregateFoodStats
+} from "../../shared/food-stats.js";
 
 // ==================== FIREBASE INIT (Compat SDK) ====================
 
@@ -99,6 +104,7 @@ export async function loadAnalytics() {
 
   // Initialize data with defaults
   let recharges = {}, bookings = {}, members = [], sessions = [], guestSessions = [];
+  let foodStats = null;
 
   try {
     console.log("📊 Loading analytics data (with caching)...");
@@ -189,7 +195,10 @@ export async function loadAnalytics() {
       bookingDb.ref(FB_PATHS.BOOKINGS).once('value'),
       fetchMembers(),
       fetchSessions(),
-      fetchGuestSessions()
+      fetchGuestSessions(),
+      SharedCache.getFoodSales(bookingDb, FB_PATHS.FOOD_SALES),
+      SharedCache.getFoodCreditPayments(bookingDb, FB_PATHS.FOOD_CREDIT_PAYMENTS),
+      bookingDb.ref(FB_PATHS.FOOD_CREDITS).once('value')
     ]);
 
     // Process results safely
@@ -217,6 +226,17 @@ export async function loadAnalytics() {
       guestSessions = results[4].value || [];
       console.log("✅ Guest sessions:", guestSessions.length);
     }
+
+    if (results[5].status === 'fulfilled' || results[6].status === 'fulfilled') {
+      const salesTree = results[5].status === 'fulfilled' ? (results[5].value || {}) : {};
+      const paymentsTree = results[6].status === 'fulfilled' ? (results[6].value || {}) : {};
+      const creditsVal = results[7].status === 'fulfilled' ? (results[7].value?.val?.() || {}) : {};
+      const credits = Object.entries(creditsVal).map(([id, data]) => ({ id, ...data }));
+      const salesList = flattenFoodSalesByDate(salesTree);
+      const paymentsList = flattenFoodCreditPayments(paymentsTree);
+      foodStats = aggregateFoodStats(salesList, paymentsList, credits);
+      console.log("✅ Food stats:", foodStats.saleCount, "sales");
+    }
     
     console.log(`📊 Data loading complete`);
   } catch (error) {
@@ -225,7 +245,7 @@ export async function loadAnalytics() {
 
   // Always render dashboard, even with empty data
   try {
-    renderAnalyticsDashboard(container, { recharges, bookings, members, sessions, guestSessions });
+    renderAnalyticsDashboard(container, { recharges, bookings, members, sessions, guestSessions, foodStats });
     console.log("📊 Analytics dashboard rendered");
   } catch (renderError) {
     console.error("Error rendering analytics:", renderError);
@@ -242,7 +262,7 @@ export async function loadAnalytics() {
 // ==================== RENDER DASHBOARD ====================
 
 function renderAnalyticsDashboard(container, data) {
-  const { recharges, bookings, members, sessions, guestSessions = [] } = data;
+  const { recharges, bookings, members, sessions, guestSessions = [], foodStats = null } = data;
 
   // Calculate stats
   const stats = calculateStats(recharges, bookings, members, sessions);
@@ -250,13 +270,25 @@ function renderAnalyticsDashboard(container, data) {
   // Calculate guest session stats
   const guestStats = calculateGuestStats(guestSessions);
 
+  const food = foodStats || {
+    totalSales: 0,
+    cashCollected: 0,
+    upiCollected: 0,
+    creditsOutstanding: 0,
+    collectedTotal: 0,
+    saleCount: 0,
+    topItems: []
+  };
+
+  const combinedRevenue = stats.totalRevenue + food.collectedTotal;
+
   container.innerHTML = `
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <div class="stat-card p-4 rounded-xl text-center">
         <div class="text-gray-500 text-xs uppercase tracking-wider">Total Revenue</div>
-        <div class="text-2xl font-bold font-orbitron mt-1" style="color: #00ff88;">₹${stats.totalRevenue.toLocaleString()}</div>
-        <div class="text-xs text-gray-600 mt-1">This Month: ₹${stats.monthlyRevenue.toLocaleString()}</div>
+        <div class="text-2xl font-bold font-orbitron mt-1" style="color: #00ff88;">₹${combinedRevenue.toLocaleString()}</div>
+        <div class="text-xs text-gray-600 mt-1">Gaming ₹${stats.totalRevenue.toLocaleString()} · Food ₹${food.collectedTotal.toLocaleString()}</div>
       </div>
       <div class="stat-card p-4 rounded-xl text-center">
         <div class="text-gray-500 text-xs uppercase tracking-wider">Total Members</div>
@@ -279,16 +311,56 @@ function renderAnalyticsDashboard(container, data) {
     <div class="grid grid-cols-3 gap-4 mb-8">
       <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(0,240,255,0.3);">
         <div class="text-gray-500 text-xs uppercase tracking-wider">💵 Cash Total</div>
-        <div class="text-xl font-bold font-orbitron mt-1" style="color: #00f0ff;">₹${stats.totalCash.toLocaleString()}</div>
+        <div class="text-xl font-bold font-orbitron mt-1" style="color: #00f0ff;">₹${(stats.totalCash + food.cashCollected).toLocaleString()}</div>
+        <div class="text-xs text-gray-600 mt-1">Gaming ₹${stats.totalCash.toLocaleString()} · Food ₹${food.cashCollected.toLocaleString()}</div>
       </div>
       <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(184,41,255,0.3);">
         <div class="text-gray-500 text-xs uppercase tracking-wider">📱 UPI Total</div>
-        <div class="text-xl font-bold font-orbitron mt-1" style="color: #b829ff;">₹${stats.totalUpi.toLocaleString()}</div>
+        <div class="text-xl font-bold font-orbitron mt-1" style="color: #b829ff;">₹${(stats.totalUpi + food.upiCollected).toLocaleString()}</div>
+        <div class="text-xs text-gray-600 mt-1">Gaming ₹${stats.totalUpi.toLocaleString()} · Food ₹${food.upiCollected.toLocaleString()}</div>
       </div>
       <div class="stat-card p-4 rounded-xl text-center" style="border-color: rgba(255,107,0,0.3);">
         <div class="text-gray-500 text-xs uppercase tracking-wider">🔖 Credit Collected</div>
         <div class="text-xl font-bold font-orbitron mt-1" style="color: #ff6b00;">₹${stats.totalCreditCollected.toLocaleString()}</div>
       </div>
+    </div>
+
+    <!-- Food Sales Summary -->
+    <div class="neon-card rounded-xl p-4 mb-8" style="border-color: rgba(255,107,0,0.35);">
+      <h3 class="font-orbitron text-sm font-bold mb-4 flex items-center gap-2" style="color: #ff6b00;">
+        🍔 FOOD / SNACKS ANALYTICS
+      </h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3);">
+          <div class="text-xs text-gray-500 mb-1">Food Sales</div>
+          <div class="text-xl font-bold font-orbitron" style="color: #ff6b00;">₹${food.totalSales.toLocaleString()}</div>
+          <div class="text-[10px] text-gray-600">${food.saleCount} orders</div>
+        </div>
+        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3);">
+          <div class="text-xs text-gray-500 mb-1">Cash Collected</div>
+          <div class="text-xl font-bold font-orbitron" style="color: #00f0ff;">₹${food.cashCollected.toLocaleString()}</div>
+        </div>
+        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3);">
+          <div class="text-xs text-gray-500 mb-1">UPI Collected</div>
+          <div class="text-xl font-bold font-orbitron" style="color: #b829ff;">₹${food.upiCollected.toLocaleString()}</div>
+        </div>
+        <div class="text-center p-3 rounded-lg" style="background: rgba(0,0,0,0.3);">
+          <div class="text-xs text-gray-500 mb-1">Credits Outstanding</div>
+          <div class="text-xl font-bold font-orbitron" style="color: #ff6b00;">₹${food.creditsOutstanding.toLocaleString()}</div>
+        </div>
+      </div>
+      ${food.topItems.length > 0 ? `
+        <div class="pt-3 border-t border-gray-800">
+          <div class="text-xs text-gray-500 mb-2">Top Items</div>
+          <div class="flex flex-wrap gap-2">
+            ${food.topItems.slice(0, 6).map((item, idx) => `
+              <span class="px-2 py-1 rounded text-xs" style="background: rgba(255,107,0,0.12); color: #ff6b00;">
+                #${idx + 1} ${item.name}: ${item.qty} (₹${item.revenue.toLocaleString()})
+              </span>
+            `).join("")}
+          </div>
+        </div>
+      ` : `<div class="text-sm text-gray-500">No food sales recorded yet</div>`}
     </div>
     
     <!-- Guest Sessions Summary -->
