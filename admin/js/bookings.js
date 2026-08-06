@@ -138,32 +138,50 @@ function timetableColor(status) {
 const bookingsRef = ref(db, FB_PATHS.BOOKINGS);
 let bookingsUnsubscribe = null;
 let bookingsTimeLineTimer = null;
+let bookingsRenderTimer = null;
+let isPurgingBookings = false;
+let timetableHeaderReady = false;
+/** How many days of past bookings to show in the cards list (upcoming/ongoing always shown) */
+const PAST_BOOKINGS_DISPLAY_DAYS = 2;
+const MAX_PAST_CARDS = 40;
 
 function startBookingsSync() {
+  const container = document.getElementById("bookingCards");
+  if (container && !bookingsUnsubscribe && !Object.keys(currentBookingsData || {}).length) {
+    container.innerHTML = `<div class="text-center text-gray-500 py-10 font-orbitron text-sm">Loading bookings…</div>`;
+  }
+
   if (bookingsUnsubscribe) {
-    // Already listening — just refresh UI from cache
-    if (currentBookingsData && Object.keys(currentBookingsData).length) {
-      renderBookings(currentBookingsData);
-      renderTimeHeader();
-      renderTimetable(buildTimetableBookings(currentBookingsData));
-      renderCurrentTimeLine();
-    }
+    scheduleBookingsRender();
     return;
   }
 
   bookingsUnsubscribe = onValue(bookingsRef, snapshot => {
-    const data = snapshot.val();
-    currentBookingsData = data || {};
-    renderBookings(data);
-    renderTimeHeader();
-    renderTimetable(buildTimetableBookings(data));
-    renderCurrentTimeLine();
-    purgeOldBookingsIfNeeded(currentBookingsData);
+    currentBookingsData = snapshot.val() || {};
+    // Skip UI work while bulk-purging (avoids N full re-renders)
+    if (isPurgingBookings) return;
+    scheduleBookingsRender();
+    // Purge in background after first paint — never block open
+    setTimeout(() => purgeOldBookingsIfNeeded(currentBookingsData), 1500);
   });
 
   if (!bookingsTimeLineTimer) {
     bookingsTimeLineTimer = setInterval(renderCurrentTimeLine, 60_000);
   }
+}
+
+function scheduleBookingsRender() {
+  clearTimeout(bookingsRenderTimer);
+  bookingsRenderTimer = setTimeout(() => {
+    const data = currentBookingsData || {};
+    renderBookings(data);
+    if (!timetableHeaderReady) {
+      renderTimeHeader();
+      timetableHeaderReady = true;
+    }
+    renderTimetable(buildTimetableBookings(data));
+    renderCurrentTimeLine();
+  }, 50);
 }
 
 function stopBookingsSync() {
@@ -175,6 +193,7 @@ function stopBookingsSync() {
     clearInterval(bookingsTimeLineTimer);
     bookingsTimeLineTimer = null;
   }
+  clearTimeout(bookingsRenderTimer);
 }
 
 window.startBookingsSync = startBookingsSync;
@@ -182,7 +201,7 @@ window.stopBookingsSync = stopBookingsSync;
 
 /**
  * Delete bookings whose end time is older than BOOKING_RETENTION_DAYS.
- * Runs at most once per browser day for staff who can edit.
+ * Uses a single multi-path update so RTDB fires one snapshot (not one per delete).
  */
 async function purgeOldBookingsIfNeeded(bookingsData) {
   try {
@@ -190,47 +209,44 @@ async function purgeOldBookingsIfNeeded(bookingsData) {
     if (typeof canEditData === "function" && !canEditData()) return;
 
     const retentionDays = Number(CONSTANTS.BOOKING_RETENTION_DAYS) || 15;
-    const todayKey = getISTToday();
+    const d = getISTToday();
+    const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const storageKey = "oceanz_bookings_purge_day";
     if (localStorage.getItem(storageKey) === todayKey) return;
 
     const cutoffMs = getISTDate().getTime() - retentionDays * 24 * 60 * 60 * 1000;
-    const toDelete = [];
+    const updates = {};
 
     Object.entries(bookingsData).forEach(([id, b]) => {
       if (!b || typeof b !== "object") return;
-      // Prefer end timestamp; fall back to start / legacy date
       let endMs = 0;
       if (b.end) endMs = new Date(b.end).getTime();
       else if (b.start) endMs = new Date(b.start).getTime();
       else if (b.date) endMs = new Date(`${b.date}T23:59:59`).getTime();
 
       if (endMs && endMs < cutoffMs) {
-        toDelete.push(id);
+        updates[`bookings/${id}`] = null;
       }
     });
 
-    // Mark as done even if nothing to delete — avoid re-scanning every snapshot
-    if (toDelete.length === 0) {
+    const count = Object.keys(updates).length;
+    if (count === 0) {
       localStorage.setItem(storageKey, todayKey);
       return;
     }
 
-    // Batch deletes (Firebase web client has no multi-path remove helper here)
-    const BATCH = 25;
-    for (let i = 0; i < toDelete.length; i += BATCH) {
-      await Promise.all(
-        toDelete.slice(i, i + BATCH).map(id => remove(ref(db, `bookings/${id}`)))
-      );
-    }
-
-    localStorage.setItem(storageKey, todayKey);
-
-    console.log(`🧹 Purged ${toDelete.length} booking(s) older than ${retentionDays} days`);
-    if (window.notifyInfo) {
-      window.notifyInfo(`Cleaned ${toDelete.length} old booking${toDelete.length > 1 ? "s" : ""} (>${retentionDays}d)`);
+    isPurgingBookings = true;
+    try {
+      // Single write → single onValue callback instead of N deletes / N re-renders
+      await update(ref(db), updates);
+      localStorage.setItem(storageKey, todayKey);
+      console.log(`🧹 Purged ${count} booking(s) older than ${retentionDays} days`);
+    } finally {
+      isPurgingBookings = false;
+      scheduleBookingsRender();
     }
   } catch (err) {
+    isPurgingBookings = false;
     console.warn("Booking retention purge skipped:", err);
   }
 }
@@ -238,7 +254,10 @@ async function purgeOldBookingsIfNeeded(bookingsData) {
 // ==================== EXPORTS FOR GLOBAL ACCESS ====================
 
 window.fetchBookings = () => {
-  get(ref(db, FB_PATHS.BOOKINGS)).then(snapshot => renderBookings(snapshot.val()));
+  get(ref(db, FB_PATHS.BOOKINGS)).then(snapshot => {
+    currentBookingsData = snapshot.val() || {};
+    scheduleBookingsRender();
+  });
 };
 
 window.downloadCSV = () => {
@@ -331,9 +350,7 @@ window.approveBooking = async id => {
     approvedBy: adminName,
     approvedAt: new Date().toISOString()
   });
-  console.log(`✅ Booking ${id} approved by ${adminName}`);
-  window.fetchBookings();
-  lucide?.createIcons();
+  // Realtime listener refreshes UI — don't fetch full tree again
 };
 
 window.declineBooking = async id => {
@@ -345,9 +362,6 @@ window.declineBooking = async id => {
     declinedBy: adminName,
     declinedAt: new Date().toISOString()
   });
-  console.log(`❌ Booking ${id} declined by ${adminName}`);
-  window.fetchBookings();
-  lucide?.createIcons();
 };
 
 // ==================== RENDER BOOKINGS ====================
@@ -375,7 +389,7 @@ function createSection(title, cards, collapsed = false) {
         <span style="color: #ff0044;">${title}</span>
         <span class="px-2 py-0.5 rounded-full text-[10px]" style="background: rgba(255,0,68,0.2); color: #ff6666;">${count}</span>
       </span>
-      <i data-lucide="chevron-down" class="w-4 h-4 section-chevron transition-transform ${collapsed ? '' : 'rotate-180'}" style="color: #ff0044;"></i>
+      <span class="section-chevron transition-transform inline-block ${collapsed ? '' : 'rotate-180'}" style="color: #ff0044;">▼</span>
     </button>
     <div id="${contentId}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pt-3 ${collapsed ? "hidden" : ""}"></div>
   `;
@@ -387,19 +401,40 @@ function createSection(title, cards, collapsed = false) {
 
 function renderBookings(bookingsData) {
   const container = document.getElementById("bookingCards");
+  if (!container) return;
   container.innerHTML = "";
 
   const now = getISTDate();
+  const pastCutoff = now.getTime() - PAST_BOOKINGS_DISPLAY_DAYS * 24 * 60 * 60 * 1000;
   const groups = { upcoming: [], ongoing: [], past: [] };
 
   const sortedEntries = Object.entries(bookingsData || {}).sort(
-    (a, b) => new Date(b[1].start) - new Date(a[1].start)
+    (a, b) => new Date(b[1]?.start || 0) - new Date(a[1]?.start || 0)
   );
 
+  let skippedOldPast = 0;
+
   sortedEntries.forEach(([key, booking]) => {
+    if (!booking || !booking.start) return;
+
     const startTime = new Date(booking.start);
-    const endTime = new Date(booking.end);
+    const endTime = new Date(booking.end || booking.start);
+    if (isNaN(startTime) || isNaN(endTime)) return;
+
     const group = startTime > now ? "upcoming" : (startTime <= now && endTime > now) ? "ongoing" : "past";
+
+    // Don't build DOM for old past bookings — biggest lag source
+    if (group === "past") {
+      if (endTime.getTime() < pastCutoff) {
+        skippedOldPast += 1;
+        return;
+      }
+      if (groups.past.length >= MAX_PAST_CARDS) {
+        skippedOldPast += 1;
+        return;
+      }
+    }
+
     const statusText = group === "past" ? "Expired" : (booking.status || "Pending");
 
     const statusClasses = {
@@ -413,18 +448,16 @@ function renderBookings(bookingsData) {
     card.className = `booking-card booking-card-${statusText.toLowerCase()}`;
     card.dataset.bookingKey = key;
 
-    // Format time nicely
-    const startTimeStr = new Date(booking.start).toLocaleTimeString("en-IN", { 
+    const startTimeStr = startTime.toLocaleTimeString("en-IN", { 
       hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
     });
-    const endTimeStr = new Date(booking.end).toLocaleTimeString("en-IN", { 
+    const endTimeStr = endTime.toLocaleTimeString("en-IN", { 
       hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
     });
-    const dateStr = new Date(booking.start).toLocaleDateString("en-IN", { 
+    const dateStr = startTime.toLocaleDateString("en-IN", { 
       day: "numeric", month: "short", timeZone: "Asia/Kolkata" 
     });
 
-    // Compact action info
     let actionBy = "";
     if (booking.approvedBy) {
       actionBy = `<span class="text-[9px] text-gray-600">✓ ${booking.approvedBy}</span>`;
@@ -432,23 +465,24 @@ function renderBookings(bookingsData) {
       actionBy = `<span class="text-[9px]" style="color: #ff6666;">✕ ${booking.declinedBy}</span>`;
     }
 
-    // Device type info
     const deviceIcons = { PC: '🖥️', XBOX: '🎮', PS: '🕹️' };
     const deviceType = booking.deviceType || 'PC';
     const deviceIcon = deviceIcons[deviceType] || '🖥️';
     const deviceName = booking.deviceName || (deviceType === 'PC' ? 'Gaming PC' : deviceType);
+    const pcs = Array.isArray(booking.pcs) ? booking.pcs.join(", ") : (booking.pc || "-");
 
+    // Use text glyphs instead of lucide icons — avoids expensive createIcons() scans
     card.innerHTML = `
       <div class="booking-card-clickable" onclick="openBookingModal('${key}')">
         <div class="booking-card-header">
           <div class="booking-card-name">
-            <h3 class="font-orbitron export-cell">${booking.name}</h3>
-            <span class="booking-status-badge ${statusClasses[statusText]}">${statusText}</span>
+            <h3 class="font-orbitron export-cell">${booking.name || "—"}</h3>
+            <span class="booking-status-badge ${statusClasses[statusText] || ""}">${statusText}</span>
           </div>
-          <span class="booking-card-price export-cell">₹${booking.price}</span>
+          <span class="booking-card-price export-cell">₹${booking.price || 0}</span>
         </div>
         <div class="booking-card-details">
-          <span>${deviceIcon} ${deviceType === 'PC' ? booking.pcs.join(", ") : deviceName}</span>
+          <span>${deviceIcon} ${deviceType === 'PC' ? pcs : deviceName}</span>
           <span class="booking-card-divider">•</span>
           <span>${dateStr}</span>
           <span class="booking-card-divider">•</span>
@@ -458,23 +492,17 @@ function renderBookings(bookingsData) {
       <div class="hidden">
         <span class="export-cell">${formatDate(booking.start)}</span>
         <span class="export-cell">${formatDate(booking.end)}</span>
-        <span class="export-cell">${booking.duration} mins</span>
-        <span class="export-cell">${booking.pcs.join(", ")}</span>
+        <span class="export-cell">${booking.duration || ""} mins</span>
+        <span class="export-cell">${pcs}</span>
       </div>
       <div class="booking-card-actions">
         <div class="booking-card-meta">${actionBy}</div>
         <div class="booking-card-buttons">
           ${(group === "upcoming" || group === "ongoing") && statusText === "Pending" ? `
-            <button onclick="approveBooking('${key}')" class="booking-action-btn booking-action-approve" title="Approve">
-              <i data-lucide='check' class='w-2.5 h-2.5'></i>
-            </button>
-            <button onclick="declineBooking('${key}')" class="booking-action-btn booking-action-decline" title="Decline">
-              <i data-lucide='x' class='w-2.5 h-2.5'></i>
-            </button>
+            <button onclick="approveBooking('${key}')" class="booking-action-btn booking-action-approve" title="Approve">✓</button>
+            <button onclick="declineBooking('${key}')" class="booking-action-btn booking-action-decline" title="Decline">✕</button>
           ` : ""}
-          <button onclick="deleteBooking('${key}')" class="booking-action-btn booking-action-delete" title="Delete">
-            <i data-lucide="trash-2" class="w-2.5 h-2.5"></i>
-          </button>
+          <button onclick="deleteBooking('${key}')" class="booking-action-btn booking-action-delete" title="Delete">🗑</button>
         </div>
       </div>
     `;
@@ -484,9 +512,17 @@ function renderBookings(bookingsData) {
 
   if (groups.upcoming.length) createSection("Upcoming Bookings", groups.upcoming, false);
   if (groups.ongoing.length) createSection("Ongoing Bookings", groups.ongoing, false);
-  if (groups.past.length) createSection("Past Bookings", groups.past, true);
-
-  lucide?.createIcons();
+  if (groups.past.length) {
+    createSection("Past Bookings", groups.past, true);
+    if (skippedOldPast > 0) {
+      const note = document.createElement("p");
+      note.className = "text-[10px] text-gray-600 px-1 -mt-2 mb-2";
+      note.textContent = `${skippedOldPast} older past booking${skippedOldPast > 1 ? "s" : ""} hidden (showing last ${PAST_BOOKINGS_DISPLAY_DAYS} days)`;
+      container.appendChild(note);
+    }
+  } else if (!groups.upcoming.length && !groups.ongoing.length) {
+    container.innerHTML = `<div class="text-center text-gray-500 py-10 font-orbitron text-sm">No active bookings</div>`;
+  }
 }
 
 // ==================== SEARCH/FILTER ====================
