@@ -56,7 +56,7 @@ export function normalizeFoodSale(sale = {}) {
 /**
  * Cash / UPI collected from a single sale (credit not included until paid).
  * @param {object} sale
- * @returns {{ cash: number, upi: number, credit: number, total: number }}
+ * @returns {Object} amounts with cash, upi, credit, and total
  */
 export function getSaleCollectedAmounts(sale) {
   const s = normalizeFoodSale(sale);
