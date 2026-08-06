@@ -13,6 +13,7 @@ import {
   getISTHours,
   getISTDate,
   getISTToday,
+  getTodayIST,
   FB_PATHS
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
@@ -209,8 +210,7 @@ async function purgeOldBookingsIfNeeded(bookingsData) {
     if (typeof canEditData === "function" && !canEditData()) return;
 
     const retentionDays = Number(CONSTANTS.BOOKING_RETENTION_DAYS) || 15;
-    const d = getISTToday();
-    const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const todayKey = getTodayIST();
     const storageKey = "oceanz_bookings_purge_day";
     if (localStorage.getItem(storageKey) === todayKey) return;
 
