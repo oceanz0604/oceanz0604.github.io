@@ -771,6 +771,30 @@ body.admin-page::before {
   width: 100% !important;
 }
 
+/* Modal scroll lock helpers (used with shared/modal-scroll-lock.js) */
+html.modal-open,
+body.modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body.modal-open .fixed.inset-0,
+body.modal-open .fixed.inset-0 * {
+  touch-action: auto;
+}
+
+.fixed.inset-0 {
+  overscroll-behavior: contain;
+}
+
+.fixed.inset-0 .overflow-y-auto,
+.fixed.inset-0 .overflow-auto,
+.fixed.inset-0 [data-modal-scroll] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Recharge table wrapper */
 .recharge-table-wrapper {
   overflow-x: auto;
