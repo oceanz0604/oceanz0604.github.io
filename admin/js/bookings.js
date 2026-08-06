@@ -179,9 +179,10 @@ async function purgeOldBookingsIfNeeded(bookingsData) {
     });
 
     // Mark as done even if nothing to delete — avoid re-scanning every snapshot
-    localStorage.setItem(storageKey, todayKey);
-
-    if (toDelete.length === 0) return;
+    if (toDelete.length === 0) {
+      localStorage.setItem(storageKey, todayKey);
+      return;
+    }
 
     // Batch deletes (Firebase web client has no multi-path remove helper here)
     const BATCH = 25;
@@ -190,6 +191,8 @@ async function purgeOldBookingsIfNeeded(bookingsData) {
         toDelete.slice(i, i + BATCH).map(id => remove(ref(db, `bookings/${id}`)))
       );
     }
+
+    localStorage.setItem(storageKey, todayKey);
 
     console.log(`🧹 Purged ${toDelete.length} booking(s) older than ${retentionDays} days`);
     if (window.notifyInfo) {
