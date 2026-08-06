@@ -1303,8 +1303,8 @@ function render() {
       : (r.mode === "credit" && !r.paid ? r.amount : 0);
 
     const typeBadge = isFood
-      ? `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(255,107,0,0.2); color: var(--neon-orange);">🍔 Food</span>`
-      : `<span class="text-[10px] px-1.5 py-0.5 rounded ml-1" style="background: rgba(0,240,255,0.12); color: var(--neon-cyan);">🎮 Game</span>`;
+      ? `<span class="txn-type-badge" style="background: rgba(255,107,0,0.2); color: var(--neon-orange);">Food</span>`
+      : `<span class="txn-type-badge" style="background: rgba(0,240,255,0.12); color: var(--neon-cyan);">Game</span>`;
 
     const editFn = isFood ? `editFoodRecharge('${r.id}')` : `editRecharge('${r.id}')`;
     const deleteFn = isFood ? `deleteFoodRecharge('${r.id}')` : `deleteRecharge('${r.id}')`;
@@ -1312,54 +1312,50 @@ function render() {
       ? `collectCredit('${r.id}', ${pendingCreditAmount}, 'food')`
       : `collectCredit('${r.id}', ${pendingCreditAmount})`;
 
+    const itemsText = (r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ");
+    // Avoid duplicating auto-generated item notes in the Note column
+    const rawNote = (r.note || "").trim();
+    const displayNote = isFood && itemsText && rawNote === itemsText ? "" : rawNote;
+
     row.innerHTML = `
-      <td class="px-2 py-3 text-center">
-        <span class="font-orbitron text-xs font-bold" style="color: var(--neon-red); opacity: 0.7;">${serialNum}</span>
+      <td class="text-center">
+        <span class="font-orbitron text-[10px] font-bold" style="color: var(--neon-red); opacity: 0.65;">${serialNum}</span>
       </td>
-      <td class="px-4 py-3">
-        <div class="text-white font-medium">${timeStr}</div>
-        <div class="text-xs text-gray-500">${dateStr}</div>
+      <td>
+        <div class="txn-time">${timeStr}</div>
+        <div class="txn-date">${dateStr}</div>
       </td>
-      <td class="px-4 py-3">
-        <div class="flex items-center flex-wrap gap-1">
-          <span class="font-orbitron font-bold" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${r.member || r.customerName || "—"}</span>
+      <td>
+        <div class="flex items-center gap-1 min-w-0">
+          <span class="txn-member font-orbitron font-bold truncate" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${r.member || r.customerName || "—"}</span>
           ${typeBadge}
         </div>
-        ${isFood && (r.items || []).length
-          ? `<div class="text-[10px] text-gray-500 mt-0.5 max-w-[220px] truncate" title="${(r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ")}">${(r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ")}</div>`
+        ${isFood && itemsText
+          ? `<div class="txn-items" title="${itemsText}">${itemsText}</div>`
           : ""}
       </td>
-      <td class="px-4 py-3 text-right">
-        <span class="font-orbitron font-bold" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
-        ${r.free > 0 ? `<div class="text-xs" style="color: #ffff00;">(+₹${r.free})</div>` : ''}
+      <td class="text-right">
+        <span class="txn-amt font-orbitron font-bold" style="color: var(--neon-green);">₹${(r.total || r.amount || 0) + (r.free || 0)}</span>
+        ${r.free > 0 ? `<div class="text-[10px]" style="color: #ffff00;">(+₹${r.free})</div>` : ""}
       </td>
-      <td class="px-4 py-3 recharge-col-payment">
-        <div class="flex flex-wrap gap-1">${paymentBadges}</div>
+      <td class="recharge-col-payment">
+        <div class="flex flex-wrap gap-0.5">${paymentBadges}</div>
       </td>
-      <td class="px-4 py-3 text-gray-400 text-xs max-w-32 truncate recharge-col-note" title="${r.note || ''}">
-        ${r.note || "-"}
+      <td class="text-gray-400 text-[11px] truncate recharge-col-note" title="${displayNote || ""}">
+        ${displayNote || "—"}
       </td>
-      <td class="px-4 py-3 recharge-col-admin">
-        <span class="text-xs px-2 py-1 rounded" style="background: rgba(0,240,255,0.1); color: var(--neon-cyan);">${r.admin || r.staffName || "Admin"}</span>
+      <td class="recharge-col-admin">
+        <span class="txn-admin" title="${r.admin || r.staffName || "Admin"}">${r.admin || r.staffName || "Admin"}</span>
       </td>
-      <td class="px-4 py-3 text-right">
-        <div class="flex gap-1 justify-end items-center">
+      <td class="text-right">
+        <div class="txn-actions">
           ${pendingCreditAmount > 0 ? `
-            <button onclick="${collectFn}" 
-              class="text-xs px-2 py-1 rounded transition-all hover:scale-105"
+            <button onclick="${collectFn}"
               style="background: rgba(255,107,0,0.2); color: #ff6b00; border: 1px solid rgba(255,107,0,0.3);"
-              title="Collect Credit">
-              💰
-            </button>
-          ` : ''}
-          <button onclick="${editFn}" 
-            class="p-1 rounded transition-all hover:bg-cyan-500/20" style="color: var(--neon-cyan);" title="Edit">
-            ✏️
-          </button>
-          <button onclick="${deleteFn}" 
-            class="p-1 rounded transition-all hover:bg-red-500/20" style="color: #ff0044;" title="Delete">
-            🗑️
-          </button>
+              title="Collect Credit">💰</button>
+          ` : ""}
+          <button onclick="${editFn}" style="color: var(--neon-cyan);" title="Edit">✏️</button>
+          <button onclick="${deleteFn}" style="color: #ff0044;" title="Delete">🗑️</button>
         </div>
       </td>
     `;

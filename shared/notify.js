@@ -175,7 +175,10 @@ function showConfirm(message, options = {}) {
     const cleanup = (result) => {
       const modal = backdrop.querySelector("#confirm-modal");
       modal.classList.add("scale-95", "opacity-0");
-      setTimeout(() => backdrop.remove(), 200);
+      setTimeout(() => {
+        backdrop.remove();
+        if (typeof syncModalScrollLock === "function") syncModalScrollLock();
+      }, 200);
       resolve(result);
     };
     
