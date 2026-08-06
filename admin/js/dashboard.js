@@ -117,7 +117,28 @@ function initializePermissions() {
   console.log(`✅ Permissions loaded for ${session.name} (${session.role})`);
 }
 
+window.refreshPermissionsUI = initializePermissions;
+
 // ==================== VIEW SWITCHER ====================
+
+let currentView = null;
+const loadedAdminModules = new Set();
+
+/** Lazy-load heavy admin modules only when their section is opened */
+async function ensureAdminModule(name) {
+  if (loadedAdminModules.has(name)) return;
+  const map = {
+    analytics: "./analytics.js",
+    finance: "./finance.js",
+    staff: "./staff.js",
+    "food-menu": "./food-menu.js",
+    "food-analytics": "./food-analytics.js"
+  };
+  const path = map[name];
+  if (!path) return;
+  await import(path);
+  loadedAdminModules.add(name);
+}
 
 function switchView(view) {
   // Map view names to permission keys
@@ -178,18 +199,70 @@ function switchView(view) {
   });
 
   const viewMap = {
-    dashboard: { section: elements.dashboardSection, nav: elements.navDashboard },
+    dashboard: {
+      section: elements.dashboardSection,
+      nav: elements.navDashboard,
+      onShow: () => startDataSync(),
+      onHide: null
+    },
     members: { section: elements.membersSection, nav: elements.navMembers, onShow: loadAllMembers },
-    bookings: { section: elements.bookingsSection, nav: elements.navBookings },
+    bookings: {
+      section: elements.bookingsSection,
+      nav: elements.navBookings,
+      onShow: () => window.startBookingsSync?.()
+    },
     recharges: { section: elements.rechargesSection, nav: elements.navRecharges },
-    analytics: { section: elements.analyticsSection, nav: elements.navAnalytics, onShow: () => window.loadAnalytics?.() },
-    staff: { section: elements.staffSection, nav: elements.navStaff, onShow: () => window.loadStaffManagement?.() },
+    analytics: {
+      section: elements.analyticsSection,
+      nav: elements.navAnalytics,
+      onShow: async () => {
+        await ensureAdminModule("analytics");
+        window.loadAnalytics?.();
+      }
+    },
+    staff: {
+      section: elements.staffSection,
+      nav: elements.navStaff,
+      onShow: async () => {
+        await ensureAdminModule("staff");
+        window.loadStaffManagement?.();
+      }
+    },
     cash: { section: elements.cashSection, nav: elements.navCash, onShow: () => window.loadCashRegister?.() },
     leaderboard: { section: elements.leaderboardSection, nav: elements.navLeaderboard, onShow: () => window.initLeaderboards?.() },
-    finance: { section: elements.financeSection, nav: elements.navFinance, onShow: () => window.loadFinanceDashboard?.() },
-    "food-menu": { section: elements.foodMenuSection, nav: elements.navFoodMenu, onShow: () => window.initFoodMenu?.() },
-    "food-analytics": { section: elements.foodAnalyticsSection, nav: elements.navFoodAnalytics, onShow: () => window.initFoodAnalytics?.() }
+    finance: {
+      section: elements.financeSection,
+      nav: elements.navFinance,
+      onShow: async () => {
+        await ensureAdminModule("finance");
+        window.loadFinanceDashboard?.();
+      }
+    },
+    "food-menu": {
+      section: elements.foodMenuSection,
+      nav: elements.navFoodMenu,
+      onShow: async () => {
+        await ensureAdminModule("food-menu");
+        window.initFoodMenu?.();
+      }
+    },
+    "food-analytics": {
+      section: elements.foodAnalyticsSection,
+      nav: elements.navFoodAnalytics,
+      onShow: async () => {
+        await ensureAdminModule("food-analytics");
+        window.initFoodAnalytics?.();
+      }
+    }
   };
+
+  // Stop heavy listeners when leaving their views
+  if (currentView === "dashboard" && view !== "dashboard") {
+    stopDataSync();
+  }
+  if (currentView === "bookings" && view !== "bookings") {
+    window.stopBookingsSync?.();
+  }
 
   const config = viewMap[view];
   if (config) {
@@ -198,6 +271,8 @@ function switchView(view) {
     config.nav?.classList.add("active");
     config.onShow?.();
   }
+
+  currentView = view;
 }
 
 function showAccessDenied(view) {
@@ -426,7 +501,6 @@ function startDataSync() {
   try {
     // Set up real-time listeners (Firebase handles updates automatically)
     terminalsListener = onValue(terminalsRef, snap => {
-      console.log("📡 Terminal update received");
       renderTerminals(snap.val() || {});
     }, (error) => {
       console.error("❌ Terminal listener error:", error);
@@ -437,7 +511,6 @@ function startDataSync() {
     });
     
     isListenerActive = true;
-    console.log("✅ Firebase listeners active (single instance)");
   } catch (error) {
     console.error("❌ Failed to set up Firebase listeners:", error);
   }
@@ -616,9 +689,8 @@ document.addEventListener("DOMContentLoaded", () => {
     switchView("recharges");
   }
   
-  startDataSync();
-  
-  console.log("✅ Admin dashboard initialized (optimized)");
+  // Default view is recharges — do NOT start terminal/session listeners until Dashboard is opened
+  console.log("✅ Admin dashboard initialized (lazy listeners)");
 });
 
 // Export for external use

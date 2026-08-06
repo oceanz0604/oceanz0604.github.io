@@ -48,16 +48,17 @@ export const ROLES = {
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
+    // Finance / Analytics / Food Analytics are Super Admin only
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "cash_register", "leaderboard", "food_menu"],
     canEdit: true,
-    description: "Full access except staff management"
+    description: "Operations access (no finance/analytics)"
   },
   MANAGER: {
     name: "Manager",
     level: 60,
     color: "#00f0ff",
     icon: "🎯",
-    permissions: ["bookings", "recharges", "cash_register", "food_menu", "food_analytics"],
+    permissions: ["bookings", "recharges", "cash_register", "food_menu"],
     canEdit: true,
     description: "Day-to-day operations management"
   },

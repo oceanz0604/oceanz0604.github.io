@@ -403,6 +403,9 @@ export class DataCache {
 
 // ==================== SHARED GLOBAL CACHE ====================
 // These caches are shared across ALL admin pages to avoid duplicate downloads
+// Enable verbose logs: localStorage.setItem('OCEANZ_DEBUG','1')
+const CACHE_DEBUG = typeof localStorage !== "undefined" && localStorage.getItem("OCEANZ_DEBUG") === "1";
+const cacheLog = (...args) => { if (CACHE_DEBUG) console.log(...args); };
 
 /**
  * Helper: Fetch data from Firebase (supports both modular and compat SDK)
@@ -414,7 +417,7 @@ async function fetchFirebaseData(dbWrapper, path) {
   try {
     // Check if it's modular SDK style (has get function at wrapper level)
     if (typeof dbWrapper.get === 'function' && typeof dbWrapper.ref === 'function') {
-      console.log(`🔌 SharedCache: Using modular SDK for path: ${path}`);
+      cacheLog(`🔌 SharedCache: Using modular SDK for path: ${path}`);
       const dbRef = dbWrapper.ref(path);
       const snap = await dbWrapper.get(dbRef);
       return snap.val() || {};
@@ -424,7 +427,7 @@ async function fetchFirebaseData(dbWrapper, path) {
     if (typeof dbWrapper.ref === 'function') {
       const testRef = dbWrapper.ref(path);
       if (typeof testRef.once === 'function') {
-        console.log(`🔌 SharedCache: Using compat SDK for path: ${path}`);
+        cacheLog(`🔌 SharedCache: Using compat SDK for path: ${path}`);
         const snap = await testRef.once("value");
         return snap.val() || {};
       }

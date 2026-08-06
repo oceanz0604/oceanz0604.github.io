@@ -133,20 +133,52 @@ function timetableColor(status) {
     : "timetable-block-pending";
 }
 
-// ==================== REAL-TIME LISTENER ====================
+// ==================== REAL-TIME LISTENER (lazy — only while Bookings view is open) ====================
 
 const bookingsRef = ref(db, FB_PATHS.BOOKINGS);
+let bookingsUnsubscribe = null;
+let bookingsTimeLineTimer = null;
 
-onValue(bookingsRef, snapshot => {
-  const data = snapshot.val();
-  currentBookingsData = data || {};
-  renderBookings(data);
-  renderTimeHeader();
-  renderTimetable(buildTimetableBookings(data));
-  renderCurrentTimeLine();
-  // Opportunistic retention purge (non-blocking)
-  purgeOldBookingsIfNeeded(currentBookingsData);
-});
+function startBookingsSync() {
+  if (bookingsUnsubscribe) {
+    // Already listening — just refresh UI from cache
+    if (currentBookingsData && Object.keys(currentBookingsData).length) {
+      renderBookings(currentBookingsData);
+      renderTimeHeader();
+      renderTimetable(buildTimetableBookings(currentBookingsData));
+      renderCurrentTimeLine();
+    }
+    return;
+  }
+
+  bookingsUnsubscribe = onValue(bookingsRef, snapshot => {
+    const data = snapshot.val();
+    currentBookingsData = data || {};
+    renderBookings(data);
+    renderTimeHeader();
+    renderTimetable(buildTimetableBookings(data));
+    renderCurrentTimeLine();
+    purgeOldBookingsIfNeeded(currentBookingsData);
+  });
+
+  if (!bookingsTimeLineTimer) {
+    bookingsTimeLineTimer = setInterval(renderCurrentTimeLine, 60_000);
+  }
+}
+
+function stopBookingsSync() {
+  if (typeof bookingsUnsubscribe === "function") {
+    bookingsUnsubscribe();
+    bookingsUnsubscribe = null;
+  }
+  if (bookingsTimeLineTimer) {
+    clearInterval(bookingsTimeLineTimer);
+    bookingsTimeLineTimer = null;
+  }
+}
+
+window.startBookingsSync = startBookingsSync;
+window.stopBookingsSync = stopBookingsSync;
 
 /**
  * Delete bookings whose end time is older than BOOKING_RETENTION_DAYS.
@@ -796,5 +828,3 @@ function renderCurrentTimeLine() {
 
   inner.appendChild(line);
 }
-
-setInterval(renderCurrentTimeLine, 60 * 1000);

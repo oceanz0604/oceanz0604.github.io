@@ -1,12 +1,13 @@
 /**
- * OceanZ - Global modal scroll lock
- * Prevents background page scroll while any fixed overlay modal is open,
- * including when the modal itself scrolls to its end (scroll chaining).
+ * OceanZ - Lightweight modal scroll lock
+ * Locks background scroll while fixed overlay modals are open.
+ * Avoids document-wide MutationObservers (those caused UI lag).
  */
 (function (global) {
   let lockCount = 0;
   let savedScrollY = 0;
-  let observer = null;
+  let observed = new WeakSet();
+  let bodyChildObserver = null;
 
   function getScrollbarWidth() {
     return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
@@ -61,18 +62,16 @@
     const z = parseInt(style.zIndex || "0", 10);
     if (Number.isFinite(z) && z < 40) return false;
 
-    // Full-screen overlays / dialogs
-    const coversViewport =
+    return (
       el.classList.contains("inset-0") ||
-      (style.top === "0px" && style.left === "0px" &&
-        (style.right === "0px" || el.offsetWidth >= window.innerWidth * 0.9));
-
-    return coversViewport;
+      (style.top === "0px" && style.left === "0px")
+    );
   }
 
   function countOpenOverlays() {
-    return Array.from(document.querySelectorAll(".fixed.inset-0, .fixed[class*='z-['], .fixed[style*='z-index']"))
-      .filter(isVisibleOverlay).length;
+    return Array.from(
+      document.querySelectorAll(".fixed.inset-0, [id$='Modal'], [id$='modal']")
+    ).filter(isVisibleOverlay).length;
   }
 
   function syncLockFromDom() {
@@ -86,64 +85,72 @@
     }
   }
 
-  function initModalScrollLock() {
-    if (observer) return;
-
-    observer = new MutationObserver(() => {
-      // Batch to next frame to avoid thrashing on multi-class toggles
-      if (initModalScrollLock._raf) return;
-      initModalScrollLock._raf = requestAnimationFrame(() => {
-        initModalScrollLock._raf = 0;
-        syncLockFromDom();
-      });
-    });
-
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
+  function watchOverlay(el) {
+    if (!(el instanceof HTMLElement) || observed.has(el)) return;
+    if (!el.classList.contains("fixed") && !/modal/i.test(el.id || "")) return;
+    observed.add(el);
+    new MutationObserver(syncLockFromDom).observe(el, {
       attributes: true,
       attributeFilter: ["class", "style"]
     });
+  }
 
-    // Contain scroll chaining inside modal panels
+  function initModalScrollLock() {
+    // Watch known modals only (class toggles), not the whole document tree
+    document.querySelectorAll(".fixed.inset-0, [id$='Modal'], [id$='modal']").forEach(watchOverlay);
+
+    // Watch for dynamically inserted overlays (confirm dialogs) — childList only
+    bodyChildObserver = new MutationObserver(mutations => {
+      let needsSync = false;
+      mutations.forEach(m => {
+        m.addedNodes.forEach(node => {
+          if (node instanceof HTMLElement) {
+            watchOverlay(node);
+            if (node.classList?.contains("fixed")) needsSync = true;
+            node.querySelectorAll?.(".fixed.inset-0").forEach(watchOverlay);
+          }
+        });
+        if (m.removedNodes.length) needsSync = true;
+      });
+      if (needsSync) syncLockFromDom();
+    });
+    bodyChildObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Contain scroll chaining at edges of modal content
     document.addEventListener(
       "wheel",
       (e) => {
         if (!document.body.classList.contains("modal-open")) return;
         const target = e.target instanceof Element ? e.target : null;
         if (!target) return;
-        const overlay = target.closest(".fixed.inset-0");
+        const overlay = target.closest(".fixed.inset-0, [id$='Modal']");
         if (!overlay) {
           e.preventDefault();
           return;
         }
-        // Find nearest scrollable ancestor inside the overlay
-        let scroller = target;
-        let found = null;
-        while (scroller && scroller !== overlay) {
-          if (scroller instanceof HTMLElement) {
-            const cs = global.getComputedStyle(scroller);
-            const oy = cs.overflowY;
-            if ((oy === "auto" || oy === "scroll") && scroller.scrollHeight > scroller.clientHeight) {
-              found = scroller;
+
+        let node = target;
+        let scroller = null;
+        while (node && node !== overlay) {
+          if (node instanceof HTMLElement) {
+            const cs = global.getComputedStyle(node);
+            if ((cs.overflowY === "auto" || cs.overflowY === "scroll") &&
+                node.scrollHeight > node.clientHeight) {
+              scroller = node;
               break;
             }
           }
-          scroller = scroller.parentElement;
+          node = node.parentElement;
         }
-        if (!found) {
-          // Overlay itself may scroll
-          if (overlay.scrollHeight > overlay.clientHeight) found = overlay;
-        }
-        if (!found) {
+        if (!scroller && overlay.scrollHeight > overlay.clientHeight) scroller = overlay;
+        if (!scroller) {
           e.preventDefault();
           return;
         }
 
-        const { scrollTop, scrollHeight, clientHeight } = found;
-        const delta = e.deltaY;
-        const atTop = scrollTop <= 0 && delta < 0;
-        const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && delta > 0;
+        const { scrollTop, scrollHeight, clientHeight } = scroller;
+        const atTop = scrollTop <= 0 && e.deltaY < 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1 && e.deltaY > 0;
         if (atTop || atBottom) e.preventDefault();
       },
       { passive: false }
@@ -155,18 +162,13 @@
         if (!document.body.classList.contains("modal-open")) return;
         const target = e.target instanceof Element ? e.target : null;
         if (!target) return;
-        const overlay = target.closest(".fixed.inset-0");
+        const overlay = target.closest(".fixed.inset-0, [id$='Modal']");
         if (!overlay) {
           e.preventDefault();
           return;
         }
-        // Allow touch scrolling only inside scrollable modal content
-        const scroller = target.closest(
-          ".overflow-y-auto, .overflow-auto, [data-modal-scroll]"
-        );
-        if (!scroller) {
-          // If the overlay itself is the scroll container, allow it
-          if (overlay.scrollHeight > overlay.clientHeight) return;
+        const scroller = target.closest(".overflow-y-auto, .overflow-auto, [data-modal-scroll]");
+        if (!scroller && !(overlay.scrollHeight > overlay.clientHeight)) {
           e.preventDefault();
         }
       },

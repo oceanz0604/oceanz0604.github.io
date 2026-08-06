@@ -106,10 +106,18 @@ let auditFilter = "all";
 onFoodDayChange((foods) => {
   foodState = foods || [];
   render();
-  loadCreditCollectionsForDate(selectedDate);
-  loadOtherDayCollections(selectedDate);
-  loadAllOutstandingCredits();
+  scheduleCreditRefresh(selectedDate);
 });
+
+let creditRefreshTimer = null;
+function scheduleCreditRefresh(dateStr) {
+  clearTimeout(creditRefreshTimer);
+  creditRefreshTimer = setTimeout(() => {
+    loadCreditCollectionsForDate(dateStr || selectedDate);
+    loadOtherDayCollections(dateStr || selectedDate);
+    loadAllOutstandingCredits();
+  }, 250);
+}
 
 // OPTIMIZATION: Use SharedCache for recharges data to avoid repeated downloads
 // SharedCache is shared across all admin pages (recharges, analytics, cash-register)
@@ -402,7 +410,8 @@ async function loadDay() {
     return;
   }
   
-  console.log(`📡 Loading recharges for ${selectedDate}...`);
+  // Quiet by default — hot path
+  // console.log(`📡 Loading recharges for ${selectedDate}...`);
   const ref = rechargeDb.ref(`recharges/${selectedDate}`);
   ref.off();
   ref.on("value", snap => {
@@ -410,13 +419,9 @@ async function loadDay() {
       ? Object.entries(snap.val()).map(([id, r]) => ({ id, entryType: "recharge", ...r }))
       : [];
     render();
-    // After rendering, scan for credit collections that happened on selectedDate
-    loadCreditCollectionsForDate(selectedDate);
-    // Load credit collections from OTHER dates that were collected on this date
-    loadOtherDayCollections(selectedDate);
+    // Debounced — full-tree credit scans are expensive
+    scheduleCreditRefresh(selectedDate);
     loadAudit();
-    // Reload outstanding credits whenever data changes (including new credit entries)
-    loadAllOutstandingCredits();
   });
 
   // Food day listener (via onFoodDayChange) merges into Today's Transactions
@@ -536,12 +541,6 @@ async function loadCreditCollectionsForDate(targetDate) {
     if (elements.totalEl) {
       elements.totalEl.textContent = `₹${baseCollected + otherDayCash + otherDayUpi}`;
     }
-    
-    console.log(`[RECHARGES] Date: ${targetDate}`);
-    console.log(`  From render() - Direct Cash: ₹${baseCash}, Direct UPI: ₹${baseUpi}`);
-    console.log(`  Credit collections - Same-day: Cash ₹${sameDayCash}, UPI ₹${sameDayUpi}`);
-    console.log(`  Credit collections - Other-day: Cash ₹${otherDayCash}, UPI ₹${otherDayUpi}`);
-    console.log(`  Final totals: Cash ₹${baseCash + totalCollectedCash}, UPI ₹${baseUpi + totalCollectedUpi}`);
   } catch (error) {
     console.warn("Could not load credit collections:", error);
   }
