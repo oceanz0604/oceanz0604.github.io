@@ -114,7 +114,7 @@
       });
       if (needsSync) syncLockFromDom();
     });
-    bodyChildObserver.observe(document.body, { childList: true, subtree: true });
+    bodyChildObserver.observe(document.body, { childList: true, subtree: false });
 
     // Contain scroll chaining at edges of modal content
     document.addEventListener(
