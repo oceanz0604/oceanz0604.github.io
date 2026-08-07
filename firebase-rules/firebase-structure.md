@@ -724,8 +724,11 @@ Written by Counter POS (`source: "pos"`) and Recharges page (`source: "recharges
 }
 ```
 
-Related paths: `food_menu`, `food_credits`, `food_credit_payments`.  
+Related paths: `food_menu`, `food_credits`, `food_credit_payments`, `food_purchases`, `food_stock_log`.  
 Expense categories for food stock: `food_purchase`, `food_supplies` under `expenses/{date}`.
+
+### Food purchases (`food_purchases/{YYYY-MM-DD}/{purchase_id}`)
+Stock-in receipts. Saving a purchase increments `food_menu/{id}/stock`, writes `food_stock_log`, and creates a linked `expenses/{date}/{id}` with `category: "food_purchase"` and `purchaseId`.
 
 ---
 
