@@ -39,7 +39,7 @@ export const ROLES = {
     level: 100,
     color: "#ff0044",
     icon: "👑",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "analytics", "staff", "settings", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "staff", "settings", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
     canEdit: true,
     description: "Full access to all features"
   },
@@ -48,10 +48,10 @@ export const ROLES = {
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    // Finance / Analytics / Food Analytics are Super Admin only
+    // Finance / Food Analytics are Super Admin only
     permissions: ["dashboard", "bookings", "recharges", "members", "history", "cash_register", "leaderboard", "food_menu"],
     canEdit: true,
-    description: "Operations access (no finance/analytics)"
+    description: "Operations access (no finance)"
   },
   MANAGER: {
     name: "Manager",
@@ -67,7 +67,7 @@ export const ROLES = {
     level: 55,
     color: "#ffd700",
     icon: "💰",
-    permissions: ["analytics", "cash_register", "finance"],
+    permissions: ["cash_register", "finance"],
     canEdit: false,  // View-only for finance data
     description: "View-only access to financial reports and expenses"
   },
@@ -99,7 +99,6 @@ export const MODULE_NAV_MAP = {
   recharges: { name: "Recharges", icon: "wallet", view: "recharges" },
   members: { name: "Members", icon: "users", view: "members" },
   history: { name: "History", icon: "history", view: "history" },
-  analytics: { name: "Analytics", icon: "bar-chart-3", view: "analytics" },
   staff: { name: "Staff", icon: "shield-check", view: "staff" },
   cash_register: { name: "Cash Register", icon: "banknote", view: "cash" },
   leaderboard: { name: "Leaderboards", icon: "trophy", view: "leaderboard" },

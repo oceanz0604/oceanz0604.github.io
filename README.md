@@ -100,7 +100,10 @@ oceanz0604.github.io/
 │       ├── cash-register.js   # Daily cash tracking
 │       ├── staff.js           # Staff management
 │       ├── history.js         # Member history lookup
-│       ├── analytics.js       # Charts & statistics
+│       ├── finance.js         # Finance P&L, expenses & insights
+│       ├── food-stock.js      # Food inventory & purchases → expenses
+│       ├── food-menu.js       # Cafe menu CRUD
+│       ├── food-analytics.js  # Food sales analytics
 │       ├── counter.js         # POS terminal logic
 │       └── permissions.js     # Role-based access control
 │

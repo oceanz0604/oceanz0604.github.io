@@ -39,23 +39,23 @@ const elements = {
   navMembers: $("nav-members"),
   navBookings: $("nav-bookings"),
   navRecharges: $("nav-recharges"),
-  navAnalytics: $("nav-analytics"),
   navStaff: $("nav-staff"),
   navCash: $("nav-cash"),
   navLeaderboard: $("nav-leaderboard"),
   navFinance: $("nav-finance"),
   navFoodMenu: $("nav-food-menu"),
+  navFoodStock: $("nav-food-stock"),
   navFoodAnalytics: $("nav-food-analytics"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
   rechargesSection: $("recharges-section"),
-  analyticsSection: $("analytics-section"),
   staffSection: $("staff-section"),
   cashSection: $("cash-section"),
   leaderboardSection: $("leaderboard-section"),
   financeSection: $("finance-section"),
   foodMenuSection: $("food-menu-section"),
+  foodStockSection: $("food-stock-section"),
   foodAnalyticsSection: $("food-analytics-section")
 };
 
@@ -121,10 +121,10 @@ const loadedAdminModules = new Set();
 async function ensureAdminModule(name) {
   if (loadedAdminModules.has(name)) return;
   const map = {
-    analytics: "./analytics.js",
     finance: "./finance.js",
     staff: "./staff.js",
     "food-menu": "./food-menu.js",
+    "food-stock": "./food-stock.js",
     "food-analytics": "./food-analytics.js",
     members: "./members.js"
   };
@@ -143,10 +143,10 @@ function switchView(view) {
     "members": "members",
     "bookings": "bookings",
     "recharges": "recharges",
-    "analytics": "analytics",
     "staff": "staff",
     "finance": "finance",
     "food-menu": "food_menu",
+    "food-stock": "food_menu",
     "food-analytics": "food_analytics"
   };
   const permissionKey = permissionMap[view] || view;
@@ -163,12 +163,12 @@ function switchView(view) {
     elements.membersSection,
     elements.bookingsSection,
     elements.rechargesSection,
-    elements.analyticsSection,
     elements.staffSection,
     elements.cashSection,
     elements.leaderboardSection,
     elements.financeSection,
     elements.foodMenuSection,
+    elements.foodStockSection,
     elements.foodAnalyticsSection
   ];
 
@@ -177,12 +177,12 @@ function switchView(view) {
     elements.navMembers,
     elements.navBookings,
     elements.navRecharges,
-    elements.navAnalytics,
     elements.navStaff,
     elements.navCash,
     elements.navLeaderboard,
     elements.navFinance,
     elements.navFoodMenu,
+    elements.navFoodStock,
     elements.navFoodAnalytics
   ];
 
@@ -213,14 +213,6 @@ function switchView(view) {
       onShow: () => window.startBookingsSync?.()
     },
     recharges: { section: elements.rechargesSection, nav: elements.navRecharges },
-    analytics: {
-      section: elements.analyticsSection,
-      nav: elements.navAnalytics,
-      onShow: async () => {
-        await ensureAdminModule("analytics");
-        window.loadAnalytics?.();
-      }
-    },
     staff: {
       section: elements.staffSection,
       nav: elements.navStaff,
@@ -245,6 +237,14 @@ function switchView(view) {
       onShow: async () => {
         await ensureAdminModule("food-menu");
         window.initFoodMenu?.();
+      }
+    },
+    "food-stock": {
+      section: elements.foodStockSection,
+      nav: elements.navFoodStock,
+      onShow: async () => {
+        await ensureAdminModule("food-stock");
+        window.initFoodStock?.();
       }
     },
     "food-analytics": {
@@ -298,12 +298,12 @@ const navLinks = [
   { el: elements.navMembers, view: "members" },
   { el: elements.navBookings, view: "bookings" },
   { el: elements.navRecharges, view: "recharges" },
-  { el: elements.navAnalytics, view: "analytics" },
   { el: elements.navStaff, view: "staff" },
   { el: elements.navCash, view: "cash" },
   { el: elements.navLeaderboard, view: "leaderboard" },
   { el: elements.navFinance, view: "finance" },
   { el: elements.navFoodMenu, view: "food-menu" },
+  { el: elements.navFoodStock, view: "food-stock" },
   { el: elements.navFoodAnalytics, view: "food-analytics" }
 ];
 

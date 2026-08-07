@@ -469,6 +469,91 @@ body.admin-page::before {
   box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
 }
 
+/* ==================== FINANCE INSIGHTS ==================== */
+.fin-insight {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 255, 136, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.fin-insight-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.fin-insight-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* ==================== FOOD STOCK ==================== */
+.stock-kpi {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 107, 0, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.stock-kpi-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.stock-kpi-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.stock-tab {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  background: transparent;
+}
+
+.stock-tab.active,
+.stock-tab:hover {
+  border-color: rgba(255, 107, 0, 0.45);
+  color: var(--neon-orange);
+  background: rgba(255, 107, 0, 0.1);
+}
+
+.stock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stock-badge-pill {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+}
+
+.stock-badge-pill.ok { color: #00ff88; background: rgba(0,255,136,0.12); }
+.stock-badge-pill.low { color: #ff6b00; background: rgba(255,107,0,0.15); }
+.stock-badge-pill.out { color: #ff0044; background: rgba(255,0,68,0.15); }
+.stock-badge-pill.muted { color: #888; background: rgba(136,136,136,0.12); }
+
 /* ==================== MEMBER ROSTER ==================== */
 .members-kpi {
   background: rgba(0, 0, 0, 0.4);

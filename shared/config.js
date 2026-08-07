@@ -122,7 +122,11 @@ export const FB_PATHS = {
   FOOD_MENU: "food_menu",                     // /food_menu/{item_id} - menu items with prices
   FOOD_SALES: "food_sales",                   // /food_sales/{YYYY-MM-DD}/{sale_id} - daily sales
   FOOD_CREDITS: "food_credits",               // /food_credits/{customer_id} - outstanding credits
-  FOOD_CREDIT_PAYMENTS: "food_credit_payments" // /food_credit_payments/{YYYY-MM-DD}/{payment_id}
+  FOOD_CREDIT_PAYMENTS: "food_credit_payments", // /food_credit_payments/{YYYY-MM-DD}/{payment_id}
+
+  // Food inventory / purchases (stock in → expenses)
+  FOOD_PURCHASES: "food_purchases",           // /food_purchases/{YYYY-MM-DD}/{purchase_id}
+  FOOD_STOCK_LOG: "food_stock_log"            // /food_stock_log/{YYYY-MM-DD}/{log_id}
 };
 
 /**

@@ -42,6 +42,7 @@ let financeState = {
   deleteExpenseData: null,
   revenueChart: null,
   expenseChart: null,
+  mixChart: null,
   initialized: false
 };
 
@@ -459,6 +460,49 @@ function calculateSummary() {
   } else {
     $("finAvgSession").textContent = "-";
   }
+
+  // Insight strip
+  const marginPct = totalRevenue > 0 ? Math.round((profit / totalRevenue) * 100) : 0;
+  const foodShare = totalRevenue > 0 ? Math.round((foodRevenue / totalRevenue) * 100) : 0;
+  const daySpan = Math.max(1, daysInSelectedPeriod());
+  const avgDaily = Math.round(totalRevenue / daySpan);
+
+  if ($("finMarginPct")) {
+    $("finMarginPct").textContent = `${marginPct}%`;
+    $("finMarginPct").style.color = marginPct < 0 ? "var(--neon-red)" : "var(--neon-cyan)";
+  }
+  if ($("finFoodShare")) $("finFoodShare").textContent = `${foodShare}%`;
+  if ($("finAvgDaily")) $("finAvgDaily").textContent = `₹${formatNumber(avgDaily)}`;
+
+  // Top expense category
+  const catTotals = {};
+  expenses.forEach(exp => {
+    const amt = exp.amount || ((exp.cash || 0) + (exp.online || 0));
+    const cat = exp.category || "other";
+    catTotals[cat] = (catTotals[cat] || 0) + amt;
+  });
+  const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+  if ($("finTopExpense")) {
+    if (topCat) {
+      const meta = EXPENSE_CATEGORIES.find(c => c.id === topCat[0]);
+      $("finTopExpense").textContent = `${meta?.name || topCat[0]} ₹${formatNumber(topCat[1])}`;
+    } else {
+      $("finTopExpense").textContent = "—";
+    }
+  }
+
+  // Cache for mix chart / daily pnl
+  financeState._lastSummary = {
+    gamingRevenue, foodRevenue, totalRevenue, totalExpenses, profit,
+    startDate, endDate, gamingCash, gamingUpi, foodCash, foodUpi
+  };
+  renderDailyPnl();
+}
+
+function daysInSelectedPeriod() {
+  const d = financeState.selectedDate;
+  if (financeState.period === "year") return 365;
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
 
 // ==================== PERIOD MANAGEMENT ====================
@@ -780,6 +824,9 @@ function renderExpenses() {
     // Build payment mode badges
     const amount = exp.amount || ((exp.cash || 0) + (exp.online || 0));
     let paymentBadges = '';
+    const paymentBadgeExtra = exp.purchaseId
+      ? `<span class="text-xs px-1.5 py-0.5 rounded ml-1" style="background: rgba(255,107,0,0.15); color: #ff6b00;">Stock</span>`
+      : "";
     if (exp.cash > 0) {
       paymentBadges += `<span class="text-xs px-1.5 py-0.5 rounded" style="background: rgba(0,255,136,0.2); color: #00ff88;">💵${formatNumber(exp.cash)}</span>`;
     }
@@ -790,6 +837,7 @@ function renderExpenses() {
       // Old format - show just total
       paymentBadges = `<span class="text-xs text-gray-500">💵 Cash</span>`;
     }
+    paymentBadges += paymentBadgeExtra;
 
     return `
       <div class="expense-item flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-lg bg-black/20 border border-gray-800 hover:border-gray-700 transition-colors">
@@ -837,6 +885,119 @@ function filterFinanceExpenses(category) {
 function renderCharts() {
   renderRevenueChart();
   renderExpenseChart();
+  renderMixChart();
+}
+
+function renderDailyPnl() {
+  const el = document.getElementById("finDailyPnl");
+  if (!el) return;
+
+  const { startDate, endDate } = getDateRange();
+  const { recharges, foodSales, foodCreditPayments, expenses } = financeState;
+  const dayMap = {};
+
+  const ensure = (d) => {
+    if (!dayMap[d]) dayMap[d] = { rev: 0, exp: 0 };
+  };
+
+  Object.entries(recharges || {}).forEach(([date, dayData]) => {
+    if (date < startDate || date > endDate) return;
+    ensure(date);
+    Object.values(dayData || {}).forEach(r => {
+      dayMap[date].rev += (r.cash || 0) + (r.upi || 0);
+      if (r.total === undefined && r.amount !== undefined && r.mode !== "credit") {
+        if (r.mode === "cash" || r.mode === "upi") dayMap[date].rev += r.amount || 0;
+      }
+      if (r.creditPayments) {
+        Object.entries(r.creditPayments).forEach(([pd, payment]) => {
+          if (pd < startDate || pd > endDate) return;
+          ensure(pd);
+          dayMap[pd].rev += (payment.cash || 0) + (payment.upi || 0);
+        });
+      }
+    });
+  });
+
+  const foodList = flattenFoodSalesByDate(foodSales, startDate, endDate);
+  foodList.forEach(s => {
+    const d = s.date || s._date;
+    if (!d) return;
+    ensure(d);
+    // Prefer cash+upi collected; fall back to total for paid sales
+    if (s.paymentMode === "cash") dayMap[d].rev += Number(s.total) || 0;
+    else if (s.paymentMode === "upi") dayMap[d].rev += Number(s.total) || 0;
+  });
+  const foodPays = flattenFoodCreditPayments(foodCreditPayments, startDate, endDate);
+  foodPays.forEach(p => {
+    const d = p.date || p._date;
+    if (!d) return;
+    ensure(d);
+    dayMap[d].rev += (Number(p.cash) || 0) + (Number(p.upi) || 0) || (Number(p.amount) || 0);
+  });
+
+  expenses.forEach(exp => {
+    if (exp.date < startDate || exp.date > endDate) return;
+    ensure(exp.date);
+    dayMap[exp.date].exp += exp.amount || ((exp.cash || 0) + (exp.online || 0));
+  });
+
+  const days = Object.keys(dayMap).sort().reverse().slice(0, 14);
+  if (!days.length) {
+    el.innerHTML = `<p class="text-gray-500 text-center py-6">No daily activity</p>`;
+    return;
+  }
+
+  el.innerHTML = days.map(d => {
+    const { rev, exp } = dayMap[d];
+    const pnl = rev - exp;
+    const color = pnl < 0 ? "var(--neon-red)" : "var(--neon-green)";
+    const label = new Date(d + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    return `
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-gray-800/80">
+        <span class="text-gray-400 w-16">${label}</span>
+        <span class="text-gray-500">In ₹${formatNumber(rev)}</span>
+        <span class="text-gray-500">Out ₹${formatNumber(exp)}</span>
+        <span class="font-orbitron" style="color:${color};">₹${formatNumber(pnl)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderMixChart() {
+  const canvas = document.getElementById("finMixChart");
+  if (!canvas || typeof Chart === "undefined") return;
+  const ctx = canvas.getContext("2d");
+  const s = financeState._lastSummary || { gamingRevenue: 0, foodRevenue: 0 };
+
+  if (financeState.mixChart) financeState.mixChart.destroy();
+
+  financeState.mixChart = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: ["Gaming", "Food"],
+      datasets: [{
+        data: [s.gamingRevenue || 0, s.foodRevenue || 0],
+        backgroundColor: ["rgba(0,255,136,0.75)", "rgba(255,107,0,0.75)"],
+        borderColor: ["#00ff88", "#ff6b00"],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: { color: "#aaa", boxWidth: 12 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (c) => ` ${c.label}: ₹${formatNumber(c.raw)}`
+          }
+        }
+      }
+    }
+  });
 }
 
 function renderRevenueChart() {

@@ -81,6 +81,16 @@
       ".write": "auth != null"
     },
 
+    "food_purchases": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "food_stock_log": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
     ".read": false,
     ".write": false
   }
