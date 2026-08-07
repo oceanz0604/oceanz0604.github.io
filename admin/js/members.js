@@ -11,7 +11,6 @@ import {
   FB_PATHS,
   FB_PATHS_V2,
   SharedCache,
-  formatToIST,
   TIMEZONE
 } from "../../shared/config.js";
 
@@ -99,15 +98,32 @@ function formatLastActive(iso) {
 function badgeChips(m) {
   const b = m.badges || {};
   const chips = [];
-  if (b.champion) chips.push({ t: "👑 Champ", c: "#ffd700" });
-  if (b.runner_up) chips.push({ t: "🥈 #2", c: "#c0c0c0" });
-  if (b.third_place) chips.push({ t: "🥉 #3", c: "#cd7f32" });
-  if (b.grinder) chips.push({ t: "🔥 Grinder", c: "#ff6b00" });
-  if (b.big_spender) chips.push({ t: "💰 Whale", c: "#b829ff" });
+  if (b.champion) chips.push({ t: "Champ", c: "#ffd700" });
+  if (b.runner_up) chips.push({ t: "#2", c: "#c0c0c0" });
+  if (b.third_place) chips.push({ t: "#3", c: "#cd7f32" });
+  if (b.grinder) chips.push({ t: "Grinder", c: "#ff6b00" });
+  if (b.big_spender) chips.push({ t: "Whale", c: "#b829ff" });
   if (b.streak_master || (b.streak_days && b.streak_days >= 7)) {
-    chips.push({ t: `⚡ ${b.streak_days || m.stats?.streak_days || 0}d`, c: "#00ff88" });
+    chips.push({ t: `${b.streak_days || m.stats?.streak_days || 0}d streak`, c: "#00ff88" });
   }
   return chips.slice(0, 3);
+}
+
+/** Playtime-derived cafe tier — fun dossier flair */
+function playerTier(m) {
+  const hours = (Number(m._minutes) || Number(m.stats?.total_minutes) || 0) / 60;
+  if (hours >= 500) return { label: "LEGEND", color: "#ffd700", blurb: "Cafe royalty" };
+  if (hours >= 200) return { label: "ELITE", color: "#b829ff", blurb: "Hardcore regular" };
+  if (hours >= 50) return { label: "VETERAN", color: "#00f0ff", blurb: "Knows the house" };
+  if (hours >= 10) return { label: "REGULAR", color: "#00ff88", blurb: "Getting dialed in" };
+  return { label: "ROOKIE", color: "#8899aa", blurb: "Just getting started" };
+}
+
+function walletBurnPct(m) {
+  const loaded = Number(m.balance?.total_loaded) || 0;
+  const spent = Number(m.balance?.total_spent) || 0;
+  if (loaded <= 0) return spent > 0 ? 100 : 0;
+  return Math.min(100, Math.round((spent / loaded) * 100));
 }
 
 // ==================== LOAD / FILTER ====================
@@ -212,14 +228,16 @@ function renderMemberCards() {
   container.innerHTML = filteredMembers.map(m => {
     const status = activityMeta(m._status);
     const chips = badgeChips(m);
+    const tier = playerTier(m);
     const balColor = m._balance <= 0 ? "#ff0044" : m._balance < 100 ? "#ff6b00" : "#00ff88";
     const uname = escapeHtml(m.USERNAME);
+    const pulse = m._status === "active" ? " member-avatar-pulse" : "";
 
     return `
       <button type="button" class="member-card member-card-rich text-left w-full"
         data-username="${uname}" onclick="openMemberDossier('${uname.replace(/'/g, "\\'")}')">
         <div class="member-card-top">
-          <div class="member-avatar" style="border-color: ${status.color}; box-shadow: 0 0 12px ${status.color}33;">
+          <div class="member-avatar${pulse}" style="border-color: ${status.color}; box-shadow: 0 0 12px ${status.color}33;">
             ${escapeHtml(initials(m))}
           </div>
           <div class="member-card-id min-w-0">
@@ -227,7 +245,9 @@ function renderMemberCards() {
               <h3 class="font-orbitron font-bold text-sm truncate" style="color: var(--neon-cyan);">${escapeHtml(displayName(m))}</h3>
               <span class="member-status-pill" style="color:${status.color}; background:${status.bg};">${status.label}</span>
             </div>
-            <p class="text-xs text-gray-500 truncate">@${uname}</p>
+            <p class="text-xs text-gray-500 truncate">@${uname}
+              <span class="member-tier-inline" style="color:${tier.color};">· ${tier.label}</span>
+            </p>
           </div>
         </div>
         <div class="member-card-stats">
@@ -247,7 +267,7 @@ function renderMemberCards() {
         <div class="member-card-foot">
           <span class="text-[10px] text-gray-600">Last: <span style="color:#aaa;">${escapeHtml(formatLastActive(m._lastActive))}</span></span>
           <div class="member-chip-row">
-            ${chips.map(c => `<span class="member-mini-chip" style="color:${c.c}; border-color:${c.c}44;">${c.t}</span>`).join("")}
+            ${chips.map(c => `<span class="member-mini-chip" style="color:${c.c}; border-color:${c.c}44;">${escapeHtml(c.t)}</span>`).join("")}
           </div>
         </div>
       </button>
@@ -269,7 +289,7 @@ window.openMemberDossier = async function(username) {
   modal.classList.add("flex");
   if (typeof syncModalScrollLock === "function") syncModalScrollLock();
 
-  populateDossierShell(m);
+  populateDossierShell(m, { resetFeeds: true });
   loadDossierExtras(username, m);
 };
 
@@ -282,9 +302,35 @@ window.closeMemberDossier = function() {
   if (typeof syncModalScrollLock === "function") syncModalScrollLock();
 };
 
-function populateDossierShell(m) {
+window.navigateMemberDossier = function(delta) {
+  if (!selectedUsername || !filteredMembers.length) return;
+  const idx = filteredMembers.findIndex(m => m.USERNAME === selectedUsername);
+  if (idx < 0) return;
+  const next = filteredMembers[(idx + delta + filteredMembers.length) % filteredMembers.length];
+  if (next) openMemberDossier(next.USERNAME);
+};
+
+window.copyMemberField = async function(kind) {
+  const m = allMembers.find(x => x.USERNAME === selectedUsername);
+  if (!m) return;
+  const val = kind === "phone" ? (m.PHONE || "") : (m.USERNAME || "");
+  if (!val) return;
+  try {
+    await navigator.clipboard.writeText(val);
+    const tip = $("dossierCopyTip");
+    if (tip) {
+      tip.textContent = kind === "phone" ? "Phone copied" : "Username copied";
+      tip.classList.add("show");
+      clearTimeout(window.__dossierCopyTipTimer);
+      window.__dossierCopyTipTimer = setTimeout(() => tip.classList.remove("show"), 1400);
+    }
+  } catch { /* ignore */ }
+};
+
+function populateDossierShell(m, opts = {}) {
   const status = activityMeta(m._status);
-  const chips = badgeChips(m);
+  const tier = playerTier(m);
+  const burn = walletBurnPct(m);
   const balColor = m._balance <= 0 ? "#ff0044" : m._balance < 100 ? "#ff6b00" : "#00ff88";
 
   const avatar = $("dossierAvatar");
@@ -292,6 +338,7 @@ function populateDossierShell(m) {
     avatar.textContent = initials(m);
     avatar.style.borderColor = status.color;
     avatar.style.boxShadow = `0 0 24px ${status.color}44`;
+    avatar.classList.toggle("member-avatar-pulse", m._status === "active");
   }
 
   const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
@@ -303,6 +350,15 @@ function populateDossierShell(m) {
     statusEl.style.color = status.color;
     statusEl.style.background = status.bg;
   }
+
+  setText("dossierTier", tier.label);
+  const tierEl = $("dossierTier");
+  if (tierEl) {
+    tierEl.style.color = tier.color;
+    tierEl.style.borderColor = `${tier.color}66`;
+    tierEl.style.background = `${tier.color}18`;
+  }
+  setText("dossierTierBlurb", tier.blurb);
 
   setText("dossierBalance", formatMoney(m._balance));
   const balEl = $("dossierBalance");
@@ -319,16 +375,27 @@ function populateDossierShell(m) {
   setText("dossierEmail", m.EMAIL || "—");
   setText("dossierMemberId", m.id != null ? String(m.id) : "—");
   setText("dossierState", m.MEMBERSTATE || "—");
+  setText("dossierBurnPct", `${burn}% spent`);
+
+  const burnBar = $("dossierBurnBar");
+  if (burnBar) {
+    burnBar.style.width = `${burn}%`;
+    burnBar.style.background = burn >= 90
+      ? "linear-gradient(90deg, #ff6b00, #ff0044)"
+      : "linear-gradient(90deg, var(--neon-cyan), var(--neon-purple))";
+  }
 
   const ranks = m.ranks || {};
   setText("dossierRankAll", ranks.all_time != null ? `#${ranks.all_time}` : "—");
   setText("dossierRankMonth", ranks.monthly != null ? `#${ranks.monthly}` : "—");
   setText("dossierRankWeek", ranks.weekly != null ? `#${ranks.weekly}` : "—");
 
+  const pos = filteredMembers.findIndex(x => x.USERNAME === m.USERNAME);
+  setText("dossierNavPos", pos >= 0 ? `${pos + 1} / ${filteredMembers.length}` : "—");
+
   const badgeRow = $("dossierBadges");
   if (badgeRow) {
     const allChips = badgeChips(m);
-    // show more badge keys as chips
     const b = m.badges || {};
     Object.entries(b).forEach(([k, v]) => {
       if (!v || k === "activity_status" || k === "streak_days") return;
@@ -340,10 +407,12 @@ function populateDossierShell(m) {
       : `<span class="text-xs text-gray-600">No special badges yet</span>`;
   }
 
-  const hist = $("dossierHistory");
-  const sess = $("dossierSessionsList");
-  if (hist) hist.innerHTML = `<p class="text-xs text-gray-500 py-4 text-center">Loading activity…</p>`;
-  if (sess) sess.innerHTML = `<p class="text-xs text-gray-500 py-4 text-center">Loading sessions…</p>`;
+  if (opts.resetFeeds) {
+    const hist = $("dossierHistory");
+    const sess = $("dossierSessionsList");
+    if (hist) hist.innerHTML = `<p class="text-xs text-gray-500 py-4 text-center">Loading activity…</p>`;
+    if (sess) sess.innerHTML = `<p class="text-xs text-gray-500 py-4 text-center">Loading sessions…</p>`;
+  }
 }
 
 async function loadDossierExtras(username, cached) {
@@ -356,7 +425,7 @@ async function loadDossierExtras(username, cached) {
     renderHistoryList(history);
     renderSessionsList(sessions);
 
-    // Refresh shell fields if raw has fresher stats
+    // Refresh shell fields if raw has fresher stats (keep feeds intact)
     if (raw.stats || raw.balance) {
       const merged = {
         ...cached,
@@ -370,10 +439,7 @@ async function loadDossierExtras(username, cached) {
         _lastActive: raw.stats?.last_active || cached._lastActive,
         _status: raw.badges?.activity_status || cached._status
       };
-      if (selectedUsername === username) populateDossierShell(merged);
-      // re-fill lists after shell wipe
-      renderHistoryList(history);
-      renderSessionsList(sessions);
+      if (selectedUsername === username) populateDossierShell(merged, { resetFeeds: false });
     }
   } catch (err) {
     console.warn("Dossier extras failed:", err);
@@ -490,16 +556,17 @@ window.clearMembersSearch = function() {
   applyFilters();
 };
 
-// Close dossier on backdrop / Escape
+// Close dossier on backdrop / Escape; arrow keys flip members
 document.addEventListener("DOMContentLoaded", () => {
   const modal = $("memberDossierModal");
   modal?.addEventListener("click", e => {
     if (e.target === modal) closeMemberDossier();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) {
-      closeMemberDossier();
-    }
+    if (!modal || modal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeMemberDossier();
+    else if (e.key === "ArrowLeft") { e.preventDefault(); navigateMemberDossier(-1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); navigateMemberDossier(1); }
   });
 });
 

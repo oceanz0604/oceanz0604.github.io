@@ -568,6 +568,32 @@ body.admin-page::before {
   border-radius: 16px;
 }
 
+.member-avatar-pulse {
+  animation: memberPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes memberPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.25); }
+  50% { box-shadow: 0 0 22px rgba(0, 255, 136, 0.55); }
+}
+
+.member-tier-inline {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+}
+
+.member-tier-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  padding: 0.18rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
 .member-status-pill {
   font-size: 0.58rem;
   font-family: 'Orbitron', sans-serif;
@@ -695,6 +721,83 @@ body.admin-page::before {
 
 .dossier-feed-row:last-child {
   border-bottom: none;
+}
+
+.dossier-panel {
+  position: relative;
+}
+
+.dossier-scanline {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 240, 255, 0.015) 2px,
+    rgba(0, 240, 255, 0.015) 4px
+  );
+  opacity: 0.55;
+}
+
+.dossier-ghost-btn {
+  font-size: 0.58rem;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #9ca3af;
+  background: rgba(0, 0, 0, 0.35);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.dossier-ghost-btn:hover {
+  color: var(--neon-cyan);
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.dossier-copy-tip {
+  font-size: 0.58rem;
+  color: var(--neon-green);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dossier-copy-tip.show {
+  opacity: 1;
+}
+
+.dossier-nav-btn {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.06);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.dossier-nav-btn:hover {
+  background: rgba(0, 240, 255, 0.14);
+  border-color: rgba(0, 240, 255, 0.5);
+}
+
+.dossier-burn-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.dossier-burn-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.45s ease;
 }
 
 /* ==================== BOOKING CARD ==================== */
