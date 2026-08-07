@@ -1158,10 +1158,67 @@
 
         <!-- Members Section -->
         <div id="members-section" class="hidden">
-          <h2 class="font-orbitron text-2xl font-bold mb-6 glow-cyan flex items-center gap-3" style="color: var(--neon-cyan);">
-            <i data-lucide="users" class="w-7 h-7"></i> MEMBERS DATABASE
-          </h2>
-          <div id="membersList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-5">
+            <div>
+              <h2 class="font-orbitron text-2xl font-bold glow-cyan flex items-center gap-3" style="color: var(--neon-cyan);">
+                <i data-lucide="users" class="w-7 h-7"></i> MEMBER ROSTER
+              </h2>
+              <p class="text-xs text-gray-500 mt-1">Tap a card to open the full dossier</p>
+            </div>
+            <span id="membersResultCount" class="text-xs font-orbitron text-gray-500">—</span>
+          </div>
+
+          <!-- Roster KPIs -->
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+            <div class="members-kpi">
+              <div class="members-kpi-label">Total</div>
+              <div id="membersStatTotal" class="members-kpi-value" style="color: var(--neon-cyan);">0</div>
+            </div>
+            <div class="members-kpi">
+              <div class="members-kpi-label">Active</div>
+              <div id="membersStatActive" class="members-kpi-value" style="color: var(--neon-green);">0</div>
+            </div>
+            <div class="members-kpi">
+              <div class="members-kpi-label">Ghost</div>
+              <div id="membersStatGhost" class="members-kpi-value" style="color: #888;">0</div>
+            </div>
+            <div class="members-kpi">
+              <div class="members-kpi-label">Low balance</div>
+              <div id="membersStatLowBal" class="members-kpi-value" style="color: var(--neon-orange);">0</div>
+            </div>
+            <div class="members-kpi col-span-2 sm:col-span-1">
+              <div class="members-kpi-label">Lifetime hours</div>
+              <div id="membersStatHours" class="members-kpi-value" style="color: var(--neon-purple);">0h</div>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            <div class="relative flex-1 min-w-[180px]">
+              <input type="text" id="membersSearch" placeholder="Search name, @user, phone…"
+                class="neon-input w-full pl-9 pr-8 py-2 rounded-lg text-sm"
+                oninput="filterMembersDirectory()"/>
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-sm"
+                onclick="clearMembersSearch()">✕</button>
+            </div>
+            <select id="membersSort" class="neon-input py-2 px-3 rounded-lg text-xs" onchange="setMembersSort(this.value)">
+              <option value="name">Sort: Name</option>
+              <option value="balance">Sort: Balance</option>
+              <option value="hours">Sort: Playtime</option>
+              <option value="recent">Sort: Last active</option>
+            </select>
+          </div>
+
+          <div class="flex flex-wrap gap-2 mb-5">
+            <button type="button" class="members-filter-chip active" data-filter="all" onclick="setMembersStatusFilter('all')">All</button>
+            <button type="button" class="members-filter-chip" data-filter="active" onclick="setMembersStatusFilter('active')">Active</button>
+            <button type="button" class="members-filter-chip" data-filter="regular" onclick="setMembersStatusFilter('regular')">Regular</button>
+            <button type="button" class="members-filter-chip" data-filter="ghost" onclick="setMembersStatusFilter('ghost')">Ghost</button>
+            <button type="button" class="members-filter-chip" data-filter="low_balance" onclick="setMembersStatusFilter('low_balance')">Low ₹</button>
+          </div>
+
+          <div id="membersList" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"></div>
         </div>
 
         <!-- Bookings Section -->
@@ -2772,6 +2829,87 @@
         <div class="flex gap-2">
           <button onclick="exportSyncReport()" class="neon-btn neon-btn-purple px-4 py-2 rounded-lg text-sm">📄 Export PDF</button>
           <button onclick="closeSyncModal()" class="px-4 py-2 rounded-lg text-gray-400" style="background: rgba(100,100,100,0.2);">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Member Dossier Modal -->
+  <div id="memberDossierModal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-6" style="background: rgba(0,0,0,0.88); backdrop-filter: blur(10px);">
+    <div class="dossier-panel neon-card rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden relative flex flex-col" style="border-color: rgba(0,240,255,0.35); animation: modalSlideIn 0.28s ease-out;">
+      <button type="button" onclick="closeMemberDossier()" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-white" style="background: rgba(0,0,0,0.45);">✕</button>
+
+      <div class="dossier-hero p-5 sm:p-6 shrink-0">
+        <div class="flex items-start gap-4">
+          <div id="dossierAvatar" class="member-avatar member-avatar-lg shrink-0">?</div>
+          <div class="min-w-0 flex-1 pt-1">
+            <div class="flex flex-wrap items-center gap-2 mb-1">
+              <h3 id="dossierName" class="font-orbitron text-xl font-bold" style="color: var(--neon-cyan);">—</h3>
+              <span id="dossierStatus" class="member-status-pill">—</span>
+            </div>
+            <p id="dossierUsername" class="text-sm text-gray-400 mb-3">@—</p>
+            <div id="dossierBadges" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-4 sm:p-5 space-y-5" data-modal-scroll>
+        <!-- Money + play -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Balance</div>
+            <div id="dossierBalance" class="dossier-stat-value">₹0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Lifetime play</div>
+            <div id="dossierHours" class="dossier-stat-value" style="color: var(--neon-purple);">0m</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Sessions</div>
+            <div id="dossierSessions" class="dossier-stat-value" style="color: var(--neon-yellow);">0</div>
+          </div>
+          <div class="dossier-stat">
+            <div class="dossier-stat-label">Streak</div>
+            <div id="dossierStreak" class="dossier-stat-value" style="color: var(--neon-green);">0d</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="dossier-block">
+            <h4 class="dossier-block-title">Wallet</h4>
+            <div class="dossier-kv"><span>Total loaded</span><strong id="dossierLoaded">₹0</strong></div>
+            <div class="dossier-kv"><span>Total spent</span><strong id="dossierSpent">₹0</strong></div>
+            <div class="dossier-kv"><span>This month</span><strong id="dossierMonthly">0m</strong></div>
+          </div>
+          <div class="dossier-block">
+            <h4 class="dossier-block-title">Leaderboard ranks</h4>
+            <div class="dossier-kv"><span>All-time</span><strong id="dossierRankAll" style="color: var(--neon-yellow);">—</strong></div>
+            <div class="dossier-kv"><span>Monthly</span><strong id="dossierRankMonth" style="color: var(--neon-cyan);">—</strong></div>
+            <div class="dossier-kv"><span>Weekly</span><strong id="dossierRankWeek" style="color: var(--neon-purple);">—</strong></div>
+          </div>
+        </div>
+
+        <div class="dossier-block">
+          <h4 class="dossier-block-title">Profile</h4>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            <div class="dossier-kv"><span>Member ID</span><strong id="dossierMemberId">—</strong></div>
+            <div class="dossier-kv"><span>State</span><strong id="dossierState">—</strong></div>
+            <div class="dossier-kv"><span>Joined</span><strong id="dossierJoined">—</strong></div>
+            <div class="dossier-kv"><span>Last active</span><strong id="dossierLastActive">—</strong></div>
+            <div class="dossier-kv col-span-2"><span>Phone</span><strong id="dossierPhone">—</strong></div>
+            <div class="dossier-kv col-span-2"><span>Email</span><strong id="dossierEmail" class="truncate">—</strong></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="dossier-block">
+            <h4 class="dossier-block-title">Recent sessions</h4>
+            <div id="dossierSessionsList" class="space-y-1 max-h-52 overflow-y-auto"></div>
+          </div>
+          <div class="dossier-block">
+            <h4 class="dossier-block-title">Recent charges</h4>
+            <div id="dossierHistory" class="space-y-1 max-h-52 overflow-y-auto"></div>
+          </div>
         </div>
       </div>
     </div>

@@ -469,16 +469,232 @@ body.admin-page::before {
   box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
 }
 
-/* ==================== MEMBER CARD ==================== */
+/* ==================== MEMBER ROSTER ==================== */
+.members-kpi {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.members-kpi-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.members-kpi-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.members-filter-chip {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+
+.members-filter-chip.active,
+.members-filter-chip:hover {
+  border-color: rgba(0, 240, 255, 0.45);
+  color: var(--neon-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+
 .member-card {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(0, 240, 255, 0.2);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .member-card:hover {
   border-color: var(--neon-cyan);
   background: rgba(0, 240, 255, 0.05);
+}
+
+.member-card-rich {
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(0, 240, 255, 0.14);
+  background:
+    linear-gradient(145deg, rgba(0, 240, 255, 0.04), transparent 40%),
+    rgba(8, 10, 18, 0.85);
+}
+
+.member-card-rich:hover {
+  border-color: rgba(0, 240, 255, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.member-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+  background: linear-gradient(145deg, rgba(0, 240, 255, 0.2), rgba(184, 41, 255, 0.25));
+  border: 2px solid var(--neon-cyan);
+  flex-shrink: 0;
+}
+
+.member-avatar-lg {
+  width: 64px;
+  height: 64px;
+  font-size: 1.15rem;
+  border-radius: 16px;
+}
+
+.member-status-pill {
+  font-size: 0.58rem;
+  font-family: 'Orbitron', sans-serif;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.member-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.member-stat-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+}
+
+.member-stat-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.member-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 10px;
+}
+
+.member-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.member-mini-chip {
+  font-size: 0.58rem;
+  padding: 0.12rem 0.35rem;
+  border-radius: 6px;
+  border: 1px solid;
+  background: rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.dossier-hero {
+  background:
+    radial-gradient(ellipse at top left, rgba(0, 240, 255, 0.18), transparent 55%),
+    radial-gradient(ellipse at top right, rgba(184, 41, 255, 0.14), transparent 50%),
+    rgba(10, 12, 20, 0.95);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.12);
+}
+
+.dossier-stat {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.dossier-stat-label {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.dossier-stat-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--neon-green);
+}
+
+.dossier-block {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.dossier-block-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--neon-cyan);
+  margin-bottom: 10px;
+}
+
+.dossier-kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.dossier-kv strong {
+  color: #e5e7eb;
+  font-weight: 600;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+}
+
+.dossier-feed-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dossier-feed-row:last-child {
+  border-bottom: none;
 }
 
 /* ==================== BOOKING CARD ==================== */

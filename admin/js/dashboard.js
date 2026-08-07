@@ -5,7 +5,7 @@
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS, SharedCache } from "../../shared/config.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS } from "../../shared/config.js";
 import { 
   getStaffSession, 
   hasPermission, 
@@ -15,12 +15,6 @@ import {
   refreshSessionActivity,
   ROLES 
 } from "./permissions.js";
-
-// Modular SDK wrapper for SharedCache compatibility
-const createDbWrapper = (database) => ({
-  ref: (path) => ref(database, path),
-  get: (dbRef) => get(dbRef)
-});
 
 // ==================== FIREBASE INIT ====================
 
@@ -33,7 +27,6 @@ const db = getDatabase(fdbApp);
 
 const terminalsRef = ref(db, FB_PATHS.TERMINAL_STATUS);  // V2: /terminal-status
 const sessionsRef = ref(db, FB_PATHS.SESSIONS);
-const membersRef = ref(db, FB_PATHS.MEMBERS);  // V2: /members
 
 // ==================== DOM ELEMENTS ====================
 
@@ -132,7 +125,8 @@ async function ensureAdminModule(name) {
     finance: "./finance.js",
     staff: "./staff.js",
     "food-menu": "./food-menu.js",
-    "food-analytics": "./food-analytics.js"
+    "food-analytics": "./food-analytics.js",
+    members: "./members.js"
   };
   const path = map[name];
   if (!path) return;
@@ -205,7 +199,14 @@ function switchView(view) {
       onShow: () => startDataSync(),
       onHide: null
     },
-    members: { section: elements.membersSection, nav: elements.navMembers, onShow: loadAllMembers },
+    members: {
+      section: elements.membersSection,
+      nav: elements.navMembers,
+      onShow: async () => {
+        await ensureAdminModule("members");
+        window.initMembersPage?.();
+      }
+    },
     bookings: {
       section: elements.bookingsSection,
       nav: elements.navBookings,
@@ -314,55 +315,7 @@ navLinks.forEach(({ el, view }) => {
 });
 
 // ==================== MEMBERS ====================
-
-// Create a db wrapper for SharedCache compatibility (modular SDK)
-const fdbDb = createDbWrapper(db);
-
-async function loadAllMembers() {
-  const container = $("membersList");
-  if (!container) return;
-  
-  container.innerHTML = `<p class="text-gray-500 font-orbitron text-sm">🔄 LOADING...</p>`;
-
-  try {
-    // Use SharedCache for members - shared across all admin pages
-    const members = await SharedCache.getMembers(fdbDb, FB_PATHS.MEMBERS);
-    
-    if (!members || members.length === 0) {
-      container.innerHTML = `<p class="text-gray-500">No members found</p>`;
-      return;
-    }
-
-    // Map to display format
-    const displayMembers = members.map(m => ({
-      USERNAME: m.USERNAME,
-      DISPLAY_NAME: m.DISPLAY_NAME || m.USERNAME,
-      FIRSTNAME: m.FIRSTNAME || "",
-      LASTNAME: m.LASTNAME || "",
-      RECDATE: m.RECDATE || "",
-      TOTALACTMINUTE: m.stats?.total_minutes || 0,
-      BALANCE: m.balance?.current_balance || 0
-    }));
-    
-    renderMembers(container, displayMembers);
-  } catch (error) {
-    console.error("Error loading members:", error);
-    container.innerHTML = `<p class="text-red-500">Error loading members</p>`;
-  }
-}
-
-function renderMembers(container, members) {
-  container.innerHTML = members.map(m => {
-    const displayName = [m.FIRSTNAME, m.LASTNAME].filter(Boolean).join(' ').trim() || m.DISPLAY_NAME || m.USERNAME;
-    return `
-      <div class="member-card p-4 rounded-xl">
-        <h3 class="font-orbitron font-bold" style="color: #00f0ff;">${displayName}</h3>
-        <p class="text-sm text-gray-400">@${m.USERNAME}</p>
-        <p class="text-xs text-gray-600 mt-2">Joined: <span style="color: #b829ff;">${m.RECDATE || "-"}</span></p>
-      </div>
-    `;
-  }).join("");
-}
+// Member roster UI lives in members.js (lazy-loaded on first open)
 
 // ==================== TERMINALS ====================
 
