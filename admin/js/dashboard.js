@@ -4,8 +4,8 @@
  */
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS } from "../../shared/config.js";
+import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { FDB_DATASET_CONFIG, FDB_APP_NAME, TIMEZONE, formatToIST, FB_PATHS, getTodayIST } from "../../shared/config.js";
 import { 
   getStaffSession, 
   hasPermission, 
@@ -65,6 +65,10 @@ let activeSessions = {};
 let autoRefreshInterval = null;
 let terminalsListener = null;
 let sessionsListener = null;
+/** Terminals with open detail accordion — survives live re-renders */
+const expandedTerminals = new Set();
+/** Cached today history for all PCs (guest + member charges) */
+let terminalDayCache = { date: null, rows: null, loading: null };
 
 // CRITICAL: Track if listener is active to prevent duplication
 // This was the root cause of 4GB+ bandwidth usage!
@@ -319,97 +323,372 @@ navLinks.forEach(({ el, view }) => {
 
 // ==================== TERMINALS ====================
 
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function shortTerminalName(name) {
+  const n = String(name || "").toUpperCase().trim();
+  if (n.startsWith("CT-ROOM-")) return `CT${n.replace("CT-ROOM-", "")}`;
+  if (n.startsWith("T-ROOM-")) return `T${n.replace("T-ROOM-", "")}`;
+  if (n === "XBOX ONE X") return "XBOX";
+  return n || name;
+}
+
+function normalizeTerminalKey(name) {
+  return shortTerminalName(name).replace(/[^A-Z0-9]/g, "");
+}
+
+function statusMeta(status) {
+  const s = String(status || "unknown").toLowerCase();
+  const map = {
+    occupied: { label: "OCCUPIED", color: "#ff0044", bg: "rgba(255,0,68,0.15)", cls: "occupied" },
+    available: { label: "FREE", color: "#00ff88", bg: "rgba(0,255,136,0.12)", cls: "available" },
+    offline: { label: "OFFLINE", color: "#6b7280", bg: "rgba(107,114,128,0.15)", cls: "offline" },
+    reserved: { label: "RESERVED", color: "#ffd700", bg: "rgba(255,215,0,0.12)", cls: "reserved" },
+    maintenance: { label: "MAINT.", color: "#ff6b00", bg: "rgba(255,107,0,0.15)", cls: "maintenance" },
+    closing: { label: "CLOSING", color: "#b829ff", bg: "rgba(184,41,255,0.15)", cls: "closing" }
+  };
+  return map[s] || { label: s.toUpperCase(), color: "#9ca3af", bg: "rgba(156,163,175,0.12)", cls: "unknown" };
+}
+
+function formatDurationMins(mins) {
+  const n = Number(mins) || 0;
+  if (n < 1) return "<1m";
+  const h = Math.floor(n / 60);
+  const m = Math.round(n % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function formatSessionStart(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleTimeString("en-IN", {
+      timeZone: TIMEZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+  } catch {
+    return String(iso).slice(11, 16) || "—";
+  }
+}
+
+function formatClockTime(val) {
+  if (!val) return "";
+  const s = String(val);
+  // Already HH:MM or HH:MM:SS
+  if (/^\d{1,2}:\d{2}/.test(s)) return s.slice(0, 5);
+  try {
+    return new Date(s).toLocaleTimeString("en-IN", {
+      timeZone: TIMEZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
+  } catch {
+    return s.slice(0, 8);
+  }
+}
+
 function parseActiveSessions(snapshot) {
   const sessions = snapshot.val() || {};
   const latest = {};
   Object.values(sessions).forEach(s => {
-    if (s.active) latest[s.terminal] = s;
+    if (s.active && s.terminal) latest[s.terminal] = s;
   });
   activeSessions = latest;
 }
 
+function updateFloorSummary(terminals) {
+  const list = Object.values(terminals || {});
+  let occupied = 0, free = 0, other = 0;
+  list.forEach(t => {
+    const s = String(t.status || "").toLowerCase();
+    if (s === "occupied") occupied++;
+    else if (s === "available") free++;
+    else other++;
+  });
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set("floorStatOccupied", String(occupied));
+  set("floorStatFree", String(free));
+  set("floorStatOther", String(other));
+  set("floorStatTotal", String(list.length));
+}
+
 function renderTerminals(data) {
   if (!elements.timestamp || !elements.groupContainer) return;
-  
-  // Use IST timezone for timestamp
-  elements.timestamp.textContent = "Last updated: " + formatToIST(new Date());
 
-  const groups = { "T-ROOM": [], "CT-ROOM": [], "PS/XBOX": [] };
+  elements.timestamp.textContent = "Live · " + formatToIST(new Date());
+  updateFloorSummary(data);
 
-  Object.entries(data).forEach(([name, info]) => {
-    const group = name.includes("CT") ? "CT-ROOM" : name.includes("T-") ? "T-ROOM" : "PS/XBOX";
+  const groups = { "T-ROOM": [], "CT-ROOM": [], "PS / CONSOLE": [] };
+
+  Object.entries(data || {}).forEach(([name, info]) => {
+    const group = name.includes("CT") ? "CT-ROOM" : name.includes("T-") ? "T-ROOM" : "PS / CONSOLE";
     groups[group].push({ name, ...info });
   });
 
+  // Preserve scroll + expanded state across live updates
+  const openIds = new Set(expandedTerminals);
   elements.groupContainer.innerHTML = "";
 
   Object.entries(groups).forEach(([group, list]) => {
+    if (!list.length) return;
+
+    const occupiedCount = list.filter(t => t.status === "occupied").length;
     const section = document.createElement("section");
-    section.innerHTML = `<h2 class="font-orbitron text-xl font-bold mb-4" style="color: #b829ff;">${group}</h2>`;
+    section.className = "terminal-group";
+    section.innerHTML = `
+      <div class="terminal-group-head">
+        <h2 class="terminal-group-title">${escapeHtml(group)}</h2>
+        <span class="terminal-group-meta">${occupiedCount}/${list.length} live</span>
+      </div>
+    `;
 
     const grid = document.createElement("div");
-    grid.className = "grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
+    grid.className = "terminal-grid";
 
     list.sort((a, b) => a.name.localeCompare(b.name)).forEach(t => {
-      const session = activeSessions[t.name];
-      const occupied = t.status === "occupied";
-      
-      // Build session info for occupied terminals
-      let sessionInfo = "";
-      if (occupied) {
-        // User info - member or guest
-        if (t.is_guest || t.member_id === 0) {
-          sessionInfo += `<div class="text-sm mt-2"><span class="px-2 py-0.5 rounded text-xs" style="background: rgba(255,107,0,0.2); color: #ff6b00;">🎮 Guest</span></div>`;
-        } else if (t.member_username) {
-          sessionInfo += `<div class="text-sm mt-2"><span class="px-2 py-0.5 rounded text-xs" style="background: rgba(0,240,255,0.2); color: #00f0ff;">👤 ${t.member_username}</span></div>`;
-        }
-        
-        // Duration
-        const duration = t.duration_minutes || (session?.duration_minutes);
-        if (duration) {
-          const hours = Math.floor(duration / 60);
-          const mins = Math.round(duration % 60);
-          const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-          sessionInfo += `<p class="text-xs text-gray-400 mt-1">⏱️ Running: ${durationStr}</p>`;
-        }
-        
-        // Timer info for timed sessions
-        if (t.timer_minutes && t.timer_minutes > 0) {
-          const remaining = t.timer_minutes - (t.duration_minutes || 0);
-          if (remaining > 0) {
-            const remHours = Math.floor(remaining / 60);
-            const remMins = Math.round(remaining % 60);
-            const remStr = remHours > 0 ? `${remHours}h ${remMins}m` : `${remMins}m`;
-            sessionInfo += `<p class="text-xs mt-1" style="color: #ffff00;">⏳ Remaining: ${remStr}</p>`;
-          } else {
-            sessionInfo += `<p class="text-xs mt-1" style="color: #ff0044;">⚠️ Time exceeded</p>`;
-          }
-        } else if (t.session_type === "unlimited") {
-          sessionInfo += `<p class="text-xs text-gray-500 mt-1">∞ Unlimited</p>`;
-        }
-        
-        // Price if available
-        if (t.session_price && t.session_price > 0) {
-          sessionInfo += `<p class="text-xs mt-1" style="color: #00ff88;">₹${t.session_price}</p>`;
-        }
-      }
-
-      grid.innerHTML += `
-        <div class="terminal-card ${occupied ? 'occupied' : 'available'} p-4 rounded-xl">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-orbitron text-lg font-bold" style="color: ${occupied ? '#ff0044' : '#00ff88'};">${t.name}</h3>
-            <span class="w-3 h-3 rounded-full ${occupied ? 'bg-red-500 alert-pulse' : 'bg-green-500'}"></span>
-          </div>
-          <p class="text-sm text-gray-400">Status: <span style="color: ${occupied ? '#ff0044' : '#00ff88'};">${(t.status || 'unknown').toUpperCase()}</span></p>
-          ${sessionInfo}
-        </div>
-      `;
+      grid.appendChild(buildTerminalCard(t, openIds.has(t.name)));
     });
 
     section.appendChild(grid);
     elements.groupContainer.appendChild(section);
   });
+
+  // Re-hydrate history panels for still-open cards
+  openIds.forEach(name => {
+    const panel = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(name)}"]`);
+    if (panel) loadTerminalHistory(name, panel);
+  });
 }
+
+function buildTerminalCard(t, isOpen) {
+  const meta = statusMeta(t.status);
+  const occupied = t.status === "occupied";
+  const short = shortTerminalName(t.name);
+  const player = occupied
+    ? (t.is_guest || t.member_id === 0
+      ? { label: "Guest", color: "#ff6b00" }
+      : { label: t.member_username || t.member_name || `ID ${t.member_id}`, color: "#00f0ff" })
+    : null;
+
+  const duration = occupied ? (t.duration_minutes || activeSessions[t.name]?.duration_minutes) : null;
+  let timerLine = "";
+  if (occupied && t.timer_minutes > 0) {
+    const remaining = t.timer_minutes - (t.duration_minutes || 0);
+    timerLine = remaining > 0
+      ? `<span class="term-chip" style="color:#ffff00;background:rgba(255,255,0,0.1);">${formatDurationMins(remaining)} left</span>`
+      : `<span class="term-chip" style="color:#ff0044;background:rgba(255,0,68,0.12);">Overtime</span>`;
+  } else if (occupied && t.session_type === "unlimited") {
+    timerLine = `<span class="term-chip" style="color:#9ca3af;background:rgba(156,163,175,0.1);">Unlimited</span>`;
+  }
+
+  const card = document.createElement("div");
+  card.className = `terminal-card terminal-card-v2 ${meta.cls}${isOpen ? " is-open" : ""}`;
+  card.dataset.terminal = t.name;
+
+  card.innerHTML = `
+    <button type="button" class="terminal-card-toggle" aria-expanded="${isOpen ? "true" : "false"}">
+      <div class="terminal-card-top">
+        <div class="terminal-id">
+          <span class="terminal-short" style="color:${meta.color};">${escapeHtml(short)}</span>
+          <span class="terminal-full">${escapeHtml(t.name)}</span>
+        </div>
+        <div class="terminal-top-right">
+          <span class="terminal-status-pill" style="color:${meta.color};background:${meta.bg};">${meta.label}</span>
+          <span class="terminal-dot ${occupied ? "alert-pulse" : ""}" style="background:${meta.color};"></span>
+          <span class="terminal-chevron ${isOpen ? "rotated" : ""}">▾</span>
+        </div>
+      </div>
+      <div class="terminal-card-summary">
+        ${player ? `<span class="term-chip" style="color:${player.color};background:${player.color}22;">${escapeHtml(player.label)}</span>` : `<span class="term-chip muted">Tap for today&apos;s history</span>`}
+        ${duration != null ? `<span class="term-chip" style="color:#b829ff;background:rgba(184,41,255,0.12);">${formatDurationMins(duration)} on</span>` : ""}
+        ${timerLine}
+        ${occupied && t.session_price > 0 ? `<span class="term-chip" style="color:#00ff88;background:rgba(0,255,136,0.12);">₹${Math.round(t.session_price)}</span>` : ""}
+      </div>
+    </button>
+    <div class="terminal-card-body" ${isOpen ? "" : "hidden"}>
+      ${buildLiveSessionBlock(t, occupied)}
+      <div class="terminal-history-block">
+        <div class="terminal-history-title">Today on this PC</div>
+        <div class="terminal-history" data-terminal="${escapeHtml(t.name)}">
+          <p class="terminal-history-empty">Loading…</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const toggle = card.querySelector(".terminal-card-toggle");
+  toggle.addEventListener("click", () => toggleTerminalCard(card, t.name));
+
+  return card;
+}
+
+function buildLiveSessionBlock(t, occupied) {
+  if (!occupied) {
+    return `
+      <div class="terminal-live-grid">
+        <div class="terminal-kv"><span>State</span><strong style="color:${statusMeta(t.status).color};">${escapeHtml(statusMeta(t.status).label)}</strong></div>
+        <div class="terminal-kv"><span>Updated</span><strong>${escapeHtml(formatSessionStart(t.last_updated))}</strong></div>
+        <div class="terminal-kv"><span>MAC</span><strong class="truncate">${escapeHtml(t.mac || "—")}</strong></div>
+      </div>
+    `;
+  }
+
+  const who = t.is_guest || t.member_id === 0
+    ? "Guest session"
+    : [t.member_name, t.member_username ? `@${t.member_username}` : ""].filter(Boolean).join(" ") || `Member #${t.member_id}`;
+
+  return `
+    <div class="terminal-live-grid">
+      <div class="terminal-kv"><span>Player</span><strong style="color:#00f0ff;">${escapeHtml(who)}</strong></div>
+      <div class="terminal-kv"><span>Started</span><strong>${escapeHtml(formatSessionStart(t.session_start))}</strong></div>
+      <div class="terminal-kv"><span>Running</span><strong style="color:#b829ff;">${escapeHtml(formatDurationMins(t.duration_minutes))}</strong></div>
+      <div class="terminal-kv"><span>Timer</span><strong>${
+        t.session_type === "unlimited"
+          ? "Unlimited"
+          : (t.timer_minutes ? `${formatDurationMins(t.timer_minutes)} booked` : "—")
+      }</strong></div>
+      <div class="terminal-kv"><span>Price</span><strong style="color:#00ff88;">${t.session_price > 0 ? `₹${Math.round(t.session_price)}` : "—"}</strong></div>
+      <div class="terminal-kv"><span>Started by</span><strong>${escapeHtml(t.started_by || "—")}</strong></div>
+      ${t.paused ? `<div class="terminal-kv col-span-2"><span>Paused</span><strong style="color:#ff6b00;">Yes</strong></div>` : ""}
+    </div>
+  `;
+}
+
+function toggleTerminalCard(card, name) {
+  const body = card.querySelector(".terminal-card-body");
+  const chev = card.querySelector(".terminal-chevron");
+  const btn = card.querySelector(".terminal-card-toggle");
+  const opening = body.hasAttribute("hidden");
+
+  if (opening) {
+    body.removeAttribute("hidden");
+    card.classList.add("is-open");
+    chev?.classList.add("rotated");
+    btn?.setAttribute("aria-expanded", "true");
+    expandedTerminals.add(name);
+    const hist = card.querySelector(".terminal-history");
+    if (hist) loadTerminalHistory(name, hist);
+  } else {
+    body.setAttribute("hidden", "");
+    card.classList.remove("is-open");
+    chev?.classList.remove("rotated");
+    btn?.setAttribute("aria-expanded", "false");
+    expandedTerminals.delete(name);
+  }
+}
+
+async function ensureDayHistoryCache() {
+  const today = getTodayIST();
+  if (terminalDayCache.date === today && terminalDayCache.rows) {
+    return terminalDayCache.rows;
+  }
+  if (terminalDayCache.loading && terminalDayCache.date === today) {
+    return terminalDayCache.loading;
+  }
+
+  terminalDayCache.date = today;
+  terminalDayCache.loading = (async () => {
+    const rows = [];
+    try {
+      const [guestSnap, histSnap] = await Promise.all([
+        get(ref(db, `${FB_PATHS.GUEST_SESSIONS}/${today}`)),
+        get(ref(db, `${FB_PATHS.HISTORY_BY_DATE}/${today}`))
+      ]);
+
+      const guests = guestSnap.val() || {};
+      Object.entries(guests).forEach(([id, g]) => {
+        rows.push({
+          id: `g-${id}`,
+          kind: "guest",
+          terminal: g.terminal || g.terminal_short || "",
+          terminalKey: normalizeTerminalKey(g.terminal_short || g.terminal),
+          time: formatClockTime(g.start_time || g.end_time),
+          label: "Guest",
+          mins: g.duration_minutes || g.usage || 0,
+          amount: g.total || g.prepaid || 0,
+          sort: String(g.start_time || g.end_time || id)
+        });
+      });
+
+      const hist = histSnap.val() || {};
+      Object.entries(hist).forEach(([id, h]) => {
+        rows.push({
+          id: `h-${id}`,
+          kind: "member",
+          terminal: h.TERMINALNAME || h.TERMINAL_SHORT || "",
+          terminalKey: normalizeTerminalKey(h.TERMINAL_SHORT || h.TERMINALNAME),
+          time: formatClockTime(h.TIME),
+          label: h.USERNAME || h.MEMBERS_USERNAME || h.NOTE || "Member",
+          mins: h.USINGMIN || 0,
+          amount: Math.abs(Number(h.CHARGE) || 0),
+          sort: String(h.TIME || id)
+        });
+      });
+
+      rows.sort((a, b) => String(b.sort).localeCompare(String(a.sort)));
+    } catch (err) {
+      console.warn("Terminal day history failed:", err);
+    }
+    terminalDayCache.rows = rows;
+    terminalDayCache.loading = null;
+    return rows;
+  })();
+
+  return terminalDayCache.loading;
+}
+
+function paintTerminalHistory(panel, terminalName, rows) {
+  if (!panel) return;
+  const key = normalizeTerminalKey(terminalName);
+  const mine = (rows || []).filter(r => r.terminalKey === key).slice(0, 12);
+  if (!mine.length) {
+    panel.innerHTML = `<p class="terminal-history-empty">No sessions on this PC today yet</p>`;
+    return;
+  }
+  panel.innerHTML = mine.map(r => {
+    const color = r.kind === "guest" ? "#ff6b00" : "#00f0ff";
+    return `
+      <div class="terminal-feed-row">
+        <div class="min-w-0">
+          <div class="text-xs truncate" style="color:${color};">${escapeHtml(r.label)}</div>
+          <div class="text-[10px] text-gray-500">${escapeHtml(r.time || "—")}${r.mins ? ` · ${formatDurationMins(r.mins)}` : ""}</div>
+        </div>
+        <div class="font-orbitron text-xs shrink-0" style="color: var(--neon-orange);">${r.amount ? `₹${Math.round(r.amount)}` : "—"}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadTerminalHistory(terminalName, panel) {
+  if (!panel) return;
+  const today = getTodayIST();
+
+  if (terminalDayCache.date === today && terminalDayCache.rows) {
+    paintTerminalHistory(panel, terminalName, terminalDayCache.rows);
+    return;
+  }
+
+  panel.innerHTML = `<p class="terminal-history-empty">Loading…</p>`;
+  const rows = await ensureDayHistoryCache();
+  const live = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(terminalName)}"]`) || panel;
+  paintTerminalHistory(live, terminalName, rows);
+}
+
+window.refreshTerminalDayHistory = function() {
+  terminalDayCache = { date: null, rows: null, loading: null };
+  expandedTerminals.forEach(name => {
+    const panel = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(name)}"]`);
+    if (panel) loadTerminalHistory(name, panel);
+  });
+};
 
 // ==================== DATA SYNC ====================
 

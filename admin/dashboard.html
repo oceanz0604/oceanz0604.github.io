@@ -281,7 +281,6 @@
 
     .terminal-card:hover {
       border-color: var(--neon-red);
-      transform: translateY(-2px);
     }
 
     .terminal-card.occupied {
@@ -292,6 +291,10 @@
     .terminal-card.available {
       border-color: var(--neon-green);
       box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+    }
+
+    .terminal-card-v2:hover {
+      transform: none;
     }
 
     /* Member Card */
@@ -1147,12 +1150,35 @@
 
         <!-- Dashboard Section -->
         <div id="dashboard-section">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
             <div>
-              <h1 class="font-orbitron text-3xl font-bold glow-red" style="color: var(--neon-red);">TERMINAL STATUS</h1>
-              <p id="timestamp" class="text-sm text-gray-500 mt-1"></p>
+              <h1 class="font-orbitron text-2xl sm:text-3xl font-bold glow-red" style="color: var(--neon-red);">FLOOR MONITOR</h1>
+              <p id="timestamp" class="text-sm text-gray-500 mt-1">Connecting…</p>
+            </div>
+            <button type="button" onclick="refreshTerminalDayHistory()" class="text-xs font-orbitron px-3 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-cyan-400 hover:border-cyan-500 self-start sm:self-auto">
+              Refresh history
+            </button>
+          </div>
+
+          <div class="floor-kpi-row mb-6">
+            <div class="floor-kpi">
+              <div class="floor-kpi-label">Live</div>
+              <div id="floorStatOccupied" class="floor-kpi-value" style="color: var(--neon-red);">0</div>
+            </div>
+            <div class="floor-kpi">
+              <div class="floor-kpi-label">Free</div>
+              <div id="floorStatFree" class="floor-kpi-value" style="color: var(--neon-green);">0</div>
+            </div>
+            <div class="floor-kpi">
+              <div class="floor-kpi-label">Other</div>
+              <div id="floorStatOther" class="floor-kpi-value" style="color: #9ca3af;">0</div>
+            </div>
+            <div class="floor-kpi">
+              <div class="floor-kpi-label">PCs</div>
+              <div id="floorStatTotal" class="floor-kpi-value" style="color: var(--neon-cyan);">0</div>
             </div>
           </div>
+
           <div id="group-container" class="space-y-8"></div>
         </div>
 
