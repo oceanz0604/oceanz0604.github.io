@@ -491,6 +491,8 @@ body.admin-page::before {
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-self: start;
+  height: auto;
 }
 
 .terminal-card-v2:hover {
@@ -727,6 +729,7 @@ body.admin-page::before {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 @media (min-width: 768px) {

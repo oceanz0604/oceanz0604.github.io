@@ -68,7 +68,7 @@ let sessionsListener = null;
 /** Terminals with open detail accordion — survives live re-renders */
 const expandedTerminals = new Set();
 /** Cached today history for all PCs (guest + member charges) */
-let terminalDayCache = { date: null, rows: null, loading: null };
+let terminalDayCache = { date: null, rows: null, loading: null, error: null };
 
 // CRITICAL: Track if listener is active to prevent duplication
 // This was the root cause of 4GB+ bandwidth usage!
@@ -335,12 +335,52 @@ function shortTerminalName(name) {
   const n = String(name || "").toUpperCase().trim();
   if (n.startsWith("CT-ROOM-")) return `CT${n.replace("CT-ROOM-", "")}`;
   if (n.startsWith("T-ROOM-")) return `T${n.replace("T-ROOM-", "")}`;
-  if (n === "XBOX ONE X") return "XBOX";
+  if (n === "XBOX ONE X" || n.includes("XBOX")) return "XBOX";
+  if (n.includes("PLAYSTATION") || n === "PS") return "PS";
   return n || name;
 }
 
+/** Canonical keys for matching CT-ROOM-1 ↔ CT1 ↔ CT ROOM 1 etc. */
+function terminalKeys(name) {
+  const raw = String(name || "").toUpperCase().trim();
+  const keys = new Set();
+  if (!raw) return keys;
+
+  const compact = raw.replace(/[^A-Z0-9]/g, "");
+  keys.add(compact);
+  keys.add(shortTerminalName(raw).replace(/[^A-Z0-9]/g, ""));
+
+  const ct = raw.match(/CT[\s\-]*ROOM[\s\-]*0*(\d+)/) || raw.match(/^CT0*(\d+)$/);
+  if (ct) keys.add(`CT${ct[1]}`);
+
+  const t = raw.match(/(?:^|[^C])T[\s\-]*ROOM[\s\-]*0*(\d+)/) || raw.match(/^T0*(\d+)$/);
+  if (t) keys.add(`T${t[1]}`);
+
+  if (raw.includes("XBOX")) keys.add("XBOX");
+  if (raw === "PS" || raw.includes("PLAYSTATION")) keys.add("PS");
+
+  return keys;
+}
+
 function normalizeTerminalKey(name) {
-  return shortTerminalName(name).replace(/[^A-Z0-9]/g, "");
+  const keys = [...terminalKeys(name)];
+  // Prefer short CT1/T5 style key when available
+  const short = keys.find(k => /^(CT|T)\d+$/.test(k) || k === "PS" || k === "XBOX");
+  return short || keys[0] || "";
+}
+
+function terminalsMatch(a, b) {
+  const ka = terminalKeys(a);
+  if (!ka.size) return false;
+  for (const k of terminalKeys(b)) {
+    if (ka.has(k)) return true;
+  }
+  return false;
+}
+
+function findTerminalHistoryPanel(terminalName) {
+  return [...document.querySelectorAll(".terminal-history")]
+    .find(el => el.dataset.terminal === terminalName) || null;
 }
 
 function statusMeta(status) {
@@ -463,7 +503,7 @@ function renderTerminals(data) {
 
   // Re-hydrate history panels for still-open cards
   openIds.forEach(name => {
-    const panel = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(name)}"]`);
+    const panel = findTerminalHistoryPanel(name);
     if (panel) loadTerminalHistory(name, panel);
   });
 }
@@ -569,13 +609,25 @@ function toggleTerminalCard(card, name) {
   const opening = body.hasAttribute("hidden");
 
   if (opening) {
+    // Accordion: close other open cards so only one expands
+    document.querySelectorAll(".terminal-card-v2.is-open").forEach(other => {
+      if (other === card) return;
+      const otherName = other.dataset.terminal;
+      const otherBody = other.querySelector(".terminal-card-body");
+      otherBody?.setAttribute("hidden", "");
+      other.classList.remove("is-open");
+      other.querySelector(".terminal-chevron")?.classList.remove("rotated");
+      other.querySelector(".terminal-card-toggle")?.setAttribute("aria-expanded", "false");
+      if (otherName) expandedTerminals.delete(otherName);
+    });
+
     body.removeAttribute("hidden");
     card.classList.add("is-open");
     chev?.classList.add("rotated");
     btn?.setAttribute("aria-expanded", "true");
     expandedTerminals.add(name);
     const hist = card.querySelector(".terminal-history");
-    if (hist) loadTerminalHistory(name, hist);
+    if (hist) loadTerminalHistory(name, hist, card);
   } else {
     body.setAttribute("hidden", "");
     card.classList.remove("is-open");
@@ -587,7 +639,7 @@ function toggleTerminalCard(card, name) {
 
 async function ensureDayHistoryCache() {
   const today = getTodayIST();
-  if (terminalDayCache.date === today && terminalDayCache.rows) {
+  if (terminalDayCache.date === today && Array.isArray(terminalDayCache.rows)) {
     return terminalDayCache.rows;
   }
   if (terminalDayCache.loading && terminalDayCache.date === today) {
@@ -605,37 +657,44 @@ async function ensureDayHistoryCache() {
 
       const guests = guestSnap.val() || {};
       Object.entries(guests).forEach(([id, g]) => {
+        if (!g || typeof g !== "object") return;
+        const term = g.terminal_short || g.terminal || g.TERMINAL_SHORT || g.TERMINALNAME || "";
         rows.push({
           id: `g-${id}`,
           kind: "guest",
-          terminal: g.terminal || g.terminal_short || "",
-          terminalKey: normalizeTerminalKey(g.terminal_short || g.terminal),
+          terminal: term,
+          terminalKey: normalizeTerminalKey(term),
           time: formatClockTime(g.start_time || g.end_time),
           label: "Guest",
           mins: g.duration_minutes || g.usage || 0,
-          amount: g.total || g.prepaid || 0,
+          amount: Number(g.total || g.prepaid || 0) || 0,
           sort: String(g.start_time || g.end_time || id)
         });
       });
 
       const hist = histSnap.val() || {};
       Object.entries(hist).forEach(([id, h]) => {
+        if (!h || typeof h !== "object") return;
+        const term = h.TERMINAL_SHORT || h.TERMINALNAME || h.terminal_short || h.terminal || "";
+        const user = h.USERNAME || h.MEMBERS_USERNAME || h.NOTE || "Member";
         rows.push({
           id: `h-${id}`,
           kind: "member",
-          terminal: h.TERMINALNAME || h.TERMINAL_SHORT || "",
-          terminalKey: normalizeTerminalKey(h.TERMINAL_SHORT || h.TERMINALNAME),
+          terminal: term,
+          terminalKey: normalizeTerminalKey(term),
           time: formatClockTime(h.TIME),
-          label: h.USERNAME || h.MEMBERS_USERNAME || h.NOTE || "Member",
-          mins: h.USINGMIN || 0,
+          label: user,
+          mins: Number(h.USINGMIN) || 0,
           amount: Math.abs(Number(h.CHARGE) || 0),
           sort: String(h.TIME || id)
         });
       });
 
       rows.sort((a, b) => String(b.sort).localeCompare(String(a.sort)));
+      console.log(`[Floor] Day history ${today}: ${rows.length} rows (guest+member)`);
     } catch (err) {
       console.warn("Terminal day history failed:", err);
+      terminalDayCache.error = String(err?.message || err);
     }
     terminalDayCache.rows = rows;
     terminalDayCache.loading = null;
@@ -645,47 +704,84 @@ async function ensureDayHistoryCache() {
   return terminalDayCache.loading;
 }
 
-function paintTerminalHistory(panel, terminalName, rows) {
+function paintTerminalHistory(panel, terminalName, rows, card = null) {
   if (!panel) return;
-  const key = normalizeTerminalKey(terminalName);
-  const mine = (rows || []).filter(r => r.terminalKey === key).slice(0, 12);
-  if (!mine.length) {
-    panel.innerHTML = `<p class="terminal-history-empty">No sessions on this PC today yet</p>`;
+
+  const liveCard = card || panel.closest(".terminal-card-v2");
+  const liveRows = [];
+
+  // Show current session first when this PC is occupied
+  if (liveCard) {
+    const statusPill = liveCard.querySelector(".terminal-status-pill")?.textContent || "";
+    if (statusPill.includes("OCCUPIED") || liveCard.classList.contains("occupied")) {
+      const player = [...liveCard.querySelectorAll(".term-chip")]
+        .map(el => el.textContent.trim())
+        .find(t => t && !t.includes("left") && !t.includes("Unlimited") && !t.includes("Overtime") && !t.startsWith("₹") && !t.includes(" on") && t !== "Tap for today's history");
+      const running = [...liveCard.querySelectorAll(".term-chip")]
+        .map(el => el.textContent.trim())
+        .find(t => t.endsWith(" on"));
+      liveRows.push({
+        kind: "live",
+        label: player || "Live session",
+        time: "Now",
+        mins: 0,
+        amount: 0,
+        extra: running ? running.replace(/ on$/, "") : ""
+      });
+    }
+  }
+
+  const mine = (rows || []).filter(r => terminalsMatch(r.terminal, terminalName)).slice(0, 12);
+  const combined = [...liveRows, ...mine];
+
+  if (!combined.length) {
+    const err = terminalDayCache.error
+      ? `<p class="terminal-history-empty">Could not load history</p>`
+      : `<p class="terminal-history-empty">No sessions on this PC today yet</p>`;
+    panel.innerHTML = err;
     return;
   }
-  panel.innerHTML = mine.map(r => {
-    const color = r.kind === "guest" ? "#ff6b00" : "#00f0ff";
+
+  panel.innerHTML = combined.map(r => {
+    const color = r.kind === "guest" ? "#ff6b00" : r.kind === "live" ? "#00ff88" : "#00f0ff";
+    const meta = r.kind === "live"
+      ? `${escapeHtml(r.time)}${r.extra ? ` · ${escapeHtml(r.extra)}` : ""}`
+      : `${escapeHtml(r.time || "—")}${r.mins ? ` · ${formatDurationMins(r.mins)}` : ""}`;
+    const amt = r.kind === "live"
+      ? `<span style="color:var(--neon-green);">LIVE</span>`
+      : (r.amount ? `₹${Math.round(r.amount)}` : "—");
     return `
       <div class="terminal-feed-row">
         <div class="min-w-0">
           <div class="text-xs truncate" style="color:${color};">${escapeHtml(r.label)}</div>
-          <div class="text-[10px] text-gray-500">${escapeHtml(r.time || "—")}${r.mins ? ` · ${formatDurationMins(r.mins)}` : ""}</div>
+          <div class="text-[10px] text-gray-500">${meta}</div>
         </div>
-        <div class="font-orbitron text-xs shrink-0" style="color: var(--neon-orange);">${r.amount ? `₹${Math.round(r.amount)}` : "—"}</div>
+        <div class="font-orbitron text-xs shrink-0" style="color: var(--neon-orange);">${amt}</div>
       </div>
     `;
   }).join("");
 }
 
-async function loadTerminalHistory(terminalName, panel) {
+async function loadTerminalHistory(terminalName, panel, card = null) {
   if (!panel) return;
   const today = getTodayIST();
 
-  if (terminalDayCache.date === today && terminalDayCache.rows) {
-    paintTerminalHistory(panel, terminalName, terminalDayCache.rows);
+  if (terminalDayCache.date === today && Array.isArray(terminalDayCache.rows)) {
+    paintTerminalHistory(panel, terminalName, terminalDayCache.rows, card);
     return;
   }
 
   panel.innerHTML = `<p class="terminal-history-empty">Loading…</p>`;
   const rows = await ensureDayHistoryCache();
-  const live = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(terminalName)}"]`) || panel;
-  paintTerminalHistory(live, terminalName, rows);
+  const livePanel = findTerminalHistoryPanel(terminalName) || panel;
+  const liveCard = livePanel.closest?.(".terminal-card-v2") || card;
+  paintTerminalHistory(livePanel, terminalName, rows, liveCard);
 }
 
 window.refreshTerminalDayHistory = function() {
-  terminalDayCache = { date: null, rows: null, loading: null };
+  terminalDayCache = { date: null, rows: null, loading: null, error: null };
   expandedTerminals.forEach(name => {
-    const panel = document.querySelector(`.terminal-history[data-terminal="${CSS.escape(name)}"]`);
+    const panel = findTerminalHistoryPanel(name);
     if (panel) loadTerminalHistory(name, panel);
   });
 };
