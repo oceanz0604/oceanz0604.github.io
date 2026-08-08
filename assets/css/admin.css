@@ -326,6 +326,41 @@ body.admin-page::before {
   text-shadow: 0 0 10px var(--neon-red);
 }
 
+.nav-floor-badges {
+  flex-shrink: 0;
+}
+
+.nav-pc-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.nav-pc-badge.free {
+  color: #00ff88;
+  background: rgba(0, 255, 136, 0.14);
+  border: 1px solid rgba(0, 255, 136, 0.45);
+}
+
+.nav-pc-badge.busy {
+  color: #ff4d6d;
+  background: rgba(255, 0, 68, 0.14);
+  border: 1px solid rgba(255, 0, 68, 0.45);
+}
+
+.nav-item.active .nav-pc-badge.free,
+.nav-item.active .nav-pc-badge.busy {
+  text-shadow: none;
+}
+
 /* ==================== MOBILE HEADER ==================== */
 .mobile-header {
   display: none;

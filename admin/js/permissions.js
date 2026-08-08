@@ -39,7 +39,7 @@ export const ROLES = {
     level: 100,
     color: "#ff0044",
     icon: "👑",
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "staff", "settings", "cash_register", "leaderboard", "finance", "food_menu", "food_analytics"],
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "staff", "settings", "cash_register", "leaderboard", "finance", "food_menu"],
     canEdit: true,
     description: "Full access to all features"
   },
@@ -48,10 +48,10 @@ export const ROLES = {
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    // Finance: expenses only (no P&L / revenue analytics). Food Analytics stays Super Admin only.
+    // Finance: expenses only (no P&L / revenue analytics). Cafe Manager via food_menu.
     permissions: ["dashboard", "bookings", "recharges", "members", "history", "cash_register", "leaderboard", "food_menu", "finance"],
     canEdit: true,
-    description: "Operations + expense entry (no finance analytics)"
+    description: "Operations, Cafe Manager & expense entry (no finance analytics)"
   },
   MANAGER: {
     name: "Manager",
@@ -103,8 +103,7 @@ export const MODULE_NAV_MAP = {
   cash_register: { name: "Cash Register", icon: "banknote", view: "cash" },
   leaderboard: { name: "Leaderboards", icon: "trophy", view: "leaderboard" },
   finance: { name: "Finance", icon: "indian-rupee", view: "finance" },
-  food_menu: { name: "Food Menu", icon: "utensils", view: "food-menu" },
-  food_analytics: { name: "Food Analytics", icon: "pie-chart", view: "food-analytics" },
+  food_menu: { name: "Cafe", icon: "coffee", view: "cafe-manager" },
   counter: { name: "POS Counter", icon: "receipt", view: "counter", redirect: "counter.html" }
 };
 

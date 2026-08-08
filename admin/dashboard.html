@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=floor4">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=cafe1">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -1090,6 +1090,7 @@
         <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="monitor" class="w-5 h-5"></i>
           <span class="font-medium">Floor</span>
+          <span id="navFloorBadges" class="nav-floor-badges ml-auto flex items-center gap-1.5" aria-live="polite"></span>
         </a>
         <a id="nav-bookings" href="#" data-permission="bookings" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="calendar-clock" class="w-5 h-5"></i>
@@ -1107,17 +1108,9 @@
           <i data-lucide="indian-rupee" class="w-5 h-5"></i>
           <span class="font-medium">Finance</span>
         </a>
-        <a id="nav-food-menu" href="#" data-permission="food_menu" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="utensils" class="w-5 h-5"></i>
-          <span class="font-medium">Food Menu</span>
-        </a>
-        <a id="nav-food-stock" href="#" data-permission="food_menu" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="boxes" class="w-5 h-5"></i>
-          <span class="font-medium">Food Stock</span>
-        </a>
-        <a id="nav-food-analytics" href="#" data-permission="food_analytics" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="pie-chart" class="w-5 h-5"></i>
-          <span class="font-medium">Food Analytics</span>
+        <a id="nav-cafe" href="#" data-permission="food_menu" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="coffee" class="w-5 h-5"></i>
+          <span class="font-medium">Cafe</span>
         </a>
         <a id="nav-leaderboard" href="#" data-permission="leaderboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="trophy" class="w-5 h-5"></i>
@@ -2049,36 +2042,83 @@
         </div>
       </div>
 
-        <!-- Food Menu Section -->
-        <div id="food-menu-section" class="hidden">
+        <!-- Cafe Manager Section (menu + stock) -->
+        <div id="cafe-manager-section" class="hidden">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-orange);">
-                <i data-lucide="utensils" class="w-7 h-7"></i> FOOD MENU
+                <i data-lucide="coffee" class="w-7 h-7"></i> CAFE MANAGER
               </h2>
-              <p class="text-sm text-gray-500 mt-1">Manage food items, prices & stock</p>
+              <p class="text-sm text-gray-500 mt-1">Products, stock, margin &amp; purchases</p>
             </div>
-            <button onclick="openFoodItemModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm" style="background: rgba(255,107,0,0.2); border: 1px solid var(--neon-orange); color: var(--neon-orange);">
-              <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i> Add Item
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="openFoodItemModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm" style="background: rgba(255,107,0,0.2); border: 1px solid var(--neon-orange); color: var(--neon-orange);">
+                <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i> Add Item
+              </button>
+              <button type="button" id="stockPurchaseBtn" onclick="openStockPurchaseModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm"
+                style="background: rgba(0,255,136,0.15); border: 1px solid var(--neon-green); color: var(--neon-green);">
+                + Record Purchase
+              </button>
+              <button type="button" onclick="openStockAdjustModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm border border-gray-700 text-gray-300 hover:border-cyan-500">
+                Adjust Stock
+              </button>
+            </div>
           </div>
 
-          <!-- Category Filter -->
-          <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
-            <button class="food-cat-btn selected px-4 py-2 rounded-lg text-sm font-orbitron whitespace-nowrap" data-category="all" onclick="filterFoodCategory('all')">All Items</button>
-            <button class="food-cat-btn px-4 py-2 rounded-lg text-sm font-orbitron whitespace-nowrap" data-category="snacks" onclick="filterFoodCategory('snacks')">🍿 Snacks</button>
-            <button class="food-cat-btn px-4 py-2 rounded-lg text-sm font-orbitron whitespace-nowrap" data-category="drinks" onclick="filterFoodCategory('drinks')">🥤 Drinks</button>
-            <button class="food-cat-btn px-4 py-2 rounded-lg text-sm font-orbitron whitespace-nowrap" data-category="meals" onclick="filterFoodCategory('meals')">🍽️ Meals</button>
-            <button class="food-cat-btn px-4 py-2 rounded-lg text-sm font-orbitron whitespace-nowrap" data-category="combos" onclick="filterFoodCategory('combos')">🎁 Combos</button>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <div class="stock-kpi">
+              <div class="stock-kpi-label">Products</div>
+              <div id="cafeStatItems" class="stock-kpi-value" style="color: var(--neon-cyan);">0</div>
+            </div>
+            <div class="stock-kpi">
+              <div class="stock-kpi-label">Low / Out</div>
+              <div id="cafeStatLow" class="stock-kpi-value" style="color: var(--neon-orange);">0</div>
+            </div>
+            <div class="stock-kpi">
+              <div class="stock-kpi-label">Units on hand</div>
+              <div id="cafeStatUnits" class="stock-kpi-value" style="color: var(--neon-green);">0</div>
+            </div>
+            <div class="stock-kpi">
+              <div class="stock-kpi-label">Purchases (30d)</div>
+              <div id="cafeStatPurchases" class="stock-kpi-value" style="color: var(--neon-purple);">₹0</div>
+            </div>
           </div>
 
-          <!-- Food Items Grid -->
-          <div id="foodMenuGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            <!-- Items loaded dynamically -->
-            <div class="neon-card rounded-xl p-8 text-center col-span-full">
-              <i data-lucide="utensils" class="w-12 h-12 mx-auto mb-4 text-gray-600"></i>
-              <p class="text-gray-500">No food items yet. Click "Add Item" to get started.</p>
+          <div id="cafeLowAlert" class="hidden mb-4 p-3 rounded-xl text-sm" style="background: rgba(255,107,0,0.1); border: 1px solid rgba(255,107,0,0.35); color: #ffb347;"></div>
+
+          <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="stock-tab cafe-tab active" data-tab="products" onclick="setCafeTab('products')">Products</button>
+            <button type="button" class="stock-tab cafe-tab" data-tab="purchases" onclick="setCafeTab('purchases')">Purchases</button>
+            <button type="button" class="stock-tab cafe-tab" data-tab="log" onclick="setCafeTab('log')">Stock log</button>
+          </div>
+
+          <div id="cafeProductsPanel">
+            <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
+              <button class="food-cat-btn cafe-cat-btn selected px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="all" onclick="filterFoodCategory('all')">All</button>
+              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="snacks" onclick="filterFoodCategory('snacks')">🍿 Snacks</button>
+              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="drinks" onclick="filterFoodCategory('drinks')">🥤 Drinks</button>
+              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="meals" onclick="filterFoodCategory('meals')">🍽️ Meals</button>
+              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="combos" onclick="filterFoodCategory('combos')">🎁 Combos</button>
             </div>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <input type="text" id="cafeSearch" class="neon-input flex-1 min-w-[160px] px-3 py-2 rounded-lg text-sm" placeholder="Search products…" oninput="filterCafeSearch()"/>
+              <select id="cafeStockFilter" class="neon-input px-3 py-2 rounded-lg text-xs" onchange="filterStockInventory()">
+                <option value="all">All items</option>
+                <option value="low">Low stock</option>
+                <option value="out">Out of stock</option>
+                <option value="untracked">Untracked (∞)</option>
+                <option value="tracked">Tracked only</option>
+              </select>
+            </div>
+            <div id="cafeProductList" class="space-y-2"></div>
+          </div>
+
+          <div id="stockPurchasesPanel" class="hidden">
+            <div id="stockPurchasesList" class="space-y-2"></div>
+          </div>
+
+          <div id="stockLogPanel" class="hidden">
+            <div id="stockLogList" class="space-y-2"></div>
           </div>
 
           <!-- Food Item Modal -->
@@ -2089,38 +2129,39 @@
               </div>
               <form id="foodItemForm" class="p-4 space-y-4" onsubmit="saveFoodItem(event)">
                 <input type="hidden" id="foodItemId" value="">
-                
                 <div>
                   <label class="text-xs text-gray-400 uppercase block mb-2">Item Name</label>
                   <input type="text" id="foodItemName" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="e.g. Maggi, Cold Coffee" required>
                 </div>
-                
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-2">Price (₹)</label>
+                    <label class="text-xs text-gray-400 uppercase block mb-2">Sell Price (₹)</label>
                     <input type="number" id="foodItemPrice" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="0" min="1" required>
                   </div>
+                  <div>
+                    <label class="text-xs text-gray-400 uppercase block mb-2">Cost (₹)</label>
+                    <input type="number" id="foodItemCost" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="optional" min="0" step="0.01">
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
                   <div>
                     <label class="text-xs text-gray-400 uppercase block mb-2">Stock (optional)</label>
                     <input type="number" id="foodItemStock" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="∞" min="0">
                   </div>
+                  <div>
+                    <label class="text-xs text-gray-400 uppercase block mb-2">Category</label>
+                    <select id="foodItemCategory" class="neon-input w-full px-3 py-2 rounded-lg" required>
+                      <option value="snacks">🍿 Snacks</option>
+                      <option value="drinks">🥤 Drinks</option>
+                      <option value="meals">🍽️ Meals</option>
+                      <option value="combos">🎁 Combos</option>
+                    </select>
+                  </div>
                 </div>
-                
-                <div>
-                  <label class="text-xs text-gray-400 uppercase block mb-2">Category</label>
-                  <select id="foodItemCategory" class="neon-input w-full px-3 py-2 rounded-lg" required>
-                    <option value="snacks">🍿 Snacks</option>
-                    <option value="drinks">🥤 Drinks</option>
-                    <option value="meals">🍽️ Meals</option>
-                    <option value="combos">🎁 Combos</option>
-                  </select>
-                </div>
-                
                 <div class="flex items-center gap-3">
                   <input type="checkbox" id="foodItemAvailable" checked class="w-4 h-4 rounded">
                   <label for="foodItemAvailable" class="text-sm text-gray-400">Available for sale</label>
                 </div>
-                
                 <div class="flex gap-3 pt-2">
                   <button type="button" onclick="closeFoodItemModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
                   <button type="submit" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(255,107,0,0.2); border: 1px solid var(--neon-orange); color: var(--neon-orange);">Save</button>
@@ -2142,75 +2183,6 @@
                 <button onclick="confirmFoodDelete()" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(255,0,68,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);">Delete</button>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Food Stock Section -->
-        <div id="food-stock-section" class="hidden">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-orange);">
-                <i data-lucide="boxes" class="w-7 h-7"></i> FOOD STOCK
-              </h2>
-              <p class="text-sm text-gray-500 mt-1">Inventory, purchases &amp; auto-expenses</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" id="stockPurchaseBtn" onclick="openStockPurchaseModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm"
-                style="background: rgba(0,255,136,0.15); border: 1px solid var(--neon-green); color: var(--neon-green);">
-                + Record Purchase
-              </button>
-              <button type="button" onclick="openStockAdjustModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm border border-gray-700 text-gray-300 hover:border-cyan-500">
-                Adjust Stock
-              </button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Tracked SKUs</div>
-              <div id="stockStatSkus" class="stock-kpi-value" style="color: var(--neon-cyan);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Low / Out</div>
-              <div id="stockStatLow" class="stock-kpi-value" style="color: var(--neon-orange);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Units on hand</div>
-              <div id="stockStatUnits" class="stock-kpi-value" style="color: var(--neon-green);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Purchases (30d)</div>
-              <div id="stockStatPurchases" class="stock-kpi-value" style="color: var(--neon-purple);">₹0</div>
-            </div>
-          </div>
-
-          <div id="stockLowAlert" class="hidden mb-4 p-3 rounded-xl text-sm" style="background: rgba(255,107,0,0.1); border: 1px solid rgba(255,107,0,0.35); color: #ffb347;"></div>
-
-          <div class="flex flex-wrap gap-2 mb-4">
-            <button type="button" class="stock-tab active" data-tab="inventory" onclick="setStockTab('inventory')">Inventory</button>
-            <button type="button" class="stock-tab" data-tab="purchases" onclick="setStockTab('purchases')">Purchases</button>
-            <button type="button" class="stock-tab" data-tab="log" onclick="setStockTab('log')">Stock log</button>
-          </div>
-
-          <div id="stockInventoryPanel">
-            <div class="flex flex-wrap gap-2 mb-3">
-              <input type="text" id="stockSearch" class="neon-input flex-1 min-w-[160px] px-3 py-2 rounded-lg text-sm" placeholder="Search items…" oninput="filterStockInventory()"/>
-              <select id="stockFilter" class="neon-input px-3 py-2 rounded-lg text-xs" onchange="filterStockInventory()">
-                <option value="all">All stocked</option>
-                <option value="low">Low stock</option>
-                <option value="out">Out of stock</option>
-                <option value="untracked">Untracked (∞)</option>
-              </select>
-            </div>
-            <div id="stockInventoryList" class="space-y-2"></div>
-          </div>
-
-          <div id="stockPurchasesPanel" class="hidden">
-            <div id="stockPurchasesList" class="space-y-2"></div>
-          </div>
-
-          <div id="stockLogPanel" class="hidden">
-            <div id="stockLogList" class="space-y-2"></div>
           </div>
 
           <!-- Purchase Modal -->
@@ -2300,147 +2272,6 @@
                   <button type="submit" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(0,240,255,0.15); border: 1px solid var(--neon-cyan); color: var(--neon-cyan);">Apply</button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-
-        <!-- Food Analytics Section -->
-        <div id="food-analytics-section" class="hidden">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-purple);">
-                <i data-lucide="pie-chart" class="w-7 h-7"></i> FOOD ANALYTICS
-              </h2>
-              <p class="text-sm text-gray-500 mt-1">Food sales, revenue & credit tracking</p>
-            </div>
-            
-            <!-- Period Selector -->
-            <div class="flex items-center gap-2">
-              <button onclick="setFoodPeriod('month')" id="foodMonthBtn" class="px-3 py-1.5 rounded-lg text-sm font-orbitron" style="background: rgba(184,41,255,0.2); border: 1px solid var(--neon-purple); color: var(--neon-purple);">Month</button>
-              <button onclick="setFoodPeriod('year')" id="foodYearBtn" class="px-3 py-1.5 rounded-lg text-sm font-orbitron text-gray-500 border border-gray-700">Year</button>
-              <div class="flex items-center gap-1 ml-2">
-                <button onclick="changeFoodPeriod(-1)" class="p-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white">
-                  <i data-lucide="chevron-left" class="w-4 h-4"></i>
-                </button>
-                <span id="foodPeriodLabel" class="font-orbitron text-sm px-3" style="color: var(--neon-purple);">January 2026</span>
-                <button onclick="changeFoodPeriod(1)" class="p-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white">
-                  <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Summary Cards -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="neon-card rounded-xl p-4 text-center">
-              <div class="text-2xl mb-1">💰</div>
-              <div class="font-orbitron text-2xl font-bold" id="foodTotalSales" style="color: var(--neon-green);">₹0</div>
-              <div class="text-xs text-gray-500 mt-1">Total Sales</div>
-            </div>
-            <div class="neon-card rounded-xl p-4 text-center">
-              <div class="text-2xl mb-1">💵</div>
-              <div class="font-orbitron text-2xl font-bold" id="foodCashCollected" style="color: var(--neon-cyan);">₹0</div>
-              <div class="text-xs text-gray-500 mt-1">Cash Collected</div>
-            </div>
-            <div class="neon-card rounded-xl p-4 text-center">
-              <div class="text-2xl mb-1">📱</div>
-              <div class="font-orbitron text-2xl font-bold" id="foodUpiCollected" style="color: var(--neon-purple);">₹0</div>
-              <div class="text-xs text-gray-500 mt-1">UPI Collected</div>
-            </div>
-            <div class="neon-card rounded-xl p-4 text-center">
-              <div class="text-2xl mb-1">⏰</div>
-              <div class="font-orbitron text-2xl font-bold" id="foodCreditsOutstanding" style="color: var(--neon-red);">₹0</div>
-              <div class="text-xs text-gray-500 mt-1">Credits Pending</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <!-- Sales Chart -->
-            <div class="neon-card rounded-xl p-4">
-              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-purple);">SALES TREND</h3>
-              <div class="h-64">
-                <canvas id="foodSalesChart"></canvas>
-              </div>
-            </div>
-
-            <!-- Top Items -->
-            <div class="neon-card rounded-xl p-4">
-              <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-orange);">TOP SELLING ITEMS</h3>
-              <div id="foodTopItems" class="space-y-2">
-                <div class="text-center py-8 text-gray-500">
-                  <i data-lucide="bar-chart" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                  <p class="text-sm">No sales data yet</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Outstanding Credits -->
-          <div class="neon-card rounded-xl p-4 mb-6">
-            <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-red);">OUTSTANDING FOOD CREDITS</h3>
-            <div id="foodCreditsList" class="space-y-2 max-h-64 overflow-y-auto">
-              <div class="text-center py-8 text-gray-500">
-                <i data-lucide="check-circle" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                <p class="text-sm">No outstanding credits</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Recent Sales -->
-          <div class="neon-card rounded-xl p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-orbitron text-sm font-semibold" style="color: var(--neon-cyan);">RECENT FOOD SALES</h3>
-              <button onclick="exportFoodSales()" class="text-xs px-3 py-1 rounded border border-gray-700 text-gray-400 hover:text-white">
-                <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export
-              </button>
-            </div>
-            <div id="foodSalesList" class="space-y-2 max-h-96 overflow-y-auto">
-              <div class="text-center py-8 text-gray-500">
-                <i data-lucide="receipt" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-                <p class="text-sm">No sales recorded yet</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Food Credit Collection Modal -->
-          <div id="foodCreditCollectModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
-            <div class="neon-card rounded-2xl w-full max-w-md p-6" style="border-color: rgba(0,255,136,0.5);">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-orbitron text-lg" style="color: var(--neon-green);">COLLECT FOOD CREDIT</h3>
-                <button onclick="closeFoodCreditCollectModal()" class="text-gray-500 hover:text-white">✕</button>
-              </div>
-              
-              <div id="foodCreditCollectInfo" class="mb-4 p-3 rounded-lg bg-black/30">
-                <div class="text-sm text-gray-400">Customer</div>
-                <div id="foodCreditCustomerName" class="font-semibold text-white">—</div>
-                <div class="mt-2 flex justify-between">
-                  <span class="text-sm text-gray-400">Outstanding</span>
-                  <span id="foodCreditOutstanding" class="font-orbitron font-bold" style="color: var(--neon-red);">₹0</span>
-                </div>
-              </div>
-              
-              <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="text-xs text-gray-400 block mb-1">💵 Cash</label>
-                    <input type="number" id="foodCreditCash" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="₹0" min="0" oninput="updateFoodCreditRemaining()">
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 block mb-1">📱 UPI</label>
-                    <input type="number" id="foodCreditUpi" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="₹0" min="0" oninput="updateFoodCreditRemaining()">
-                  </div>
-                </div>
-                
-                <div class="flex justify-between items-center p-2 rounded-lg bg-black/30">
-                  <span class="text-sm text-gray-400">Remaining</span>
-                  <span id="foodCreditRemaining" class="font-orbitron text-lg" style="color: var(--neon-cyan);">₹0</span>
-                </div>
-                
-                <div class="flex gap-3">
-                  <button onclick="closeFoodCreditCollectModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
-                  <button onclick="confirmFoodCreditCollection()" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(0,255,136,0.2); border: 1px solid var(--neon-green); color: var(--neon-green);">Collect</button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -2587,7 +2418,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=floor3')
+        navigator.serviceWorker.register('../sw.js?v=cafe1')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -3367,12 +3198,12 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=floor4"></script>
+  <script type="module" src="js/dashboard.js?v=cafe1"></script>
   <script type="module" src="js/bookings.js"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
   <script type="module" src="js/recharge-food.js"></script>
-  <!-- finance / staff / food-menu / food-stock / food-analytics are lazy-loaded on first open -->
+  <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->
   <script type="module">

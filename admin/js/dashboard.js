@@ -43,9 +43,7 @@ const elements = {
   navCash: $("nav-cash"),
   navLeaderboard: $("nav-leaderboard"),
   navFinance: $("nav-finance"),
-  navFoodMenu: $("nav-food-menu"),
-  navFoodStock: $("nav-food-stock"),
-  navFoodAnalytics: $("nav-food-analytics"),
+  navCafe: $("nav-cafe"),
   dashboardSection: $("dashboard-section"),
   membersSection: $("members-section"),
   bookingsSection: $("bookings-section"),
@@ -54,9 +52,7 @@ const elements = {
   cashSection: $("cash-section"),
   leaderboardSection: $("leaderboard-section"),
   financeSection: $("finance-section"),
-  foodMenuSection: $("food-menu-section"),
-  foodStockSection: $("food-stock-section"),
-  foodAnalyticsSection: $("food-analytics-section")
+  cafeManagerSection: $("cafe-manager-section")
 };
 
 // ==================== STATE ====================
@@ -65,6 +61,10 @@ let activeSessions = {};
 let autoRefreshInterval = null;
 let terminalsListener = null;
 let sessionsListener = null;
+/** Lightweight always-on terminal listener for Floor nav free/busy badges */
+let floorBadgeListener = null;
+/** Last terminal-status snapshot (for painting Floor when returning to the view) */
+let lastTerminalsSnapshot = {};
 /** Terminals with open detail accordion — survives live re-renders */
 const expandedTerminals = new Set();
 /** Cached today history for all PCs (guest + member charges) */
@@ -127,9 +127,7 @@ async function ensureAdminModule(name) {
   const map = {
     finance: "./finance.js",
     staff: "./staff.js",
-    "food-menu": "./food-menu.js",
-    "food-stock": "./food-stock.js",
-    "food-analytics": "./food-analytics.js",
+    "cafe-manager": "./cafe-manager.js",
     members: "./members.js"
   };
   const path = map[name];
@@ -149,9 +147,7 @@ function switchView(view) {
     "recharges": "recharges",
     "staff": "staff",
     "finance": "finance",
-    "food-menu": "food_menu",
-    "food-stock": "food_menu",
-    "food-analytics": "food_analytics"
+    "cafe-manager": "food_menu"
   };
   const permissionKey = permissionMap[view] || view;
   
@@ -171,9 +167,7 @@ function switchView(view) {
     elements.cashSection,
     elements.leaderboardSection,
     elements.financeSection,
-    elements.foodMenuSection,
-    elements.foodStockSection,
-    elements.foodAnalyticsSection
+    elements.cafeManagerSection
   ];
 
   const navs = [
@@ -185,9 +179,7 @@ function switchView(view) {
     elements.navCash,
     elements.navLeaderboard,
     elements.navFinance,
-    elements.navFoodMenu,
-    elements.navFoodStock,
-    elements.navFoodAnalytics
+    elements.navCafe
   ];
 
   sections.forEach(s => s?.classList.add("hidden"));
@@ -235,28 +227,12 @@ function switchView(view) {
         window.loadFinanceDashboard?.();
       }
     },
-    "food-menu": {
-      section: elements.foodMenuSection,
-      nav: elements.navFoodMenu,
+    "cafe-manager": {
+      section: elements.cafeManagerSection,
+      nav: elements.navCafe,
       onShow: async () => {
-        await ensureAdminModule("food-menu");
-        window.initFoodMenu?.();
-      }
-    },
-    "food-stock": {
-      section: elements.foodStockSection,
-      nav: elements.navFoodStock,
-      onShow: async () => {
-        await ensureAdminModule("food-stock");
-        window.initFoodStock?.();
-      }
-    },
-    "food-analytics": {
-      section: elements.foodAnalyticsSection,
-      nav: elements.navFoodAnalytics,
-      onShow: async () => {
-        await ensureAdminModule("food-analytics");
-        window.initFoodAnalytics?.();
+        await ensureAdminModule("cafe-manager");
+        window.initCafeManager?.();
       }
     }
   };
@@ -306,9 +282,7 @@ const navLinks = [
   { el: elements.navCash, view: "cash" },
   { el: elements.navLeaderboard, view: "leaderboard" },
   { el: elements.navFinance, view: "finance" },
-  { el: elements.navFoodMenu, view: "food-menu" },
-  { el: elements.navFoodStock, view: "food-stock" },
-  { el: elements.navFoodAnalytics, view: "food-analytics" }
+  { el: elements.navCafe, view: "cafe-manager" }
 ];
 
 navLinks.forEach(({ el, view }) => {
@@ -444,6 +418,19 @@ function parseActiveSessions(snapshot) {
   activeSessions = latest;
 }
 
+function updateNavFloorBadges(free, occupied) {
+  const el = $("navFloorBadges");
+  if (!el) return;
+  let html = "";
+  if (free > 0) {
+    html += `<span class="nav-pc-badge free" title="${free} available">${free}</span>`;
+  }
+  if (occupied > 0) {
+    html += `<span class="nav-pc-badge busy" title="${occupied} busy">${occupied}</span>`;
+  }
+  el.innerHTML = html;
+}
+
 function updateFloorSummary(terminals) {
   const list = Object.values(terminals || {});
   let occupied = 0, free = 0, other = 0;
@@ -458,6 +445,7 @@ function updateFloorSummary(terminals) {
   set("floorStatFree", String(free));
   set("floorStatOther", String(other));
   set("floorStatTotal", String(list.length));
+  updateNavFloorBadges(free, occupied);
 }
 
 function renderTerminals(data) {
@@ -784,78 +772,84 @@ window.refreshTerminalDayHistory = function() {
 // ==================== DATA SYNC ====================
 
 /**
- * Start real-time terminal sync with SINGLE listener
- * 
- * CRITICAL FIX: Previous code was creating new listeners repeatedly,
- * causing 4GB+ daily bandwidth usage!
- * 
- * Firebase onValue listeners automatically receive updates - no polling needed!
+ * Always-on lightweight terminal status listener for Floor nav free/busy badges.
+ * When Floor view is open, the same feed drives renderTerminals (no second listener).
+ */
+function startFloorBadgeSync() {
+  if (floorBadgeListener) return;
+  if (!db || !terminalsRef) {
+    setTimeout(startFloorBadgeSync, 1500);
+    return;
+  }
+  if (!hasPermission("dashboard")) return;
+
+  floorBadgeListener = onValue(terminalsRef, snap => {
+    const data = snap.val() || {};
+    lastTerminalsSnapshot = data;
+    updateFloorSummary(data);
+    if (currentView === "dashboard") {
+      renderTerminals(data);
+    }
+  }, (error) => {
+    console.error("❌ Floor badge listener error:", error);
+  });
+  console.log("📡 Floor badge listener active");
+}
+
+/**
+ * Start Floor Monitor sessions sync (terminals already covered by badge listener).
+ *
+ * CRITICAL: Only call once while Floor is open to avoid listener duplication.
  */
 function startDataSync() {
-  // IMPORTANT: Only set up listener ONCE
   if (isListenerActive) {
     console.log("⚠️ Listeners already active - skipping duplicate setup");
     return;
   }
-  
+
   console.log("🔄 Setting up Firebase listeners...");
-  
-  // Verify database is ready
+
   if (!db || !terminalsRef || !sessionsRef) {
     console.error("❌ Firebase database not ready - refs:", { db: !!db, terminalsRef: !!terminalsRef, sessionsRef: !!sessionsRef });
-    // Retry after delay
     setTimeout(() => {
       console.log("🔄 Retrying startDataSync...");
       startDataSync();
     }, 2000);
     return;
   }
-  
-  // Clean up any existing listeners first
-  if (terminalsListener) {
-    terminalsListener();
-    terminalsListener = null;
-  }
+
+  startFloorBadgeSync();
+
   if (sessionsListener) {
     sessionsListener();
     sessionsListener = null;
   }
-  
+
   try {
-    // Set up real-time listeners (Firebase handles updates automatically)
-    terminalsListener = onValue(terminalsRef, snap => {
-      renderTerminals(snap.val() || {});
-    }, (error) => {
-      console.error("❌ Terminal listener error:", error);
-    });
-    
     sessionsListener = onValue(sessionsRef, parseActiveSessions, (error) => {
       console.error("❌ Sessions listener error:", error);
     });
-    
     isListenerActive = true;
+    // Paint Floor immediately from cached badge snapshot (don't wait for next push)
+    if (lastTerminalsSnapshot && Object.keys(lastTerminalsSnapshot).length) {
+      renderTerminals(lastTerminalsSnapshot);
+    }
   } catch (error) {
     console.error("❌ Failed to set up Firebase listeners:", error);
   }
-  
-  // NOTE: No setInterval needed! Firebase pushes updates automatically.
-  // The old setInterval was creating 120+ duplicate listeners per hour!
 }
 
 /**
- * Stop data sync (cleanup)
+ * Stop Floor sessions sync when leaving Floor view.
+ * Keep terminal badge listener running for nav free/busy counts.
  */
 function stopDataSync() {
-  if (terminalsListener) {
-    terminalsListener();
-    terminalsListener = null;
-  }
   if (sessionsListener) {
     sessionsListener();
     sessionsListener = null;
   }
   isListenerActive = false;
-  console.log("🛑 Firebase listeners stopped");
+  console.log("🛑 Floor session listeners stopped (badges stay live)");
 }
 
 // ==================== LOGOUT HANDLER ====================
@@ -986,6 +980,10 @@ function setupLogout() {
 
 window.addEventListener("beforeunload", () => {
   stopDataSync();
+  if (floorBadgeListener) {
+    floorBadgeListener();
+    floorBadgeListener = null;
+  }
 });
 
 // ==================== INIT ====================
@@ -999,6 +997,9 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Setup logout
   setupLogout();
+
+  // Live free/busy counts on Floor nav (even when another section is open)
+  startFloorBadgeSync();
   
   // Start with recharges view as default (if user has permission)
   const session = getStaffSession();
@@ -1012,8 +1013,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switchView("recharges");
   }
   
-  // Default view is recharges — do NOT start terminal/session listeners until Dashboard is opened
-  console.log("✅ Admin dashboard initialized (lazy listeners)");
+  console.log("✅ Admin dashboard initialized (lazy listeners + floor badges)");
 });
 
 // Export for external use
