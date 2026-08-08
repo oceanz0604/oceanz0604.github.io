@@ -1,9 +1,9 @@
 /**
  * OceanZ Gaming Cafe - Service Worker
- * Enables offline functionality and caching
+ * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v2';
+const CACHE_NAME = 'oceanz-v3-floor';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)
@@ -26,6 +26,20 @@ const OPTIONAL_ASSETS = [
   '/manifest.webmanifest',
   '/admin/manifest.webmanifest'
 ];
+
+function isAppShellRequest(url) {
+  const path = url.pathname || '';
+  return (
+    path.endsWith('.html') ||
+    path.endsWith('.js') ||
+    path.endsWith('.css') ||
+    path.endsWith('.webmanifest') ||
+    path.includes('/admin/') ||
+    path.includes('/shared/') ||
+    path.includes('/member/') ||
+    path.includes('/assets/css/')
+  );
+}
 
 // Helper: Cache assets gracefully (skip failures)
 async function cacheAssets(cache, assets, required = false) {
@@ -53,24 +67,20 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(async cache => {
-        console.log('[SW] Precaching assets');
-        
-        // Cache required assets (will fail install if missing)
+        console.log('[SW] Precaching assets', CACHE_NAME);
+
         try {
           await cacheAssets(cache, PRECACHE_ASSETS, true);
         } catch (err) {
           console.warn('[SW] Some core assets missing, continuing...');
         }
-        
-        // Cache optional assets (won't fail if missing)
+
         await cacheAssets(cache, OPTIONAL_ASSETS, false);
-        
         console.log('[SW] Precaching complete');
       })
       .then(() => self.skipWaiting())
       .catch(err => {
         console.error('[SW] Install failed:', err);
-        // Still skip waiting to allow updates
         self.skipWaiting();
       })
   );
@@ -92,14 +102,38 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch - network-first for app shell (so Floor Monitor etc. deploys appear),
+// cache-first only for static icons / offline page.
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip Firebase requests (need fresh data)
-  if (event.request.url.includes('firebasedatabase.app') || 
+  if (event.request.url.includes('firebasedatabase.app') ||
       event.request.url.includes('googleapis.com/identitytoolkit')) {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+  const networkFirst = isAppShellRequest(url);
+
+  if (networkFirst) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          if (event.request.headers.get('accept')?.includes('text/html')) {
+            return caches.match(OFFLINE_URL);
+          }
+          return Response.error();
+        })
+    );
     return;
   }
 
@@ -107,7 +141,6 @@ self.addEventListener('fetch', event => {
     caches.match(event.request)
       .then(cachedResponse => {
         if (cachedResponse) {
-          // Return cached version and update cache in background
           event.waitUntil(
             fetch(event.request)
               .then(response => {
@@ -121,10 +154,8 @@ self.addEventListener('fetch', event => {
           return cachedResponse;
         }
 
-        // Not in cache - fetch from network
         return fetch(event.request)
           .then(response => {
-            // Cache successful responses
             if (response.ok && response.type === 'basic') {
               const responseToCache = response.clone();
               caches.open(CACHE_NAME)
@@ -133,8 +164,7 @@ self.addEventListener('fetch', event => {
             return response;
           })
           .catch(() => {
-            // Offline fallback for HTML pages
-            if (event.request.headers.get('accept').includes('text/html')) {
+            if (event.request.headers.get('accept')?.includes('text/html')) {
               return caches.match(OFFLINE_URL);
             }
           });
@@ -150,7 +180,6 @@ self.addEventListener('sync', event => {
 });
 
 async function syncBookings() {
-  // Sync any pending bookings stored in IndexedDB
   console.log('[SW] Syncing bookings...');
 }
 
@@ -186,4 +215,3 @@ self.addEventListener('notificationclick', event => {
     );
   }
 });
-

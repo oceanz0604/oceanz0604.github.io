@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=floor3">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -1088,8 +1088,8 @@
           <span class="font-medium">Recharges</span>
         </a>
         <a id="nav-dashboard" href="#" data-permission="dashboard" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
-          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-          <span class="font-medium">Dashboard</span>
+          <i data-lucide="monitor" class="w-5 h-5"></i>
+          <span class="font-medium">Floor</span>
         </a>
         <a id="nav-bookings" href="#" data-permission="bookings" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
           <i data-lucide="calendar-clock" class="w-5 h-5"></i>
@@ -2553,10 +2553,20 @@
         }
       });
 
-      // Service Worker Registration
+      // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js')
-          .then(reg => console.log('SW registered:', reg.scope))
+        navigator.serviceWorker.register('../sw.js?v=floor3')
+          .then(async reg => {
+            console.log('SW registered:', reg.scope);
+            try { await reg.update(); } catch (_) {}
+            // Reload once when a new worker takes control
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              if (refreshing) return;
+              refreshing = true;
+              window.location.reload();
+            });
+          })
           .catch(err => console.log('SW registration failed:', err));
       }
 
@@ -3325,7 +3335,7 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js"></script>
+  <script type="module" src="js/dashboard.js?v=floor3"></script>
   <script type="module" src="js/bookings.js"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>

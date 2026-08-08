@@ -94,7 +94,7 @@ export const ROLES = {
 
 // Module to navigation mapping
 export const MODULE_NAV_MAP = {
-  dashboard: { name: "Dashboard", icon: "layout-dashboard", view: "dashboard" },
+  dashboard: { name: "Floor", icon: "monitor", view: "dashboard" },
   bookings: { name: "Bookings", icon: "calendar-clock", view: "bookings" },
   recharges: { name: "Recharges", icon: "wallet", view: "recharges" },
   members: { name: "Members", icon: "users", view: "members" },
