@@ -532,6 +532,10 @@ function buildTerminalCard(t, isOpen) {
   const card = document.createElement("div");
   card.className = `terminal-card terminal-card-v2 ${meta.cls}${isOpen ? " is-open" : ""}`;
   card.dataset.terminal = t.name;
+  card.dataset.status = t.status || "";
+  card.dataset.player = player?.label || "";
+  card.dataset.duration = duration != null ? String(duration) : "";
+  card.dataset.price = occupied && t.session_price > 0 ? String(t.session_price) : "";
 
   card.innerHTML = `
     <button type="button" class="terminal-card-toggle" aria-expanded="${isOpen ? "true" : "false"}">
@@ -711,24 +715,15 @@ function paintTerminalHistory(panel, terminalName, rows, card = null) {
   const liveRows = [];
 
   // Show current session first when this PC is occupied
-  if (liveCard) {
-    const statusPill = liveCard.querySelector(".terminal-status-pill")?.textContent || "";
-    if (statusPill.includes("OCCUPIED") || liveCard.classList.contains("occupied")) {
-      const player = [...liveCard.querySelectorAll(".term-chip")]
-        .map(el => el.textContent.trim())
-        .find(t => t && !t.includes("left") && !t.includes("Unlimited") && !t.includes("Overtime") && !t.startsWith("₹") && !t.includes(" on") && t !== "Tap for today's history");
-      const running = [...liveCard.querySelectorAll(".term-chip")]
-        .map(el => el.textContent.trim())
-        .find(t => t.endsWith(" on"));
-      liveRows.push({
-        kind: "live",
-        label: player || "Live session",
-        time: "Now",
-        mins: 0,
-        amount: 0,
-        extra: running ? running.replace(/ on$/, "") : ""
-      });
-    }
+  if (liveCard && String(liveCard.dataset.status || "").toLowerCase() === "occupied") {
+    liveRows.push({
+      kind: "live",
+      label: liveCard.dataset.player || "Live session",
+      time: "Now",
+      mins: Number(liveCard.dataset.duration) || 0,
+      amount: Number(liveCard.dataset.price) || 0,
+      extra: liveCard.dataset.duration ? formatDurationMins(liveCard.dataset.duration) : ""
+    });
   }
 
   const mine = (rows || []).filter(r => terminalsMatch(r.terminal, terminalName)).slice(0, 12);
