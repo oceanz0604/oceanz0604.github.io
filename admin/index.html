@@ -482,10 +482,19 @@
       }
     });
 
-    // Service Worker Registration
+    // Service Worker Registration — force update after Floor Monitor deploy
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('../sw.js')
-        .then(reg => console.log('SW registered:', reg.scope))
+      navigator.serviceWorker.register('../sw.js?v=floor3')
+        .then(async reg => {
+          console.log('SW registered:', reg.scope);
+          try { await reg.update(); } catch (_) {}
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+          });
+        })
         .catch(err => console.log('SW registration failed:', err));
     }
 
