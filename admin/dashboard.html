@@ -1640,10 +1640,10 @@
         <div id="finance-section" class="hidden">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-green);">
+              <h2 id="finPageTitle" class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-green);">
                 <i data-lucide="indian-rupee" class="w-7 h-7"></i> FINANCE COMMAND
               </h2>
-              <p class="text-sm text-gray-500 mt-1">P&amp;L, cash mix, and cafe health in one place</p>
+              <p id="finPageSubtitle" class="text-sm text-gray-500 mt-1">P&amp;L, cash mix, and cafe health in one place</p>
             </div>
             
             <!-- Period Selector -->
@@ -1666,7 +1666,7 @@
 
           <!-- Summary Cards -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-green);">
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-full-only" style="border-top: 3px solid var(--neon-green);">
               <div class="flex items-center gap-2 mb-2">
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 255, 136, 0.2);">
                   <i data-lucide="trending-up" class="w-4 h-4" style="color: var(--neon-green);"></i>
@@ -1688,7 +1688,7 @@
               <div class="text-xs text-gray-500 mt-1" id="finExpenseChange">-</div>
             </div>
             
-            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-cyan);">
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-full-only" style="border-top: 3px solid var(--neon-cyan);">
               <div class="flex items-center gap-2 mb-2">
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 240, 255, 0.2);">
                   <i data-lucide="wallet" class="w-4 h-4" style="color: var(--neon-cyan);"></i>
@@ -1699,7 +1699,7 @@
               <div class="text-xs text-gray-500 mt-1" id="finProfitChange">-</div>
             </div>
             
-            <div class="neon-card rounded-xl p-4 relative overflow-hidden" style="border-top: 3px solid var(--neon-purple);">
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-full-only" style="border-top: 3px solid var(--neon-purple);">
               <div class="flex items-center gap-2 mb-2">
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(184, 41, 255, 0.2);">
                   <i data-lucide="clock" class="w-4 h-4" style="color: var(--neon-purple);"></i>
@@ -1709,10 +1709,42 @@
               <div class="font-orbitron text-xl md:text-2xl font-bold" id="finMinutes" style="color: var(--neon-purple);">0h</div>
               <div class="text-xs text-gray-500 mt-1" id="finSessions">0 sessions</div>
             </div>
+
+            <!-- Admin expense-desk extras (hidden for full finance view) -->
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-expense-only hidden" style="border-top: 3px solid var(--neon-orange);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(255, 107, 0, 0.2);">
+                  <i data-lucide="list" class="w-4 h-4" style="color: var(--neon-orange);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Entries</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finExpenseCount" style="color: var(--neon-orange);">0</div>
+              <div class="text-xs text-gray-500 mt-1">This period</div>
+            </div>
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-expense-only hidden" style="border-top: 3px solid #ffd93d;">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(255, 217, 61, 0.15);">
+                  <i data-lucide="tag" class="w-4 h-4" style="color: #ffd93d;"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Top category</span>
+              </div>
+              <div class="font-orbitron text-sm md:text-base font-bold" id="finExpenseTopCat" style="color: #ffd93d;">—</div>
+              <div class="text-xs text-gray-500 mt-1" id="finExpenseTopCatAmt">—</div>
+            </div>
+            <div class="neon-card rounded-xl p-4 relative overflow-hidden fin-expense-only hidden" style="border-top: 3px solid var(--neon-cyan);">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(0, 240, 255, 0.15);">
+                  <i data-lucide="banknote" class="w-4 h-4" style="color: var(--neon-cyan);"></i>
+                </div>
+                <span class="text-xs text-gray-400 uppercase">Cash spent</span>
+              </div>
+              <div class="font-orbitron text-xl md:text-2xl font-bold" id="finExpenseCashTotal" style="color: var(--neon-cyan);">₹0</div>
+              <div class="text-xs text-gray-500 mt-1">Expense cash</div>
+            </div>
           </div>
 
           <!-- Gaming vs Food breakdown -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 fin-full-only">
             <div class="neon-card rounded-xl p-4" style="border-color: rgba(0,255,136,0.25);">
               <div class="text-xs text-gray-500 uppercase mb-1">Gaming Revenue</div>
               <div class="font-orbitron text-xl font-bold" id="finGamingRevenue" style="color: var(--neon-green);">₹0</div>
@@ -1731,7 +1763,7 @@
           </div>
 
           <!-- Insight strip (replaces old Analytics page highlights) -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 fin-full-only">
             <div class="fin-insight">
               <div class="fin-insight-label">Profit margin</div>
               <div id="finMarginPct" class="fin-insight-value" style="color: var(--neon-cyan);">0%</div>
@@ -1752,13 +1784,13 @@
 
           <!-- Charts -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div class="neon-card rounded-xl p-4 lg:col-span-2">
+            <div class="neon-card rounded-xl p-4 lg:col-span-2 fin-full-only">
               <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">REVENUE TREND</h3>
               <div style="height: 250px;">
                 <canvas id="finRevenueChart"></canvas>
               </div>
             </div>
-            <div class="neon-card rounded-xl p-4">
+            <div class="neon-card rounded-xl p-4 fin-expense-chart-wrap">
               <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">EXPENSE MIX</h3>
               <div style="height: 250px;">
                 <canvas id="finExpenseChart"></canvas>
@@ -1766,7 +1798,7 @@
             </div>
           </div>
 
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 fin-full-only">
             <div class="neon-card rounded-xl p-4">
               <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">GAMING VS FOOD</h3>
               <div style="height: 220px;">
@@ -1829,7 +1861,7 @@
           </div>
 
           <!-- Payment & Stats -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 fin-full-only">
             <div class="neon-card rounded-xl p-4">
               <h3 class="font-orbitron text-sm font-semibold mb-4" style="color: var(--neon-cyan);">CASH & ONLINE SUMMARY</h3>
               <div class="space-y-3">

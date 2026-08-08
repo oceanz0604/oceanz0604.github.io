@@ -14,7 +14,7 @@ import {
   getISTDate,
   SharedCache
 } from "../../shared/config.js";
-import { getStaffSession, hasPermission, canEditData } from "./permissions.js";
+import { getStaffSession, hasPermission, canEditData, canViewFinanceAnalytics, isExpenseOnlyFinance } from "./permissions.js";
 import {
   flattenFoodSalesByDate,
   flattenFoodCreditPayments,
@@ -108,6 +108,8 @@ async function loadFinanceDashboard() {
 
     // Set initial date
     financeState.selectedDate = getISTDate();
+
+    applyFinanceRoleView();
     
     // Check edit permissions
     if (!canEditData()) {
@@ -144,10 +146,46 @@ async function loadFinanceDashboard() {
   }
 }
 
+function applyFinanceRoleView() {
+  const expenseOnly = isExpenseOnlyFinance();
+
+  document.querySelectorAll(".fin-full-only").forEach(el => {
+    el.classList.toggle("hidden", expenseOnly);
+  });
+  document.querySelectorAll(".fin-expense-only").forEach(el => {
+    el.classList.toggle("hidden", !expenseOnly);
+  });
+
+  const chartWrap = document.querySelector(".fin-expense-chart-wrap");
+  if (chartWrap) {
+    chartWrap.classList.toggle("lg:col-span-2", expenseOnly);
+    chartWrap.classList.toggle("lg:col-span-1", !expenseOnly);
+  }
+
+  const title = document.getElementById("finPageTitle");
+  const subtitle = document.getElementById("finPageSubtitle");
+  if (expenseOnly) {
+    if (title) title.innerHTML = `<i data-lucide="receipt" class="w-7 h-7"></i> EXPENSE DESK`;
+    if (subtitle) subtitle.textContent = "Add, edit & track cafe expenses for the month";
+  } else {
+    if (title) title.innerHTML = `<i data-lucide="indian-rupee" class="w-7 h-7"></i> FINANCE COMMAND`;
+    if (subtitle) subtitle.textContent = "P&L, cash mix, and cafe health in one place";
+  }
+}
+
 // ==================== DATA LOADING ====================
 
 async function loadFinanceData() {
   try {
+    if (isExpenseOnlyFinance()) {
+      // Admin expense desk: expenses only — no revenue / member / food loads
+      await loadExpenses();
+      calculateExpenseOnlySummary();
+      renderExpenses();
+      renderExpenseChart();
+      return;
+    }
+
     await Promise.all([
       loadExpenses(),
       loadRecharges(),
@@ -162,6 +200,47 @@ async function loadFinanceData() {
     
   } catch (error) {
     console.error("Error loading finance data:", error);
+  }
+}
+
+function calculateExpenseOnlySummary() {
+  const { expenses } = financeState;
+  let totalExpenses = 0, expenseCash = 0, expenseOnline = 0;
+  const catTotals = {};
+
+  expenses.forEach(exp => {
+    const amount = exp.amount || ((exp.cash || 0) + (exp.online || 0));
+    totalExpenses += amount;
+    if (exp.cash !== undefined || exp.online !== undefined) {
+      expenseCash += exp.cash || 0;
+      expenseOnline += exp.online || 0;
+    } else if (exp.paymentMode === "online" || exp.paymentMode === "upi") {
+      expenseOnline += amount;
+    } else {
+      expenseCash += amount;
+    }
+    const cat = exp.category || "other";
+    catTotals[cat] = (catTotals[cat] || 0) + amount;
+  });
+
+  const $ = id => document.getElementById(id);
+  if ($("finExpenses")) $("finExpenses").textContent = `₹${formatNumber(totalExpenses)}`;
+  if ($("finExpenseChange")) {
+    $("finExpenseChange").textContent = `Cash ₹${formatNumber(expenseCash)} · Online ₹${formatNumber(expenseOnline)}`;
+  }
+  if ($("finExpenseCount")) $("finExpenseCount").textContent = String(expenses.length);
+  if ($("finExpenseCashTotal")) $("finExpenseCashTotal").textContent = `₹${formatNumber(expenseCash)}`;
+
+  const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0];
+  if ($("finExpenseTopCat")) {
+    if (topCat) {
+      const meta = EXPENSE_CATEGORIES.find(c => c.id === topCat[0]);
+      $("finExpenseTopCat").textContent = meta?.name || topCat[0];
+      if ($("finExpenseTopCatAmt")) $("finExpenseTopCatAmt").textContent = `₹${formatNumber(topCat[1])}`;
+    } else {
+      $("finExpenseTopCat").textContent = "—";
+      if ($("finExpenseTopCatAmt")) $("finExpenseTopCatAmt").textContent = "—";
+    }
   }
 }
 
@@ -725,10 +804,7 @@ async function saveFinanceExpense(event) {
     }
 
     closeFinanceExpenseModal();
-    await loadExpenses();
-    calculateSummary();
-    renderExpenses();
-    renderCharts();
+    await loadFinanceData();
 
   } catch (error) {
     console.error("❌ Error saving expense:", error);
@@ -778,10 +854,7 @@ async function confirmFinanceDelete() {
     showFinanceToast("Expense deleted", "success");
     
     closeFinanceDeleteModal();
-    await loadExpenses();
-    calculateSummary();
-    renderExpenses();
-    renderCharts();
+    await loadFinanceData();
   } catch (error) {
     console.error("❌ Error deleting expense:", error);
     showFinanceToast(`Failed: ${error.message || "Unknown error"}`, "error");
@@ -883,6 +956,10 @@ function filterFinanceExpenses(category) {
 // ==================== CHARTS ====================
 
 function renderCharts() {
+  if (isExpenseOnlyFinance()) {
+    renderExpenseChart();
+    return;
+  }
   renderRevenueChart();
   renderExpenseChart();
   renderMixChart();

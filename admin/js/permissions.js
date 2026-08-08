@@ -48,10 +48,10 @@ export const ROLES = {
     level: 80,
     color: "#b829ff",
     icon: "⚡",
-    // Finance / Food Analytics are Super Admin only
-    permissions: ["dashboard", "bookings", "recharges", "members", "history", "cash_register", "leaderboard", "food_menu"],
+    // Finance: expenses only (no P&L / revenue analytics). Food Analytics stays Super Admin only.
+    permissions: ["dashboard", "bookings", "recharges", "members", "history", "cash_register", "leaderboard", "food_menu", "finance"],
     canEdit: true,
-    description: "Operations access (no finance)"
+    description: "Operations + expense entry (no finance analytics)"
   },
   MANAGER: {
     name: "Manager",
@@ -120,6 +120,23 @@ export function canEditData() {
   if (session.role === "SUPER_ADMIN") return true;
   
   return role.canEdit !== false;
+}
+
+/**
+ * Full finance analytics (revenue, profit, P&L charts).
+ * Super Admin + Finance Manager only — Admin gets expense desk instead.
+ */
+export function canViewFinanceAnalytics() {
+  const session = getStaffSession();
+  if (!session) return false;
+  if (session.role === "SUPER_ADMIN") return true;
+  if (session.role === "FINANCE_MANAGER") return true;
+  return false;
+}
+
+/** Admin (and similar) finance page = expenses CRUD + expense stats only */
+export function isExpenseOnlyFinance() {
+  return hasPermission("finance") && !canViewFinanceAnalytics();
 }
 
 // Check if user should use POS interface
@@ -602,6 +619,8 @@ window.refreshSessionActivity = refreshSessionActivity;
 window.startPermissionListener = startPermissionListener;
 window.stopPermissionListener = stopPermissionListener;
 window.canEditData = canEditData;
+window.canViewFinanceAnalytics = canViewFinanceAnalytics;
+window.isExpenseOnlyFinance = isExpenseOnlyFinance;
 window.shouldUsePOSInterface = shouldUsePOSInterface;
 
 // Auto-start permission listener if user is already logged in
