@@ -653,13 +653,17 @@
       }
       
       /* Terminal grid - 2 columns on mobile */
-      .grid-cols-2.sm\\:grid-cols-3.md\\:grid-cols-4.lg\\:grid-cols-5 {
-        grid-template-columns: repeat(2, 1fr) !important;
+      .terminal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 8px !important;
       }
       
-      .terminal-card {
+      .terminal-card:not(.terminal-card-v2) {
         padding: 10px !important;
+      }
+
+      .terminal-card-v2 .terminal-card-toggle {
+        padding: 10px 11px !important;
       }
       
       .terminal-card .text-xl {

@@ -2240,13 +2240,21 @@ body.admin-login::before {
   }
   
   /* Terminal grid */
-  .grid-cols-2.sm\:grid-cols-3.md\:grid-cols-4.lg\:grid-cols-5 {
-    grid-template-columns: repeat(2, 1fr) !important;
+  .terminal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 8px !important;
   }
-  
-  .terminal-card {
+
+  .terminal-card:not(.terminal-card-v2) {
     padding: 10px !important;
+  }
+
+  .terminal-card-v2 .terminal-card-toggle {
+    padding: 10px 11px !important;
+  }
+
+  .terminal-card-v2 .terminal-card-body {
+    padding: 10px 11px 12px !important;
   }
   
   .terminal-card .text-xl {
@@ -2635,8 +2643,12 @@ body.admin-login::before {
     gap: 8px !important;
   }
   
-  .terminal-card {
+  .terminal-card:not(.terminal-card-v2) {
     padding: 8px !important;
+  }
+
+  .terminal-card-v2 .terminal-card-toggle {
+    padding: 8px 9px !important;
   }
   
   #addRechargeModal .grid-cols-3.gap-3 {
