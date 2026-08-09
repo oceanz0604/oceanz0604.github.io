@@ -416,6 +416,71 @@ def fetch_new_history_records(cursor, last_id):
         return []
 
 
+def build_clean_history_record(record):
+    """Normalize a MEMBERSHISTORY row for Firebase (/history + /history-by-date)."""
+    username = record.get("MEMBERS_USERNAME") or record.get("USERNAME")
+    if not username:
+        return None
+
+    username = str(username).strip().upper()
+    if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
+        return None
+
+    date_val = record.get("TARIH") or record.get("DATE", "")
+    time_val = record.get("SAAT") or record.get("TIME", "")
+    charge_val = record.get("MIKTAR") if record.get("MIKTAR") is not None else record.get("CHARGE", 0)
+    balance_val = record.get("KALAN") if record.get("KALAN") is not None else record.get("BALANCE", 0)
+    record_id = record.get("ID", 0)
+
+    date_str = str(date_val).split("T")[0] if date_val else ""
+    time_str = str(time_val).split(".")[0] if time_val else ""
+
+    timestamp = None
+    if date_str and time_str:
+        timestamp = f"{date_str}T{time_str}"
+
+    terminal = record.get("TERMINALNAME", "")
+    if terminal:
+        terminal = normalize_terminal_name(terminal) or terminal
+
+    clean_record = {
+        "ID": record_id,
+        "USERNAME": username,
+        "DATE": date_str or "",
+        "TIME": time_str or "",
+        "CHARGE": float(charge_val) if charge_val else 0,
+        "BALANCE": float(balance_val) if balance_val else 0,
+        "NOTE": record.get("NOTE") or "",
+        "TERMINALNAME": terminal or "",
+        "TERMINAL_SHORT": get_short_terminal_name(terminal) or "",
+        "USINGMIN": float(record.get("USINGMIN") or 0),
+        "USINGSEC": float(record.get("USINGSEC") or 0),
+        "DISCOUNTNOTE": record.get("DISCOUNTNOTE") or "",
+    }
+
+    if timestamp:
+        clean_record["TIMESTAMP"] = timestamp
+
+    return username, date_str, record_id, clean_record
+
+
+def upload_history_by_date(by_date):
+    """Write date-indexed history used by Floor Monitor expanded cards."""
+    uploaded = 0
+    for date_str, records_dict in by_date.items():
+        if not date_str or not records_dict:
+            continue
+        try:
+            ref = db.reference(f"{FB_PATHS.HISTORY_BY_DATE}/{date_str}")
+            ref.update(records_dict)
+            uploaded += len(records_dict)
+        except Exception as e:
+            print(f"[WARN] Failed to upload history-by-date for {date_str}: {e}")
+    if uploaded:
+        print(f"   [OK] Uploaded {uploaded} history-by-date records across {len(by_date)} day(s)")
+    return uploaded
+
+
 def process_and_upload_history(records, sync_state):
     """Process and upload only new history records."""
     if not records:
@@ -423,57 +488,22 @@ def process_and_upload_history(records, sync_state):
         return sync_state["last_history_id"]
     
     by_user = defaultdict(dict)
+    by_date = defaultdict(dict)
     daily_aggregates = defaultdict(lambda: defaultdict(lambda: {"count": 0, "amount": 0}))
     max_id = sync_state["last_history_id"]
     
     for record in records:
-        username = record.get("MEMBERS_USERNAME")
-        if not username:
+        built = build_clean_history_record(record)
+        if not built:
             continue
-        
-        username = str(username).strip().upper()
-        if any(c in username for c in [".", "#", "$", "[", "]", "/"]):
-            continue
-        
-        date_val = record.get("TARIH") or record.get("DATE", "")
-        time_val = record.get("SAAT") or record.get("TIME", "")
-        charge_val = record.get("MIKTAR") or record.get("CHARGE", 0)
-        balance_val = record.get("KALAN") or record.get("BALANCE", 0)
-        
-        record_id = record.get("ID", 0)
-        max_id = max(max_id, record_id)
-        
-        date_str = str(date_val).split("T")[0] if date_val else ""
-        time_str = str(time_val).split(".")[0] if time_val else ""
-        
-        timestamp = None
-        if date_str and time_str:
-            timestamp = f"{date_str}T{time_str}"
-        
-        terminal = record.get("TERMINALNAME", "")
-        if terminal:
-            terminal = normalize_terminal_name(terminal) or terminal
-        
-        clean_record = {
-            "ID": record_id,
-            "USERNAME": username,
-            "DATE": date_str or "",
-            "TIME": time_str or "",
-            "CHARGE": float(charge_val) if charge_val else 0,
-            "BALANCE": float(balance_val) if balance_val else 0,
-            "NOTE": record.get("NOTE") or "",
-            "TERMINALNAME": terminal or "",
-            "TERMINAL_SHORT": get_short_terminal_name(terminal) or "",
-            "USINGMIN": float(record.get("USINGMIN") or 0),
-            "USINGSEC": float(record.get("USINGSEC") or 0),
-            "DISCOUNTNOTE": record.get("DISCOUNTNOTE") or "",
-        }
-        
-        if timestamp:
-            clean_record["TIMESTAMP"] = timestamp
-        
+
+        username, date_str, record_id, clean_record = built
+        max_id = max(max_id, record_id or 0)
+
         by_user[username][str(record_id)] = clean_record
-        
+        if date_str:
+            by_date[date_str][str(record_id)] = clean_record
+
         if date_str and clean_record["CHARGE"] > 0:
             daily_aggregates[date_str][username]["count"] += 1
             daily_aggregates[date_str][username]["amount"] += clean_record["CHARGE"]
@@ -488,6 +518,7 @@ def process_and_upload_history(records, sync_state):
             print(f"[WARN] Failed to upload history for {username}: {e}")
     
     print(f"   [OK] Uploaded {uploaded} history records for {len(by_user)} users")
+    upload_history_by_date(by_date)
     
     # Update daily aggregates
     for date_str, user_data in daily_aggregates.items():
@@ -520,6 +551,37 @@ def process_and_upload_history(records, sync_state):
         print(f"   [OK] Updated daily aggregates for {len(daily_aggregates)} dates")
     
     return max_id
+
+
+def backfill_history_by_date(cursor, days=2):
+    """
+    Rebuild /history-by-date for recent days from FDB.
+    Floor Monitor reads this path; older syncs only wrote /history/{user}.
+    """
+    try:
+        since = (datetime.now() - timedelta(days=max(1, days) - 1)).strftime("%Y-%m-%d")
+        cursor.execute(f"""
+            SELECT * FROM MEMBERSHISTORY
+            WHERE TARIH >= '{since}'
+            ORDER BY ID ASC
+        """)
+        columns = [desc[0].strip() for desc in cursor.description]
+        rows = cursor.fetchall()
+        by_date = defaultdict(dict)
+        for row in rows:
+            raw = dict(zip(columns, [convert_value(v) for v in row]))
+            built = build_clean_history_record(raw)
+            if not built:
+                continue
+            _username, date_str, record_id, clean_record = built
+            if not date_str:
+                continue
+            by_date[date_str][str(record_id)] = clean_record
+
+        print(f"   [DATA] Backfilling history-by-date since {since} ({sum(len(v) for v in by_date.values())} rows)")
+        upload_history_by_date(by_date)
+    except Exception as e:
+        print(f"[WARN] history-by-date backfill failed: {e}")
 
 
 def fetch_all_members(cursor):
@@ -1676,6 +1738,10 @@ def run_fdb_sync():
         print("      Processing sessions...")
         sessions = fetch_recent_sessions(cursor, hours=2)
         process_and_upload_sessions(sessions)
+
+        # Floor Monitor reads /history-by-date — backfill recent days from FDB
+        print("      Backfilling history-by-date (last 2 days)...")
+        backfill_history_by_date(cursor, days=2)
         
         # Guest sessions
         guest_sessions = parse_messages_file()

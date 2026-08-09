@@ -6,7 +6,9 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12
 import { getDatabase, get, ref, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { 
   BOOKING_DB_CONFIG, 
-  BOOKING_APP_NAME, 
+  BOOKING_APP_NAME,
+  FDB_DATASET_CONFIG,
+  FDB_APP_NAME,
   CONSTANTS, 
   TIMEZONE,
   formatToIST,
@@ -14,7 +16,9 @@ import {
   getISTDate,
   getISTToday,
   getTodayIST,
-  FB_PATHS
+  FB_PATHS,
+  normalizeTerminalName,
+  getShortTerminalName
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
 
@@ -30,6 +34,10 @@ let bookingApp = getApps().find(app => app.name === BOOKING_APP_NAME);
 if (!bookingApp) bookingApp = initializeApp(BOOKING_DB_CONFIG, BOOKING_APP_NAME);
 
 const db = getDatabase(bookingApp);
+
+let fdbApp = getApps().find(app => app.name === FDB_APP_NAME);
+if (!fdbApp) fdbApp = initializeApp(FDB_DATASET_CONFIG, FDB_APP_NAME);
+const fdb = getDatabase(fdbApp);
 
 // ==================== CONSTANTS ====================
 
@@ -83,8 +91,20 @@ function getTimetableBlockStyle(booking) {
   const startTime = new Date(booking.startTime);
   const endTime = new Date(booking.endTime);
   const minutesUntilStart = (startTime - now) / 60000;
+  const sitting = isBookingOccupiedLive(booking._raw || booking);
+
+  // Booked member is physically on that PC
+  if (sitting) {
+    return {
+      class: "timetable-block-sitting",
+      bg: "linear-gradient(135deg, #00f0ff, #0077aa)",
+      border: "#00f0ff",
+      pulse: true,
+      label: "💺 IN"
+    };
+  }
   
-  // Currently running
+  // Currently running (time window)
   if (startTime <= now && endTime > now) {
     return {
       class: "timetable-block-running",
@@ -142,15 +162,80 @@ let bookingsTimeLineTimer = null;
 let bookingsRenderTimer = null;
 let isPurgingBookings = false;
 let timetableHeaderReady = false;
+/** Live floor occupancy for “sitting on booked PC” highlight */
+let terminalOccupancy = {};
+let terminalOccupancyUnsub = null;
 /** How many days of past bookings to show in the cards list (upcoming/ongoing always shown) */
 const PAST_BOOKINGS_DISPLAY_DAYS = 2;
 const MAX_PAST_CARDS = 40;
+
+function pcKey(name) {
+  return String(getShortTerminalName(name) || normalizeTerminalName(name) || name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function usernamesMatch(a, b) {
+  const x = String(a || "").trim().toUpperCase();
+  const y = String(b || "").trim().toUpperCase();
+  return Boolean(x && y && x === y);
+}
+
+/**
+ * True when the booked member is currently sitting on one of the booked PCs.
+ */
+function isBookingOccupiedLive(booking) {
+  if (!booking || booking.status === "Declined") return false;
+  const name = booking.name;
+  if (!name) return false;
+
+  const pcs = Array.isArray(booking.pcs)
+    ? [...booking.pcs]
+    : (booking.pc ? [booking.pc] : []);
+  if (!pcs.length && booking.deviceType && booking.deviceType !== "PC") {
+    // Consoles: match by device name against terminal keys
+    pcs.push(booking.deviceName || booking.deviceType);
+  }
+  if (!pcs.length) return false;
+
+  const wantKeys = new Set(pcs.map(pcKey).filter(Boolean));
+  if (!wantKeys.size) return false;
+
+  return Object.entries(terminalOccupancy || {}).some(([termName, info]) => {
+    if (!info || String(info.status || "").toLowerCase() !== "occupied") return false;
+    if (info.is_guest || info.member_id === 0) return false;
+    if (!wantKeys.has(pcKey(termName)) && !wantKeys.has(pcKey(info.terminal_short))) return false;
+    return usernamesMatch(name, info.member_username)
+      || usernamesMatch(name, info.member_name);
+  });
+}
+
+function startTerminalOccupancySync() {
+  if (terminalOccupancyUnsub) return;
+  const termRef = ref(fdb, FB_PATHS.TERMINAL_STATUS);
+  terminalOccupancyUnsub = onValue(termRef, snap => {
+    terminalOccupancy = snap.val() || {};
+    scheduleBookingsRender();
+  }, err => {
+    console.warn("[Bookings] terminal-status listener error:", err);
+  });
+}
+
+function stopTerminalOccupancySync() {
+  if (typeof terminalOccupancyUnsub === "function") {
+    terminalOccupancyUnsub();
+    terminalOccupancyUnsub = null;
+  }
+  terminalOccupancy = {};
+}
 
 function startBookingsSync() {
   const container = document.getElementById("bookingCards");
   if (container && !bookingsUnsubscribe && !Object.keys(currentBookingsData || {}).length) {
     container.innerHTML = `<div class="text-center text-gray-500 py-10 font-orbitron text-sm">Loading bookings…</div>`;
   }
+
+  startTerminalOccupancySync();
 
   if (bookingsUnsubscribe) {
     scheduleBookingsRender();
@@ -190,6 +275,7 @@ function stopBookingsSync() {
     bookingsUnsubscribe();
     bookingsUnsubscribe = null;
   }
+  stopTerminalOccupancySync();
   if (bookingsTimeLineTimer) {
     clearInterval(bookingsTimeLineTimer);
     bookingsTimeLineTimer = null;
@@ -436,6 +522,7 @@ function renderBookings(bookingsData) {
     }
 
     const statusText = group === "past" ? "Expired" : (booking.status || "Pending");
+    const sittingLive = group !== "past" && isBookingOccupiedLive(booking);
 
     const statusClasses = {
       Pending: "status-pending",
@@ -445,8 +532,9 @@ function renderBookings(bookingsData) {
     };
 
     const card = document.createElement("div");
-    card.className = `booking-card booking-card-${statusText.toLowerCase()}`;
+    card.className = `booking-card booking-card-${statusText.toLowerCase()}${sittingLive ? " booking-card-sitting" : ""}`;
     card.dataset.bookingKey = key;
+    if (sittingLive) card.dataset.sitting = "1";
 
     const startTimeStr = startTime.toLocaleTimeString("en-IN", { 
       hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" 
@@ -478,6 +566,7 @@ function renderBookings(bookingsData) {
           <div class="booking-card-name">
             <h3 class="font-orbitron export-cell">${booking.name || "—"}</h3>
             <span class="booking-status-badge ${statusClasses[statusText] || ""}">${statusText}</span>
+            ${sittingLive ? `<span class="booking-sitting-badge">SITTING</span>` : ""}
           </div>
           <span class="booking-card-price export-cell">₹${booking.price || 0}</span>
         </div>
@@ -733,7 +822,9 @@ function buildTimetableBookings(bookingsData) {
         status: b.status || "Pending",
         startTime: b.start,
         endTime: b.end,
-        deviceType
+        deviceType,
+        pcs: b.pcs,
+        _raw: b
       };
     })
     .filter(Boolean);

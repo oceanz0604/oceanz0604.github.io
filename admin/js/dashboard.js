@@ -68,7 +68,8 @@ let lastTerminalsSnapshot = {};
 /** Terminals with open detail accordion — survives live re-renders */
 const expandedTerminals = new Set();
 /** Cached today history for all PCs (guest + member charges) */
-let terminalDayCache = { date: null, rows: null, loading: null, error: null };
+let terminalDayCache = { date: null, rows: null, loading: null, error: null, fetchedAt: 0 };
+const DAY_HISTORY_TTL_MS = 90_000;
 
 // CRITICAL: Track if listener is active to prevent duplication
 // This was the root cause of 4GB+ bandwidth usage!
@@ -629,29 +630,46 @@ function toggleTerminalCard(card, name) {
   }
 }
 
-async function ensureDayHistoryCache() {
+async function ensureDayHistoryCache(force = false) {
   const today = getTodayIST();
-  if (terminalDayCache.date === today && Array.isArray(terminalDayCache.rows)) {
+  const cacheFresh = terminalDayCache.date === today
+    && Array.isArray(terminalDayCache.rows)
+    && terminalDayCache.fetchedAt
+    && (Date.now() - terminalDayCache.fetchedAt) < DAY_HISTORY_TTL_MS;
+
+  if (!force && cacheFresh) {
     return terminalDayCache.rows;
   }
-  if (terminalDayCache.loading && terminalDayCache.date === today) {
+  if (!force && terminalDayCache.loading && terminalDayCache.date === today) {
     return terminalDayCache.loading;
   }
 
   terminalDayCache.date = today;
+  terminalDayCache.error = null;
   terminalDayCache.loading = (async () => {
     const rows = [];
     try {
-      const [guestSnap, histSnap] = await Promise.all([
+      const [guestSnap, histSnap, guestSbmSnap] = await Promise.all([
         get(ref(db, `${FB_PATHS.GUEST_SESSIONS}/${today}`)),
-        get(ref(db, `${FB_PATHS.HISTORY_BY_DATE}/${today}`))
+        get(ref(db, `${FB_PATHS.HISTORY_BY_DATE}/${today}`)),
+        // Fallback for guests when messages.msg path is empty
+        get(ref(db, `${FB_PATHS.SESSIONS_BY_MEMBER}/guest`))
       ]);
+
+      const seen = new Set();
+
+      const pushRow = (row) => {
+        const key = `${row.kind}|${row.terminalKey}|${row.sort}|${row.label}|${row.mins}|${row.amount}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        rows.push(row);
+      };
 
       const guests = guestSnap.val() || {};
       Object.entries(guests).forEach(([id, g]) => {
         if (!g || typeof g !== "object") return;
         const term = g.terminal_short || g.terminal || g.TERMINAL_SHORT || g.TERMINALNAME || "";
-        rows.push({
+        pushRow({
           id: `g-${id}`,
           kind: "guest",
           terminal: term,
@@ -669,7 +687,7 @@ async function ensureDayHistoryCache() {
         if (!h || typeof h !== "object") return;
         const term = h.TERMINAL_SHORT || h.TERMINALNAME || h.terminal_short || h.terminal || "";
         const user = h.USERNAME || h.MEMBERS_USERNAME || h.NOTE || "Member";
-        rows.push({
+        pushRow({
           id: `h-${id}`,
           kind: "member",
           terminal: term,
@@ -682,15 +700,42 @@ async function ensureDayHistoryCache() {
         });
       });
 
+      // sessions-by-member/guest fallback (closed sessions today)
+      const guestSbm = guestSbmSnap.val() || {};
+      Object.entries(guestSbm).forEach(([id, s]) => {
+        if (!s || typeof s !== "object") return;
+        let sessionDate = s.DATE || s.date;
+        if (!sessionDate && s.STARTPOINT) sessionDate = String(s.STARTPOINT).split("T")[0].split(" ")[0];
+        if (!sessionDate && s.ENDPOINT) sessionDate = String(s.ENDPOINT).split("T")[0].split(" ")[0];
+        if (sessionDate !== today) return;
+        const term = s.TERMINAL_SHORT || s.TERMINALNAME || "";
+        pushRow({
+          id: `sg-${id}`,
+          kind: "guest",
+          terminal: term,
+          terminalKey: normalizeTerminalKey(term),
+          time: formatClockTime(s.STARTPOINT || s.ENDPOINT),
+          label: "Guest",
+          mins: Number(s.USINGMIN) || 0,
+          amount: Number(s.PRICE || s.TOTALPRICE || 0) || 0,
+          sort: String(s.STARTPOINT || s.ENDPOINT || id)
+        });
+      });
+
       rows.sort((a, b) => String(b.sort).localeCompare(String(a.sort)));
       console.log(`[Floor] Day history ${today}: ${rows.length} rows (guest+member)`);
+      terminalDayCache.rows = rows;
+      terminalDayCache.fetchedAt = Date.now();
+      terminalDayCache.error = null;
     } catch (err) {
       console.warn("Terminal day history failed:", err);
       terminalDayCache.error = String(err?.message || err);
+      // Do not stick an empty successful cache on failure — allow retry
+      terminalDayCache.rows = null;
+      terminalDayCache.fetchedAt = 0;
     }
-    terminalDayCache.rows = rows;
     terminalDayCache.loading = null;
-    return rows;
+    return terminalDayCache.rows || [];
   })();
 
   return terminalDayCache.loading;
@@ -701,6 +746,7 @@ function paintTerminalHistory(panel, terminalName, rows, card = null) {
 
   const liveCard = card || panel.closest(".terminal-card-v2");
   const liveRows = [];
+  const wantKey = normalizeTerminalKey(terminalName);
 
   // Show current session first when this PC is occupied
   if (liveCard && String(liveCard.dataset.status || "").toLowerCase() === "occupied") {
@@ -714,7 +760,10 @@ function paintTerminalHistory(panel, terminalName, rows, card = null) {
     });
   }
 
-  const mine = (rows || []).filter(r => terminalsMatch(r.terminal, terminalName)).slice(0, 12);
+  const mine = (rows || []).filter(r => {
+    if (wantKey && r.terminalKey && r.terminalKey === wantKey) return true;
+    return terminalsMatch(r.terminal, terminalName);
+  }).slice(0, 12);
   const combined = [...liveRows, ...mine];
 
   if (!combined.length) {
@@ -748,8 +797,12 @@ function paintTerminalHistory(panel, terminalName, rows, card = null) {
 async function loadTerminalHistory(terminalName, panel, card = null) {
   if (!panel) return;
   const today = getTodayIST();
+  const cacheFresh = terminalDayCache.date === today
+    && Array.isArray(terminalDayCache.rows)
+    && terminalDayCache.fetchedAt
+    && (Date.now() - terminalDayCache.fetchedAt) < DAY_HISTORY_TTL_MS;
 
-  if (terminalDayCache.date === today && Array.isArray(terminalDayCache.rows)) {
+  if (cacheFresh) {
     paintTerminalHistory(panel, terminalName, terminalDayCache.rows, card);
     return;
   }
@@ -762,7 +815,7 @@ async function loadTerminalHistory(terminalName, panel, card = null) {
 }
 
 window.refreshTerminalDayHistory = function() {
-  terminalDayCache = { date: null, rows: null, loading: null, error: null };
+  terminalDayCache = { date: null, rows: null, loading: null, error: null, fetchedAt: 0 };
   expandedTerminals.forEach(name => {
     const panel = findTerminalHistoryPanel(name);
     if (panel) loadTerminalHistory(name, panel);

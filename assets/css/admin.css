@@ -1246,6 +1246,37 @@ body.admin-page::before {
 .booking-card-declined::before { background: #ff0044; }
 .booking-card-expired::before { background: #666; }
 
+/* Booked member is currently sitting on the reserved PC */
+.booking-card-sitting {
+  border-color: rgba(0, 240, 255, 0.55);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.12), rgba(0, 0, 0, 0.45));
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.18);
+}
+.booking-card-sitting::before {
+  background: #00f0ff;
+  width: 4px;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+}
+.booking-sitting-badge {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  color: #001018;
+  background: #00f0ff;
+  font-weight: 700;
+  animation: booking-sitting-pulse 1.6s ease-in-out infinite;
+}
+@keyframes booking-sitting-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.timetable-block-sitting {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.45);
+}
+
 /* Booking card layout */
 .booking-card-header {
   display: flex;
