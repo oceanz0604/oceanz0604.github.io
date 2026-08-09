@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=floor5">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=floor6">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -2414,7 +2414,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=floor5')
+        navigator.serviceWorker.register('../sw.js?v=floor6')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -3194,7 +3194,7 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=floor5"></script>
+  <script type="module" src="js/dashboard.js?v=floor6"></script>
   <script type="module" src="js/bookings.js?v=floor5"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>

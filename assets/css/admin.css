@@ -635,6 +635,11 @@ body.admin-page::before {
     linear-gradient(180deg, rgba(0, 240, 255, 0.04), transparent 40%),
     rgba(0, 0, 0, 0.25);
   animation: terminalBodyIn 0.22s ease-out;
+  display: block;
+}
+
+.terminal-card-body[hidden] {
+  display: none !important;
 }
 
 @keyframes terminalBodyIn {
@@ -683,12 +688,37 @@ body.admin-page::before {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--neon-cyan);
+  margin-bottom: 0;
+}
+
+.terminal-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.terminal-history-refresh {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--neon-cyan);
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-history-refresh:hover {
+  background: rgba(0, 240, 255, 0.18);
 }
 
 .terminal-history {
   max-height: 180px;
   overflow-y: auto;
+  min-height: 40px;
 }
 
 .terminal-history-empty {
