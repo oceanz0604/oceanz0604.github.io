@@ -804,7 +804,11 @@ function buildTimetableBookings(bookingsData) {
       if (deviceType === 'XBOX') {
         pc = "XBOX ONE X";
       } else if (deviceType === 'PS') {
-        pc = "PS";
+        // Map pcs[0] → PS-1 / PS-2 (legacy "PS" → PS-1)
+        const slot = String((Array.isArray(b.pcs) && b.pcs[0]) || b.pc || "PS-1").toUpperCase();
+        if (slot === "PS" || slot === "PS1" || slot === "PS-1") pc = "PS-1";
+        else if (slot === "PS2" || slot === "PS-2") pc = "PS-2";
+        else pc = normalizeTerminalName(slot) || "PS-1";
       } else {
         // PC - map to timetable PC names
         const slot = b.pcs[0].toUpperCase();

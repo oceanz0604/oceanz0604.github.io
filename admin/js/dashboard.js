@@ -311,7 +311,10 @@ function shortTerminalName(name) {
   if (n.startsWith("CT-ROOM-")) return `CT${n.replace("CT-ROOM-", "")}`;
   if (n.startsWith("T-ROOM-")) return `T${n.replace("T-ROOM-", "")}`;
   if (n === "XBOX ONE X" || n.includes("XBOX")) return "XBOX";
-  if (n.includes("PLAYSTATION") || n === "PS") return "PS";
+  if (n === "PS") return "PS-1";
+  const ps = n.match(/^PS[-_]?(\d+)$/);
+  if (ps) return `PS-${ps[1]}`;
+  if (n.includes("PLAYSTATION")) return "PS-1";
   return n || name;
 }
 
@@ -332,15 +335,17 @@ function terminalKeys(name) {
   if (t) keys.add(`T${t[1]}`);
 
   if (raw.includes("XBOX")) keys.add("XBOX");
-  if (raw === "PS" || raw.includes("PLAYSTATION")) keys.add("PS");
+
+  const ps = raw.match(/PS[\s\-_]*0*(\d+)/) || (raw === "PS" || raw.includes("PLAYSTATION") ? ["", "1"] : null);
+  if (ps) keys.add(`PS${ps[1]}`);
 
   return keys;
 }
 
 function normalizeTerminalKey(name) {
   const keys = [...terminalKeys(name)];
-  // Prefer short CT1/T5 style key when available
-  const short = keys.find(k => /^(CT|T)\d+$/.test(k) || k === "PS" || k === "XBOX");
+  // Prefer short CT1/T5/PS1 style key when available
+  const short = keys.find(k => /^(CT|T)\d+$/.test(k) || /^PS\d+$/.test(k) || k === "XBOX");
   return short || keys[0] || "";
 }
 

@@ -156,19 +156,22 @@ export const CONSTANTS = {
     "T1", "T2", "T3", "T4", "T5", "T6", "T7",
     "CT1", "CT2", "CT3", "CT4", "CT5", "CT6", "CT7"
   ],
+
+  // PlayStation units (deviceType stays "PS"; pcs stores the unit)
+  ALL_PS: ["PS-1", "PS-2"],
   
   // PC Names for timetable display (PanCafe format)
   TIMETABLE_PCS: [
     "CT-ROOM-1", "CT-ROOM-2", "CT-ROOM-3", "CT-ROOM-4", "CT-ROOM-5", "CT-ROOM-6", "CT-ROOM-7",
     "T-ROOM-1", "T-ROOM-2", "T-ROOM-3", "T-ROOM-4", "T-ROOM-5", "T-ROOM-6", "T-ROOM-7",
-    "PS", "XBOX ONE X"
+    "PS-1", "PS-2", "XBOX ONE X"
   ],
   
   // Guest terminals (no member account - for recharge entries)
   GUEST_TERMINALS: [
     "CT-ROOM-1", "CT-ROOM-2", "CT-ROOM-3", "CT-ROOM-4", "CT-ROOM-5", "CT-ROOM-6", "CT-ROOM-7",
     "T-ROOM-1", "T-ROOM-2", "T-ROOM-3", "T-ROOM-4", "T-ROOM-5", "T-ROOM-6", "T-ROOM-7",
-    "PS", "XBOX ONE X"
+    "PS-1", "PS-2", "XBOX ONE X"
   ],
   
   // Pricing per device type
@@ -205,11 +208,15 @@ export const CONSTANTS = {
 
 /**
  * Terminal name aliases for normalization
+ * Legacy "PS" / PLAYSTATION / PS5 map to PS-1 (renamed unit).
  */
 const TERMINAL_ALIASES = {
-  "PLAYSTATION": "PS",
+  "PS": "PS-1",
+  "PLAYSTATION": "PS-1",
+  "PS5": "PS-1",
+  "PS1": "PS-1",
+  "PS2": "PS-2",
   "XBOX": "XBOX ONE X",
-  "PS5": "PS",
   "XBOX ONE": "XBOX ONE X"
 };
 
@@ -231,6 +238,12 @@ export function normalizeTerminalName(name) {
   // Check aliases
   if (TERMINAL_ALIASES[name]) {
     return TERMINAL_ALIASES[name];
+  }
+
+  // PS-1 / PS-2 (with or without hyphen already handled via aliases for PS1/PS2)
+  const psMatch = name.match(/^PS[-_]?(\d+)$/);
+  if (psMatch) {
+    return `PS-${psMatch[1]}`;
   }
   
   // Convert short format to PanCafe format
@@ -263,6 +276,7 @@ export function normalizeTerminalName(name) {
  * getShortTerminalName("CT-ROOM-1") // "CT1"
  * getShortTerminalName("T-ROOM-5") // "T5"
  * getShortTerminalName("XBOX ONE X") // "XBOX"
+ * getShortTerminalName("PS-1") // "PS-1"
  */
 export function getShortTerminalName(name) {
   if (!name) return "";
@@ -278,6 +292,10 @@ export function getShortTerminalName(name) {
   if (name === "XBOX ONE X") {
     return "XBOX";
   }
+  // Keep PS-1 / PS-2 as-is (also map legacy PS → PS-1 for display)
+  if (name === "PS") return "PS-1";
+  const psMatch = name.match(/^PS[-_]?(\d+)$/);
+  if (psMatch) return `PS-${psMatch[1]}`;
   
   return name;
 }
@@ -288,7 +306,7 @@ export function getShortTerminalName(name) {
  * @param {string} name - Terminal name
  * @returns {boolean} True if it's a guest terminal
  * 
- * Valid guest terminals: CT1-CT7, T1-T7, PS, XBOX
+ * Valid guest terminals: CT1-CT7, T1-T7, PS-1/PS-2, XBOX
  */
 export function isGuestTerminal(name) {
   if (!name) return false;
@@ -296,7 +314,13 @@ export function isGuestTerminal(name) {
   const upper = name.toUpperCase().trim();
   
   // Check for exact matches first
-  if (upper === "PS" || upper === "XBOX" || upper === "XBOX ONE X" || upper === "PLAYSTATION") {
+  if (
+    upper === "PS" ||
+    upper === "XBOX" ||
+    upper === "XBOX ONE X" ||
+    upper === "PLAYSTATION" ||
+    /^PS[-_]?\d+$/.test(upper)
+  ) {
     return true;
   }
   

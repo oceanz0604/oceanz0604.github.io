@@ -5,6 +5,7 @@ Central configuration for all upload scripts.
 """
 
 import os
+import re
 
 # ==================== PATHS ====================
 
@@ -72,14 +73,18 @@ ALL_TERMINALS = [
     "CT-ROOM-5", "CT-ROOM-6", "CT-ROOM-7",
     "T-ROOM-1", "T-ROOM-2", "T-ROOM-3", "T-ROOM-4", 
     "T-ROOM-5", "T-ROOM-6", "T-ROOM-7",
-    "PS", "XBOX ONE X"
+    "PS-1", "PS-2", "XBOX ONE X"
 ]
 
 # Terminal name mappings for normalization
+# Legacy "PS" / PLAYSTATION / PS5 → PS-1 (renamed unit)
 TERMINAL_ALIASES = {
-    "PLAYSTATION": "PS",
+    "PS": "PS-1",
+    "PLAYSTATION": "PS-1",
+    "PS5": "PS-1",
+    "PS1": "PS-1",
+    "PS2": "PS-2",
     "XBOX": "XBOX ONE X",
-    "PS5": "PS",
     "XBOX ONE": "XBOX ONE X"
 }
 
@@ -133,7 +138,9 @@ def normalize_terminal_name(name):
     
     Examples:
         "CT-ROOM-1" -> "CT-ROOM-1"
-        "PLAYSTATION" -> "PS"
+        "PLAYSTATION" -> "PS-1"
+        "PS" -> "PS-1"
+        "PS2" -> "PS-2"
         "ct-room-1" -> "CT-ROOM-1"
     """
     if not name:
@@ -144,6 +151,11 @@ def normalize_terminal_name(name):
     # Check aliases
     if name in TERMINAL_ALIASES:
         return TERMINAL_ALIASES[name]
+
+    # PS-1 / PS-2 variants
+    ps_match = re.match(r"^PS[-_]?(\d+)$", name)
+    if ps_match:
+        return f"PS-{ps_match.group(1)}"
     
     # Check if it's a known terminal
     for terminal in ALL_TERMINALS:
@@ -161,7 +173,8 @@ def get_short_terminal_name(name):
         "CT-ROOM-1" -> "CT1"
         "T-ROOM-5" -> "T5"
         "XBOX ONE X" -> "XBOX"
-        "PS" -> "PS"
+        "PS-1" -> "PS-1"
+        "PS" -> "PS-1"
     """
     if not name:
         return ""
@@ -174,6 +187,12 @@ def get_short_terminal_name(name):
         return f"T{name.replace('T-ROOM-', '')}"
     elif name == "XBOX ONE X":
         return "XBOX"
+    elif name == "PS":
+        return "PS-1"
+    else:
+        ps_match = re.match(r"^PS[-_]?(\d+)$", name)
+        if ps_match:
+            return f"PS-{ps_match.group(1)}"
     
     return name
 

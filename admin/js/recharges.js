@@ -2236,8 +2236,10 @@ function normalizeMemberName(name) {
   // Normalize Xbox variations
   if (n.includes("XBOX")) return "XBOX";
   
-  // Normalize PlayStation variations  
-  if (n === "PS" || n.includes("PLAYSTATION")) return "PS";
+  // Normalize PlayStation units (PS / PS1 / PS-1 → PS1, PS2 / PS-2 → PS2)
+  if (n === "PS" || n.includes("PLAYSTATION")) return "PS1";
+  const ps = n.match(/^PS(\d+)$/);
+  if (ps) return `PS${ps[1]}`;
   
   return n;
 }
@@ -2384,9 +2386,10 @@ function matchEntries(adminEntries, panCafeEntries, guestSessions = []) {
         gsShortUpper === upperMember ||
         gsTerminalUpper === normalizedMember?.toUpperCase() ||
         gsShortUpper === shortName?.toUpperCase() ||
-        // Also try matching PS/PLAYSTATION variants
-        (upperMember === "PS" && (gsTerminalUpper === "PLAYSTATION" || gsTerminalUpper === "PS5")) ||
-        (gsTerminalUpper === "PS" && (upperMember === "PLAYSTATION" || upperMember === "PS5")) ||
+        // Also try matching PS/PLAYSTATION variants (legacy PS + PS-1/PS-2)
+        (upperMember.replace(/[-_]/g, "").match(/^PS\d*$/) &&
+          gsTerminalUpper.replace(/[-_]/g, "").match(/^PS\d*$/) &&
+          membersMatch(upperMember, gsTerminalUpper)) ||
         // Xbox variants
         (upperMember === "XBOX" && gsTerminalUpper?.includes("XBOX")) ||
         (gsTerminalUpper === "XBOX" && upperMember?.includes("XBOX"));

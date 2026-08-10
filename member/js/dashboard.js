@@ -238,7 +238,9 @@ function showAvailableSlots() {
 
   // Update label based on device type
   if (label) {
-    label.textContent = selectedDeviceType === 'PC' ? 'Select PC' : `Confirm ${deviceInfo.name} Booking`;
+    if (selectedDeviceType === 'PC') label.textContent = 'Select PC';
+    else if (selectedDeviceType === 'PS') label.textContent = 'Select PlayStation';
+    else label.textContent = `Confirm ${deviceInfo.name} Booking`;
   }
 
   if (selectedDeviceType === 'PC') {
@@ -284,8 +286,45 @@ function showAvailableSlots() {
       }
       updatePrice();
     });
+  } else if (selectedDeviceType === 'PS') {
+    // Pick PS-1 or PS-2
+    fetchUnavailablePCs(startSelect.value, endSelect.value, (unavailable) => {
+      const units = CONSTANTS.ALL_PS || ["PS-1", "PS-2"];
+      const grid = document.createElement("div");
+      grid.className = "grid grid-cols-2 gap-3";
+
+      units.forEach(unit => {
+        // Treat legacy bookings of "PS" as occupying PS-1
+        const blocked = unavailable.has(unit)
+          || (unit === "PS-1" && (unavailable.has("PS") || unavailable.has("PS1")));
+        if (blocked) return;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "pc-btn w-full px-4 py-4 rounded-lg font-orbitron text-sm transition-all";
+        btn.innerHTML = `<span class="text-2xl block mb-1">${deviceInfo.icon || "🕹️"}</span>${unit}`;
+        btn.dataset.pc = unit;
+
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".pc-btn").forEach(b => b.classList.remove("selected"));
+          selectedPCSet.clear();
+          selectedPCSet.add(unit);
+          btn.classList.add("selected");
+          updatePrice();
+        });
+
+        grid.appendChild(btn);
+      });
+
+      if (!grid.children.length) {
+        slotsDiv.innerHTML = `<p class="text-center text-gray-500 py-6">No PlayStation available for this slot</p>`;
+      } else {
+        slotsDiv.appendChild(grid);
+      }
+      updatePrice();
+    });
   } else {
-    // For Xbox/PS - show confirmation with device info
+    // For Xbox - show confirmation with device info
     selectedPCSet.add(selectedDeviceType); // Use device type as the "slot"
     
     slotsDiv.innerHTML = `
@@ -462,6 +501,7 @@ function loadMemberBookings(memberUsername) {
       const deviceType = booking.deviceType || 'PC';
       const deviceIcon = deviceIcons[deviceType] || '🖥️';
       const deviceName = booking.deviceName || (deviceType === 'PC' ? 'Gaming PC' : deviceType);
+      const unitLabel = Array.isArray(booking.pcs) ? booking.pcs.join(", ") : (booking.pc || "");
 
       const card = document.createElement("div");
       card.className = "booking-card rounded-xl p-4";
@@ -476,7 +516,7 @@ function loadMemberBookings(memberUsername) {
           <div><span class="text-gray-500">Start:</span> ${formatDate(booking.start)}</div>
           <div><span class="text-gray-500">End:</span> ${formatDate(booking.end)}</div>
           <div><span class="text-gray-500">Duration:</span> <span style="color: #b829ff;">${booking.duration} mins</span></div>
-          ${deviceType === 'PC' ? `<div><span class="text-gray-500">Terminal:</span> <span style="color: #00ff88;">${booking.pcs.join(", ")}</span></div>` : ''}
+          ${(deviceType === 'PC' || deviceType === 'PS') && unitLabel ? `<div><span class="text-gray-500">Terminal:</span> <span style="color: #00ff88;">${unitLabel}</span></div>` : ''}
           <div><span class="text-gray-500">Price:</span> <span style="color: #ffff00;">₹${booking.price}</span></div>
           ${booking.note ? `<div><span class="text-gray-500">Note:</span> ${booking.note}</div>` : ""}
         </div>
@@ -741,7 +781,9 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
   }
 
   if (selectedPCSet.size !== 1) {
-    const itemName = selectedDeviceType === 'PC' ? 'PC' : selectedDeviceType;
+    const itemName = selectedDeviceType === 'PC' ? 'PC'
+      : selectedDeviceType === 'PS' ? 'PlayStation (PS-1 or PS-2)'
+      : selectedDeviceType;
     notifyWarning(`Please select a ${itemName} to book.`);
     return;
   }
@@ -767,7 +809,9 @@ document.getElementById("bookingForm")?.addEventListener("submit", e => {
   const booking = {
     name: member.USERNAME,
     deviceType: selectedDeviceType,
-    deviceName: deviceInfo.name,
+    deviceName: selectedDeviceType === 'PS' && selectedItems[0]
+      ? `PlayStation (${selectedItems[0]})`
+      : deviceInfo.name,
     pcs: selectedItems,
     start: startTime.toISOString(),
     end: endTime.toISOString(),
