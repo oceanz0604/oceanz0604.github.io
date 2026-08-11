@@ -628,34 +628,6 @@ body.admin-page::before {
   letter-spacing: 0.01em;
 }
 
-.activity-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #e0f7ff;
-  background: rgba(0, 240, 255, 0.12);
-  border: 1px solid rgba(0, 240, 255, 0.28);
-  max-width: 140px;
-}
-
-.activity-chip .activity-icon {
-  width: 14px;
-  height: 14px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.activity-chip .activity-emoji {
-  font-size: 0.75rem;
-  line-height: 1;
-}
-
-.activity-chip .activity-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .terminal-card-body {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding: 12px 14px 14px;

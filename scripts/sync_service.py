@@ -35,18 +35,11 @@ import firebase_admin
 from firebase_admin import credentials, db
 from config import FB_PATHS, FIREBASE_CRED_PATH, FDB_FIREBASE_DB_URL
 
-try:
-    from config import ACTIVITY_ENABLED, ACTIVITY_INTERVAL_SECONDS
-except ImportError:
-    ACTIVITY_ENABLED = True
-    ACTIVITY_INTERVAL_SECONDS = 45
-
 # Import sync functions from the unified sync script
 from oceanz_sync import (
     run_terminals_sync,  # Quick terminal status sync
     run_fdb_sync,        # Full FDB sync (members, history, leaderboards, cash register)
 )
-from pc_activity import run_activity_sync
 
 # ==================== CONFIG ====================
 
@@ -56,8 +49,6 @@ HEARTBEAT_INTERVAL = 30  # Seconds between heartbeat updates
 # Auto-sync intervals (in minutes)
 TERMINALS_INTERVAL = 2   # Terminal status every 2 minutes (from FDB TERMINALS table)
 FDB_INTERVAL = 15        # FDB database every 15 minutes
-# Activity scrape interval is in seconds (faster than full terminal sync)
-ACTIVITY_INTERVAL = max(20, int(ACTIVITY_INTERVAL_SECONDS or 45))
 
 # Firebase paths for sync control
 SYNC_CONTROL_PATH = "sync-control"
@@ -93,7 +84,6 @@ class SyncService:
         # Track last auto-sync times
         self.last_terminals_sync = None
         self.last_fdb_sync = None
-        self.last_activity_sync = None
         
     def log(self, message, level="INFO", update_firebase=True):
         """Log message locally and optionally to Firebase."""
@@ -143,20 +133,13 @@ class SyncService:
         try:
             next_terminals = self.last_terminals_sync + timedelta(minutes=TERMINALS_INTERVAL) if self.last_terminals_sync else datetime.now()
             next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
-            next_activity = (
-                self.last_activity_sync + timedelta(seconds=ACTIVITY_INTERVAL)
-                if self.last_activity_sync else datetime.now()
-            )
             
-            payload = {
+            self.db.reference(HEARTBEAT_PATH).set({
                 "timestamp": datetime.now().isoformat(),
                 "status": "syncing" if self.syncing else "idle",
                 "next_terminals": next_terminals.isoformat(),
-                "next_fdb": next_fdb.isoformat(),
-            }
-            if ACTIVITY_ENABLED:
-                payload["next_activity"] = next_activity.isoformat()
-            self.db.reference(HEARTBEAT_PATH).set(payload)
+                "next_fdb": next_fdb.isoformat()
+            })
         except Exception as e:
             print(f"Failed to update heartbeat: {e}")
     
@@ -165,18 +148,12 @@ class SyncService:
         try:
             next_terminals = self.last_terminals_sync + timedelta(minutes=TERMINALS_INTERVAL) if self.last_terminals_sync else datetime.now()
             next_fdb = self.last_fdb_sync + timedelta(minutes=FDB_INTERVAL) if self.last_fdb_sync else datetime.now()
-            next_activity = (
-                self.last_activity_sync + timedelta(seconds=ACTIVITY_INTERVAL)
-                if self.last_activity_sync else datetime.now()
-            )
             
             schedule_data = {
                 "terminals_interval_mins": TERMINALS_INTERVAL,
                 "fdb_interval_mins": FDB_INTERVAL,
-                "activity_interval_secs": ACTIVITY_INTERVAL if ACTIVITY_ENABLED else 0,
                 "next_terminals": next_terminals.isoformat(),
                 "next_fdb": next_fdb.isoformat(),
-                "next_activity": next_activity.isoformat() if ACTIVITY_ENABLED else "",
             }
             
             # Only add last sync times if they exist (Firebase doesn't accept None)
@@ -184,8 +161,6 @@ class SyncService:
                 schedule_data["last_terminals"] = self.last_terminals_sync.isoformat()
             if self.last_fdb_sync:
                 schedule_data["last_fdb"] = self.last_fdb_sync.isoformat()
-            if self.last_activity_sync:
-                schedule_data["last_activity"] = self.last_activity_sync.isoformat()
             
             self.db.reference(SCHEDULE_PATH).set(schedule_data)
         except Exception as e:
@@ -318,29 +293,6 @@ class SyncService:
         
         return success
     
-    def auto_sync_activity(self):
-        """Remote DCOM WMI process scrape for occupied PCs (never fails sync UI)."""
-        if not ACTIVITY_ENABLED:
-            return False
-        print(f"\n[AUTO-SYNC] PC Activity - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        # Keep heartbeat fresh — activity can take a few seconds on many seats
-        try:
-            self.update_heartbeat()
-        except Exception:
-            pass
-        try:
-            run_activity_sync(verbose=False)
-        except Exception as e:
-            # Never surface to sync-control status / progress
-            print(f"[ACTIVITY] error (ignored): {e}")
-        self.last_activity_sync = datetime.now()
-        try:
-            self.update_heartbeat()
-            self.update_schedule_info()
-        except Exception:
-            pass
-        return True
-
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""
         now = datetime.now()
@@ -349,19 +301,9 @@ class SyncService:
         if self.last_terminals_sync is None or (now - self.last_terminals_sync).total_seconds() >= TERMINALS_INTERVAL * 60:
             self.auto_sync_terminals()
         
-        # Check FDB + Leaderboards (every 15 minutes) BEFORE activity so
-        # a slow WMI scrape can never delay / starve the real sync.
+        # Check FDB + Leaderboards (every 15 minutes) - run complete sync
         if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
-            self.auto_sync_fdb()
-
-        # PC activity (every ~45s) — lightweight, isolated from sync status
-        if ACTIVITY_ENABLED:
-            due = (
-                self.last_activity_sync is None
-                or (now - self.last_activity_sync).total_seconds() >= ACTIVITY_INTERVAL
-            )
-            if due:
-                self.auto_sync_activity()
+            self.auto_sync_fdb()  # This runs complete sync which includes leaderboards
     
     def run(self):
         """Main service loop with auto-scheduling."""
@@ -371,29 +313,19 @@ class SyncService:
    Auto-Scheduling + Firebase Control                      
 ----------------------------------------------------------------
    Terminals:  Every {TERMINALS_INTERVAL} minutes (from FDB TERMINALS table)
-   Activity:   Every {ACTIVITY_INTERVAL}s (DCOM WMI scrape) {"ON" if ACTIVITY_ENABLED else "OFF"}
    FDB Data:   Every {FDB_INTERVAL} minutes                         
    Manual:     Via Firebase request                     
 ================================================================
         """)
         
         self.log("[START] OceanZ Sync Service Starting...", update_firebase=True)
-        self.log(
-            f"[SCHEDULE] Terminals every {TERMINALS_INTERVAL}m, "
-            f"Activity every {ACTIVITY_INTERVAL}s, FDB every {FDB_INTERVAL}m"
-        )
+        self.log(f"[SCHEDULE] Terminals every {TERMINALS_INTERVAL}m, FDB every {FDB_INTERVAL}m")
         self.set_status("idle")
         self.update_heartbeat()
         
         # Run initial sync (unified sync handles everything)
         print("\n[STARTUP] Running initial unified sync...")
         self.auto_sync_fdb()  # Unified sync includes terminals and leaderboards
-        self.set_status("idle")
-        self.update_heartbeat()
-        # Activity after FDB — failures must not flip status
-        if ACTIVITY_ENABLED:
-            self.auto_sync_activity()
-            self.set_status("idle")
         
         last_heartbeat = time.time()
         
@@ -457,12 +389,6 @@ def main():
             print("Running in TEST mode - single full sync")
             service = SyncService()
             service.perform_full_sync(triggered_by="test")
-            return
-
-        if arg == "--activity":
-            print("Running activity scrape once (DCOM WMI)")
-            service = SyncService()
-            run_activity_sync(verbose=True)
             return
         
         if arg == "--daemon":

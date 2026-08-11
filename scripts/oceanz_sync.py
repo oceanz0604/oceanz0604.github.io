@@ -1202,16 +1202,6 @@ def process_and_upload_terminal_status(terminals):
             # Paused status
             if t.get("SESSIONPAUSED"):
                 status_data["paused"] = True
-        else:
-            # .update() merges — explicitly clear session fields left from prior occupy
-            # (None deletes the key in Firebase Admin SDK)
-            for key in (
-                "session_start", "duration_minutes", "timer_minutes", "session_type",
-                "member_id", "is_guest", "member_username", "member_name",
-                "session_price", "started_by", "paused",
-                "activity",  # clear game chip immediately; scraper also clears
-            ):
-                status_data[key] = None
         
         terminal_status[name] = status_data
     
@@ -1225,23 +1215,17 @@ def process_and_upload_terminal_status(terminals):
                 "last_updated": now.isoformat()
             }
     
-    # Upload to Firebase (per-terminal update preserves nested /activity from scraper)
+    # Upload to Firebase
     try:
-        term_ref = db.reference(FB_PATHS.TERMINAL_STATUS)
-        for name, data in terminal_status.items():
-            try:
-                term_ref.child(name).update(data)
-            except Exception as e:
-                print(f"   [WARN] Failed to update {name}: {e}")
-
-        # Drop unknown keys? Keep legacy offline PS etc. — do not wipe tree.
-
+        # New path
+        db.reference(FB_PATHS.TERMINAL_STATUS).set(terminal_status)
+        
         # Legacy path (for backward compatibility)
         for name, data in terminal_status.items():
             safe_key = name.replace(" ", "_").replace("/", "_")
             try:
-                db.reference(f"{FB_PATHS.LEGACY_STATUS}/{safe_key}").update(data)
-            except Exception:
+                db.reference(f"{FB_PATHS.LEGACY_STATUS}/{safe_key}").set(data)
+            except:
                 pass
         
         print(f"   [OK] Updated {len(terminal_status)} terminals ({occupied_count} occupied)")

@@ -1,6 +1,0 @@
-{
-  "_comment": "Optional static IP map for cafe PCs. Keys = PanCafe terminal names. Remove _comment in real file.",
-  "CT-ROOM-1": "192.168.1.101",
-  "CT-ROOM-2": "192.168.1.102",
-  "T-ROOM-1": "192.168.1.111"
-}
