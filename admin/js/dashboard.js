@@ -625,7 +625,9 @@ function buildLiveSessionBlock(t, occupied) {
       }</strong></div>
       <div class="terminal-kv"><span>Price</span><strong style="color:#00ff88;">${t.session_price > 0 ? `₹${Math.round(t.session_price)}` : "—"}</strong></div>
       <div class="terminal-kv"><span>Started by</span><strong>${escapeHtml(t.started_by || "—")}</strong></div>
-      ${t.activity?.label ? `<div class="terminal-kv col-span-2"><span>Running</span><strong style="color:var(--neon-cyan);">${escapeHtml((t.activity.icon || "") + " " + t.activity.label)}</strong></div>` : ""}
+      ${t.activity?.label && !t.activity?.error && t.activity.label !== "Unreachable" && t.activity.label !== "No signal"
+        ? `<div class="terminal-kv col-span-2"><span>Running</span><strong style="color:var(--neon-cyan);">${escapeHtml((t.activity.icon || "") + " " + t.activity.label)}</strong></div>`
+        : ""}
       ${t.paused ? `<div class="terminal-kv col-span-2"><span>Paused</span><strong style="color:#ff6b00;">Yes</strong></div>` : ""}
     </div>
   `;

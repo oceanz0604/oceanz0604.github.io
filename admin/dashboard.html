@@ -2414,7 +2414,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=activity1')
+        navigator.serviceWorker.register('../sw.js?v=activity2')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -3194,8 +3194,8 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=activity1"></script>
-  <script type="module" src="js/bookings.js?v=activity1"></script>
+  <script type="module" src="js/dashboard.js?v=activity2"></script>
+  <script type="module" src="js/bookings.js?v=activity2"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
   <script type="module" src="js/recharge-food.js"></script>

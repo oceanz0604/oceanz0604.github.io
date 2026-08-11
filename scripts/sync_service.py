@@ -319,19 +319,27 @@ class SyncService:
         return success
     
     def auto_sync_activity(self):
-        """Remote WMI process scrape for occupied PCs."""
+        """Remote DCOM WMI process scrape for occupied PCs (never fails sync UI)."""
         if not ACTIVITY_ENABLED:
             return False
         print(f"\n[AUTO-SYNC] PC Activity - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        # Do not flip global syncing UI for this lightweight poll
-        success = False
+        # Keep heartbeat fresh — activity can take a few seconds on many seats
         try:
-            success = run_activity_sync(verbose=False)
+            self.update_heartbeat()
+        except Exception:
+            pass
+        try:
+            run_activity_sync(verbose=False)
         except Exception as e:
-            print(f"[ACTIVITY] error: {e}")
+            # Never surface to sync-control status / progress
+            print(f"[ACTIVITY] error (ignored): {e}")
         self.last_activity_sync = datetime.now()
-        self.update_schedule_info()
-        return success
+        try:
+            self.update_heartbeat()
+            self.update_schedule_info()
+        except Exception:
+            pass
+        return True
 
     def check_scheduled_syncs(self):
         """Check if any scheduled syncs are due."""
@@ -341,7 +349,12 @@ class SyncService:
         if self.last_terminals_sync is None or (now - self.last_terminals_sync).total_seconds() >= TERMINALS_INTERVAL * 60:
             self.auto_sync_terminals()
         
-        # PC activity (every ~45s) — after terminals so occupied list is fresh enough
+        # Check FDB + Leaderboards (every 15 minutes) BEFORE activity so
+        # a slow WMI scrape can never delay / starve the real sync.
+        if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
+            self.auto_sync_fdb()
+
+        # PC activity (every ~45s) — lightweight, isolated from sync status
         if ACTIVITY_ENABLED:
             due = (
                 self.last_activity_sync is None
@@ -349,10 +362,6 @@ class SyncService:
             )
             if due:
                 self.auto_sync_activity()
-
-        # Check FDB + Leaderboards (every 15 minutes) - run complete sync
-        if self.last_fdb_sync is None or (now - self.last_fdb_sync).total_seconds() >= FDB_INTERVAL * 60:
-            self.auto_sync_fdb()  # This runs complete sync which includes leaderboards
     
     def run(self):
         """Main service loop with auto-scheduling."""
@@ -362,7 +371,7 @@ class SyncService:
    Auto-Scheduling + Firebase Control                      
 ----------------------------------------------------------------
    Terminals:  Every {TERMINALS_INTERVAL} minutes (from FDB TERMINALS table)
-   Activity:   Every {ACTIVITY_INTERVAL}s (WMI process scrape) {"ON" if ACTIVITY_ENABLED else "OFF"}
+   Activity:   Every {ACTIVITY_INTERVAL}s (DCOM WMI scrape) {"ON" if ACTIVITY_ENABLED else "OFF"}
    FDB Data:   Every {FDB_INTERVAL} minutes                         
    Manual:     Via Firebase request                     
 ================================================================
@@ -379,8 +388,12 @@ class SyncService:
         # Run initial sync (unified sync handles everything)
         print("\n[STARTUP] Running initial unified sync...")
         self.auto_sync_fdb()  # Unified sync includes terminals and leaderboards
+        self.set_status("idle")
+        self.update_heartbeat()
+        # Activity after FDB — failures must not flip status
         if ACTIVITY_ENABLED:
             self.auto_sync_activity()
+            self.set_status("idle")
         
         last_heartbeat = time.time()
         
@@ -447,7 +460,7 @@ def main():
             return
 
         if arg == "--activity":
-            print("Running activity scrape once")
+            print("Running activity scrape once (DCOM WMI)")
             service = SyncService()
             run_activity_sync(verbose=True)
             return

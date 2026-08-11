@@ -3,7 +3,7 @@
  * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v8-activity';
+const CACHE_NAME = 'oceanz-v9-activity2';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)

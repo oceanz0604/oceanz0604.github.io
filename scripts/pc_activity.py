@@ -4,12 +4,13 @@ OceanZ PC Activity Scraper
 
 Runs on the counter / PanCafe server. For each occupied Windows PC it:
 1. Resolves IP from MAC (ARP) and/or hostname variants
-2. Remotely lists processes via WMI / CIM (PowerShell)
+2. Remotely lists processes via classic DCOM WMI (NOT WinRM/CIM)
 3. Maps known game/app executables → label + icon key
 4. Writes result to Firebase: terminal-status/{PC}/activity
 
-Does NOT require a custom agent on each seat — only Windows remote
-management (WMI/CIM) + LAN reachability + admin credentials if needed.
+Seats need WMI/DCOM reachable on the LAN (Remote Administration firewall
+group). WinRM is NOT required. Failures are soft — they never fail FDB sync
+or flip sync-control status.
 
 Usage:
     python pc_activity.py              # one-shot scrape
@@ -26,6 +27,7 @@ import re
 import socket
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -57,6 +59,11 @@ WMI_PASSWORD = os.environ.get("OCEANZ_WMI_PASSWORD", "").strip()
 # Manual IP overrides: { "CT-ROOM-1": "192.168.1.21", ... }
 # Loaded from scripts/pc_activity_hosts.json if present
 HOSTS_FILE = Path(__file__).parent / "pc_activity_hosts.json"
+
+# Per-PC probe timeout (seconds). Keep low so a dead WMI path cannot stall heartbeat.
+PROBE_TIMEOUT_SECONDS = int(os.environ.get("OCEANZ_ACTIVITY_PROBE_TIMEOUT", "6"))
+# Parallel probes — cafe LAN can handle a few concurrent WMI calls
+PROBE_WORKERS = int(os.environ.get("OCEANZ_ACTIVITY_WORKERS", "4"))
 
 # Consoles / non-Windows — skip remote probe
 SKIP_TERMINALS = {"PS-1", "PS-2", "PS", "XBOX ONE X", "XBOX", "PLAYSTATION"}
@@ -264,41 +271,50 @@ def _ps_literal(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-def fetch_remote_processes(ip: str, timeout: int = 12) -> list[str]:
+def _parse_process_names(raw: str) -> list[str]:
+    names = []
+    for line in (raw or "").splitlines():
+        name = line.strip()
+        if not name or name.startswith("__ERR__"):
+            continue
+        # tasklist lines: "chrome.exe                   1234 Console ..."
+        if " " in name and name.lower().endswith(".exe"):
+            name = name.split()[0]
+        if not name.lower().endswith(".exe"):
+            name = f"{name}.exe"
+        names.append(name)
+    return names
+
+
+def fetch_remote_processes(ip: str, timeout: int | None = None) -> list[str]:
     """
-    Return list of process executable names on remote Windows PC.
-    Uses PowerShell Get-CimInstance (WMI/CIM) — no extra Python deps.
+    Return process exe names on a remote Windows PC.
+
+    Uses classic DCOM WMI (Get-WmiObject) — works on typical cafe LANs
+    without WinRM. Falls back to `tasklist /S`. Never uses CIM/WinRM.
     """
     if not ip:
         return []
+    timeout = timeout if timeout is not None else PROBE_TIMEOUT_SECONDS
 
     cred_block = ""
-    cim_extra = ""
+    wmi_cred = ""
     if WMI_USER and WMI_PASSWORD:
         cred_block = (
             f"$u = {_ps_literal(WMI_USER)}; "
             f"$p = ConvertTo-SecureString {_ps_literal(WMI_PASSWORD)} -AsPlainText -Force; "
             f"$cred = New-Object System.Management.Automation.PSCredential($u, $p); "
         )
-        cim_extra = " -Credential $cred"
+        wmi_cred = " -Credential $cred"
 
-    # Prefer CIM; fall back to Get-Process via Invoke-Command if needed
+    # Get-WmiObject = DCOM/RPC (port 135). Get-CimInstance would use WinRM and fail.
     script = (
         cred_block
-        + f"try {{ "
-        f"(Get-CimInstance -ClassName Win32_Process -ComputerName {_ps_literal(ip)}{cim_extra} "
-        f"-ErrorAction Stop | Select-Object -ExpandProperty Name) -join \"`n\" "
-        f"}} catch {{ "
+        + f"$ErrorActionPreference = 'Stop'; "
         f"try {{ "
-        + (
-            f"Invoke-Command -ComputerName {_ps_literal(ip)} -Credential $cred "
-            if (WMI_USER and WMI_PASSWORD)
-            else f"Invoke-Command -ComputerName {_ps_literal(ip)} "
-        )
-        + f"-ScriptBlock {{ (Get-Process | Select-Object -ExpandProperty ProcessName) -join \"`n\" }} "
-        f"-ErrorAction Stop "
-        f"}} catch {{ Write-Output ('__ERR__' + $_.Exception.Message) }} "
-        f"}}"
+        f"(Get-WmiObject -Class Win32_Process -ComputerName {_ps_literal(ip)}{wmi_cred} "
+        f"| Select-Object -ExpandProperty Name) -join \"`n\" "
+        f"}} catch {{ Write-Output ('__ERR__' + $_.Exception.Message) }}"
     )
 
     try:
@@ -314,30 +330,40 @@ def fetch_remote_processes(ip: str, timeout: int = 12) -> list[str]:
             timeout=timeout,
         )
     except FileNotFoundError:
-        # Non-Windows counter (dev) — cannot probe
         return []
     except subprocess.TimeoutExpired:
         return []
 
     out = (completed.stdout or "").strip()
-    if not out:
-        err = (completed.stderr or "").strip()
-        if err:
-            print(f"   [WMI] {ip}: {err[:160]}")
-        return []
-    if out.startswith("__ERR__"):
-        print(f"   [WMI] {ip}: {out[7:160]}")
-        return []
+    if out and not out.startswith("__ERR__"):
+        names = _parse_process_names(out)
+        if names:
+            return names
 
-    names = []
-    for line in out.splitlines():
-        name = line.strip()
-        if not name:
-            continue
-        if not name.lower().endswith(".exe"):
-            name = f"{name}.exe"
-        names.append(name)
-    return names
+    # Fallback: tasklist over RPC (also no WinRM)
+    tasklist_cmd = ["tasklist", "/S", ip, "/FO", "CSV", "/NH"]
+    if WMI_USER and WMI_PASSWORD:
+        tasklist_cmd.extend(["/U", WMI_USER, "/P", WMI_PASSWORD])
+    try:
+        tl = subprocess.run(
+            tasklist_cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if tl.returncode == 0 and tl.stdout:
+            names = []
+            for line in tl.stdout.splitlines():
+                # CSV: "chrome.exe","1234",...
+                m = re.match(r'"([^"]+\.exe)"', line.strip(), re.I)
+                if m:
+                    names.append(m.group(1))
+            if names:
+                return names
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return []
 
 
 def pick_activity(process_names: list[str]) -> dict | None:
@@ -401,6 +427,7 @@ def write_activity(terminal_name: str, activity: dict | None, dry_run: bool = Fa
 def scrape_once(verbose: bool = False, dry_run: bool = False) -> dict:
     """
     Read occupied terminals from Firebase, probe each, write activity.
+    Soft-fail: unreachable PCs are skipped (no Firebase error payload).
     Returns summary stats.
     """
     init_firebase()
@@ -412,13 +439,14 @@ def scrape_once(verbose: bool = False, dry_run: bool = False) -> dict:
     terminals = db.reference(FB_PATHS.TERMINAL_STATUS).get() or {}
     stats = {"probed": 0, "matched": 0, "skipped": 0, "failed": 0, "cleared": 0}
 
+    # Clear free seats first (fast Firebase ops)
+    targets = []  # (norm, ip)
     for name, info in terminals.items():
         if not isinstance(info, dict):
             continue
         norm = normalize_terminal_name(name) or name
         status = str(info.get("status") or "").lower()
 
-        # Clear stale activity on free/offline PCs
         if status != "occupied":
             if info.get("activity"):
                 write_activity(norm, None, dry_run=dry_run)
@@ -432,34 +460,39 @@ def scrape_once(verbose: bool = False, dry_run: bool = False) -> dict:
         mac = info.get("mac") or ""
         ip = resolve_ip(norm, mac, overrides, arp)
         if not ip:
+            stats["failed"] += 1
             if verbose:
                 print(f"   [skip] {norm}: no IP (mac={mac or '—'})")
-            stats["failed"] += 1
-            write_activity(norm, {
-                "exe": "",
-                "label": "Unreachable",
-                "category": "other",
-                "icon": "❓",
-                "iconKey": "",
-                "error": "no_ip",
-            }, dry_run=dry_run)
+            # Do NOT write error activity — keeps Floor / sync UI clean
             continue
 
+        targets.append((norm, ip))
+
+    def _probe_one(item):
+        norm, ip = item
         procs = fetch_remote_processes(ip)
+        return norm, ip, procs
+
+    results = []
+    if targets:
+        workers = max(1, min(PROBE_WORKERS, len(targets)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_probe_one, t) for t in targets]
+            for fut in as_completed(futures):
+                try:
+                    results.append(fut.result())
+                except Exception as e:
+                    stats["failed"] += 1
+                    if verbose:
+                        print(f"   [fail] probe worker: {e}")
+
+    for norm, ip, procs in results:
         stats["probed"] += 1
         if not procs:
-            if verbose:
-                print(f"   [fail] {norm} @ {ip}: no processes (WMI blocked?)")
             stats["failed"] += 1
-            write_activity(norm, {
-                "exe": "",
-                "label": "No signal",
-                "category": "other",
-                "icon": "📡",
-                "iconKey": "",
-                "error": "wmi_failed",
-                "ip": ip,
-            }, dry_run=dry_run)
+            if verbose:
+                print(f"   [fail] {norm} @ {ip}: no processes (WMI/DCOM blocked?)")
+            # Soft-fail: leave previous activity or show nothing — never write "No signal"
             continue
 
         activity = pick_activity(procs)
@@ -470,7 +503,6 @@ def scrape_once(verbose: bool = False, dry_run: bool = False) -> dict:
             if verbose:
                 print(f"   [ok] {norm} @ {ip}: {activity['label']} ({activity['exe']})")
         else:
-            # Occupied but only unknown apps — still show something useful
             write_activity(norm, {
                 "exe": "",
                 "label": "In use",
@@ -486,26 +518,44 @@ def scrape_once(verbose: bool = False, dry_run: bool = False) -> dict:
 
 
 def run_activity_sync(verbose: bool = False) -> bool:
-    """Entry point for sync_service."""
+    """
+    Entry point for sync_service.
+    Always returns True so activity never fails the overall sync service / UI.
+    """
     try:
-        print("\n[ACTIVITY] Scanning occupied PCs…")
+        print("\n[ACTIVITY] Scanning occupied PCs (DCOM WMI)…")
         stats = scrape_once(verbose=verbose, dry_run=False)
         print(
             f"[ACTIVITY] probed={stats['probed']} matched={stats['matched']} "
             f"failed={stats['failed']} cleared={stats['cleared']} skipped={stats['skipped']}"
         )
+        if stats["failed"] and stats["matched"] == 0 and stats["probed"] > 0:
+            print(
+                "[ACTIVITY] HINT: Enable 'Windows Management Instrumentation (WMI-In)' "
+                "and 'Remote Administration' firewall rules on seat PCs. "
+                "WinRM is NOT required. Optional: set OCEANZ_WMI_USER / OCEANZ_WMI_PASSWORD."
+            )
         try:
+            status = "ok" if stats["failed"] == 0 else ("partial" if stats["matched"] else "unreachable")
             db.reference(f"{FB_PATHS.SYNC_META}/activity").update({
                 "last_sync": datetime.now().isoformat(),
-                "status": "ok",
+                "status": status,
                 **{f"stats_{k}": v for k, v in stats.items()},
             })
         except Exception:
             pass
-        return True
+        return True  # never fail the service loop / UI
     except Exception as e:
-        print(f"[ACTIVITY] ERROR: {e}")
-        return False
+        print(f"[ACTIVITY] ERROR (ignored for sync status): {e}")
+        try:
+            db.reference(f"{FB_PATHS.SYNC_META}/activity").update({
+                "last_sync": datetime.now().isoformat(),
+                "status": "error",
+                "error": str(e)[:200],
+            })
+        except Exception:
+            pass
+        return True
 
 
 def main():

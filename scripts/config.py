@@ -19,7 +19,8 @@ FIREBASE_CRED_PATH = r"C:\Firebase\fbcreds.json"
 # IP Logs
 IPLOG_BASE_PATH = r"C:\Users\decrypter\Downloads\iplogs\iplogs"
 
-# PC activity scraper (WMI from counter → each seat)
+# PC activity scraper (classic DCOM WMI from counter → each seat; not WinRM)
+# Failures are soft and never flip sync-control status.
 # Credentials optional — leave blank to use the Windows account running sync_service.
 # Or set env: OCEANZ_WMI_USER / OCEANZ_WMI_PASSWORD
 ACTIVITY_ENABLED = True
