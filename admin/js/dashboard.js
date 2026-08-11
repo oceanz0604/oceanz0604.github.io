@@ -502,6 +502,24 @@ function renderTerminals(data) {
   });
 }
 
+function activityChipHtml(activity) {
+  if (!activity || typeof activity !== "object") return "";
+  const label = String(activity.label || "").trim();
+  if (!label || label === "Unreachable" || label === "No signal") {
+    // Still show soft failures only when debugging — hide noise on Floor
+    if (!label || activity.error) return "";
+  }
+  const icon = escapeHtml(activity.icon || "💻");
+  const key = String(activity.iconKey || "").replace(/[^a-z0-9_-]/gi, "");
+  const title = escapeHtml([activity.label, activity.exe].filter(Boolean).join(" · "));
+  // Optional SVG under assets/activity/{iconKey}.svg; emoji is the reliable fallback
+  const img = key
+    ? `<img class="activity-icon" src="../assets/activity/${key}.svg" alt="" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='inline')">`
+    : "";
+  const emoji = `<span class="activity-emoji"${key ? ' style="display:none"' : ""}>${icon}</span>`;
+  return `<span class="term-chip activity-chip" title="${title}">${img}${emoji}<span class="activity-label">${escapeHtml(label)}</span></span>`;
+}
+
 function buildTerminalCard(t, isOpen) {
   const meta = statusMeta(t.status);
   const occupied = t.status === "occupied";
@@ -522,6 +540,8 @@ function buildTerminalCard(t, isOpen) {
   } else if (occupied && t.session_type === "unlimited") {
     timerLine = `<span class="term-chip" style="color:#9ca3af;background:rgba(156,163,175,0.1);">Unlimited</span>`;
   }
+
+  const activityChip = occupied ? activityChipHtml(t.activity) : "";
 
   const card = document.createElement("div");
   card.className = `terminal-card terminal-card-v2 ${meta.cls}${isOpen ? " is-open" : ""}`;
@@ -546,6 +566,7 @@ function buildTerminalCard(t, isOpen) {
       </div>
       <div class="terminal-card-summary">
         ${player ? `<span class="term-chip" style="color:${player.color};background:${player.color}22;">${escapeHtml(player.label)}</span>` : `<span class="term-chip muted">Tap for today&apos;s history</span>`}
+        ${activityChip}
         ${duration != null ? `<span class="term-chip" style="color:#b829ff;background:rgba(184,41,255,0.12);">${formatDurationMins(duration)} on</span>` : ""}
         ${timerLine}
         ${occupied && t.session_price > 0 ? `<span class="term-chip" style="color:#00ff88;background:rgba(0,255,136,0.12);">₹${Math.round(t.session_price)}</span>` : ""}
@@ -604,6 +625,7 @@ function buildLiveSessionBlock(t, occupied) {
       }</strong></div>
       <div class="terminal-kv"><span>Price</span><strong style="color:#00ff88;">${t.session_price > 0 ? `₹${Math.round(t.session_price)}` : "—"}</strong></div>
       <div class="terminal-kv"><span>Started by</span><strong>${escapeHtml(t.started_by || "—")}</strong></div>
+      ${t.activity?.label ? `<div class="terminal-kv col-span-2"><span>Running</span><strong style="color:var(--neon-cyan);">${escapeHtml((t.activity.icon || "") + " " + t.activity.label)}</strong></div>` : ""}
       ${t.paused ? `<div class="terminal-kv col-span-2"><span>Paused</span><strong style="color:#ff6b00;">Yes</strong></div>` : ""}
     </div>
   `;
