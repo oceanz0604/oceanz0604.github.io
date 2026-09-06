@@ -66,23 +66,31 @@ function nextReceipt() {
   return `RCT-${Date.now().toString(36).toUpperCase()}`;
 }
 
+export function slugifyCategory(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "uncategorized";
+}
+
 async function findSaleByExternalId(ownerId, externalId) {
   const sales = await listByOwner("pos_sales", ownerId);
   return sales.find((s) => s.externalId === externalId) || null;
 }
 
 export async function listProducts({ ownerId, locationId }) {
-  const [products, categories, stock] = await Promise.all([
+  const [productDocs, categoryDocs, stock] = await Promise.all([
     listByOwner("products", ownerId),
     listCollection("categories"),
     listByOwner("stock", ownerId),
   ]);
-  const catById = Object.fromEntries(categories.map((c) => [c.id, c]));
+  const catById = Object.fromEntries(categoryDocs.map((c) => [c.id, c]));
   const stockMap = {};
   stock.filter((s) => !locationId || s.locationId === locationId)
     .forEach((s) => { stockMap[s.productId] = (stockMap[s.productId] || 0) + (Number(s.quantity) || 0); });
 
-  return products
+  const productsOut = productDocs
     .filter((p) => {
       const type = p.type || "simple";
       return type === "simple" || type === "complex";
@@ -90,11 +98,7 @@ export async function listProducts({ ownerId, locationId }) {
     .filter((p) => p.available !== false)
     .map((p) => {
       const cat = catById[p.categoryId] || {};
-      const catName = String(cat.name || "").toLowerCase();
-      let category = "snacks";
-      if (catName.includes("drink")) category = "drinks";
-      else if (catName.includes("meal")) category = "meals";
-      else if (catName.includes("combo")) category = "combos";
+      const categoryName = String(cat.name || "").trim() || "Uncategorized";
       return {
         id: p.id,
         name: p.name,
@@ -104,14 +108,30 @@ export async function listProducts({ ownerId, locationId }) {
         gstRate: Number(p.gstRate) || 0,
         unit: p.unit || "pcs",
         categoryId: p.categoryId || "",
-        category,
-        categoryName: cat.name || "",
+        category: slugifyCategory(categoryName),
+        categoryName,
         stock: stockMap[p.id] ?? 0,
         cafeExternalId: p.cafeExternalId || null,
         type: p.type || "simple",
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const catMap = new Map();
+  for (const p of productsOut) {
+    const id = p.categoryId || p.category;
+    if (!catMap.has(id)) {
+      catMap.set(id, {
+        id: p.categoryId || p.category,
+        name: p.categoryName,
+        slug: p.category,
+        count: 0,
+      });
+    }
+    catMap.get(id).count += 1;
+  }
+  const categories = [...catMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return { products: productsOut, categories };
 }
 
 export async function createSale(payload) {
