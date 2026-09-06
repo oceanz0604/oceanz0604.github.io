@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory2">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory3">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -2185,7 +2185,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=zentory2')
+        navigator.serviceWorker.register('../sw.js?v=zentory3')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2341,7 +2341,7 @@
 
   <!-- Add Food / Snacks Modal (from Recharges page) -->
   <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
-    <div class="neon-card rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
+    <div class="neon-card rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
       <button onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
 
       <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">🍔 ADD FOOD / SNACKS</h3>
@@ -2363,8 +2363,12 @@
         </div>
 
         <div>
-          <label class="text-xs text-gray-500 mb-2 block">Menu Items</label>
-          <div id="foodRechargeMenuGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1"></div>
+          <label class="text-xs text-gray-500 mb-2 block">Menu</label>
+          <input id="foodRechargeItemSearch" type="search" placeholder="Search Maggi, fries, pasta…"
+            class="neon-input w-full px-3 py-2 rounded-lg text-white text-sm mb-2"
+            oninput="searchFoodRechargeMenu(this.value)" autocomplete="off"/>
+          <div id="foodRechargeCatChips" class="flex gap-1.5 overflow-x-auto pb-2 mb-1" style="scrollbar-width: thin;"></div>
+          <div id="foodRechargeMenuGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1"></div>
         </div>
 
         <div>
@@ -2965,11 +2969,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=zentory2"></script>
-  <script type="module" src="js/bookings.js?v=zentory2"></script>
+  <script type="module" src="js/dashboard.js?v=zentory3"></script>
+  <script type="module" src="js/bookings.js?v=zentory3"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
-  <script type="module" src="js/recharge-food.js?v=zentory2"></script>
+  <script type="module" src="js/recharge-food.js?v=zentory3"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->

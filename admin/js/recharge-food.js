@@ -26,6 +26,12 @@ import {
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
 import { fetchZentoryProducts, postZentorySale, voidZentorySale } from "../../shared/zentory-api.js";
+import {
+  uniqueFoodCategories,
+  filterFoodItems,
+  foodCategoryEmoji,
+  escapeFoodHtml
+} from "../../shared/food-picker.js";
 
 // ==================== FIREBASE ====================
 
@@ -76,6 +82,8 @@ const $ = id => document.getElementById(id);
 
 let foodMenu = [];
 let foodCart = [];
+let foodMenuQuery = "";
+let foodMenuCategory = "all";
 let foodPaymentMode = "cash"; // cash | upi | split | credit — UI mode
 let foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
 let selectedMemberName = "";
@@ -215,6 +223,9 @@ async function loadFoodMenuItems() {
       name: p.name,
       price: p.price,
       category: p.category || "snacks",
+      categoryName: p.categoryName || p.category || "Snacks",
+      categoryId: p.categoryId || "",
+      sku: p.sku || "",
       stock: p.stock,
       cafeExternalId: p.cafeExternalId || null,
       available: true,
@@ -240,33 +251,72 @@ async function loadFoodMenuItems() {
   }
 }
 
+function renderFoodCatChips() {
+  const bar = $("foodRechargeCatChips");
+  if (!bar) return;
+  const cats = uniqueFoodCategories(foodMenu);
+  const chip = (key, label, extra = "") => {
+    const on = foodMenuCategory === key;
+    return `<button type="button" data-cat="${escapeFoodHtml(key)}" onclick="filterFoodRechargeMenu('${String(key).replace(/'/g, "\\'")}')"
+      class="food-cat-btn shrink-0 px-3 py-1.5 rounded-full text-[11px] font-orbitron whitespace-nowrap ${on ? "selected" : ""}">${escapeFoodHtml(label)}${extra}</button>`;
+  };
+  bar.innerHTML = [
+    chip("all", "All", foodMenu.length ? ` (${foodMenu.length})` : ""),
+    ...cats.map((c) => chip(c.key, `${c.emoji} ${c.label}`, c.count ? ` (${c.count})` : "")),
+  ].join("");
+}
+
 function renderFoodMenuPicker() {
   const container = $("foodRechargeMenuGrid");
   if (!container) return;
+  renderFoodCatChips();
 
   if (foodMenu.length === 0) {
-    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-4 col-span-full">No menu items. Add products in Zentory inventory.</div>`;
+    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-6 col-span-full">No menu items. Add products in Zentory inventory.</div>`;
     return;
   }
 
-  container.innerHTML = foodMenu.map(item => {
+  const filtered = filterFoodItems(foodMenu, { query: foodMenuQuery, categoryKey: foodMenuCategory });
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-6 col-span-full">No items match that search.</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
     const stockLabel = item.stock === null || item.stock === undefined
       ? ""
-      : `<span class="text-[10px] text-gray-500">(${item.stock} left)</span>`;
+      : `<span class="text-[10px] text-gray-500">${item.stock} left</span>`;
     const disabled = item.stock !== null && item.stock !== undefined && item.stock <= 0;
+    const cat = item.categoryName || item.category || "";
+    const emoji = foodCategoryEmoji(cat);
+    const safeId = String(item.id).replace(/'/g, "\\'");
     return `
-      <button type="button" ${disabled ? "disabled" : ""} onclick="addFoodRechargeItem('${item.id}')"
-        class="p-2 rounded-lg text-left transition-all ${disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-800"}"
-        style="border: 1px solid rgba(255,107,0,0.25); background: rgba(0,0,0,0.25);">
-        <div class="text-sm text-white truncate">${item.name}</div>
-        <div class="flex items-center justify-between mt-1">
-          <span class="font-orbitron text-xs" style="color: var(--neon-orange);">₹${item.price || 0}</span>
+      <button type="button" ${disabled ? "disabled" : ""} onclick="addFoodRechargeItem('${safeId}')"
+        class="p-2.5 rounded-xl text-left transition-all ${disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-800"}"
+        style="border: 1px solid rgba(255,107,0,0.22); background: rgba(0,0,0,0.28);">
+        <div class="flex items-start justify-between gap-1">
+          <span class="text-base leading-none">${emoji}</span>
           ${stockLabel}
+        </div>
+        <div class="text-sm text-white mt-1 leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeFoodHtml(item.name)}</div>
+        <div class="flex items-center justify-between mt-1.5">
+          <span class="font-orbitron text-xs" style="color: var(--neon-orange);">₹${item.price || 0}</span>
+          <span class="text-[9px] uppercase tracking-wide text-gray-500 truncate max-w-[50%]">${escapeFoodHtml(cat)}</span>
         </div>
       </button>
     `;
   }).join("");
 }
+
+window.searchFoodRechargeMenu = function(query) {
+  foodMenuQuery = query || "";
+  renderFoodMenuPicker();
+};
+
+window.filterFoodRechargeMenu = function(categoryKey) {
+  foodMenuCategory = categoryKey || "all";
+  renderFoodMenuPicker();
+};
 
 // ==================== CUSTOMER ====================
 
@@ -550,6 +600,9 @@ function resetFoodForm() {
   selectedMemberName = "";
   selectedPcName = "";
   foodEditId = null;
+  foodMenuQuery = "";
+  foodMenuCategory = "all";
+  if ($("foodRechargeItemSearch")) $("foodRechargeItemSearch").value = "";
   if ($("foodMemberInput")) $("foodMemberInput").value = "";
   if ($("foodGuestTerminalSelect")) $("foodGuestTerminalSelect").value = "";
   if ($("foodRechargeNote")) $("foodRechargeNote").value = "";
@@ -558,6 +611,7 @@ function resetFoodForm() {
   if ($("foodRechargeCredit")) $("foodRechargeCredit").value = "";
   setFoodRechargePaymentMode("cash");
   renderFoodCart();
+  renderFoodMenuPicker();
   updateFoodCustomerBadge();
 }
 

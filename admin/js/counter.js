@@ -25,6 +25,12 @@ import {
   foodCreditKey
 } from "../../shared/food-stats.js";
 import { fetchZentoryProducts, postZentorySale } from "../../shared/zentory-api.js";
+import {
+  uniqueFoodCategories,
+  filterFoodItems,
+  foodCategoryEmoji,
+  escapeFoodHtml
+} from "../../shared/food-picker.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -1011,6 +1017,7 @@ let foodCart = [];
 let foodCustomer = "Counter";
 let foodPaymentMode = "cash";
 let foodCurrentCategory = "all";
+let foodSearchQuery = "";
 let foodSearchTimeout = null;
 
 // Load food menu from Zentory (fallback to local food_menu if API down)
@@ -1022,6 +1029,9 @@ async function loadFoodMenu() {
       name: p.name,
       price: p.price,
       category: p.category || "snacks",
+      categoryName: p.categoryName || p.category || "Snacks",
+      categoryId: p.categoryId || "",
+      sku: p.sku || "",
       stock: p.stock,
       cafeExternalId: p.cafeExternalId || null,
       available: true,
@@ -1052,56 +1062,66 @@ async function loadFoodMenu() {
   }
 }
 
+function renderFoodCategoryTabs() {
+  const bar = $("foodCategoryTabs");
+  if (!bar) return;
+  const cats = uniqueFoodCategories(foodMenu);
+  const btn = (key, label) => {
+    const on = foodCurrentCategory === key;
+    const safe = String(key).replace(/'/g, "\\'");
+    return `<button type="button" class="food-cat ${on ? "active" : ""}" data-cat="${escapeFoodHtml(key)}" onclick="filterFoodMenu('${safe}')">${escapeFoodHtml(label)}</button>`;
+  };
+  bar.innerHTML = [
+    btn("all", "All"),
+    ...cats.map((c) => btn(c.key, `${c.emoji} ${c.label}`)),
+  ].join("");
+}
+
 // Render food menu items
 function renderFoodMenu() {
   const container = $("foodMenuItems");
   if (!container) return;
-  
-  const filtered = foodCurrentCategory === "all" 
-    ? foodMenu 
-    : foodMenu.filter(item => item.category === foodCurrentCategory);
+  renderFoodCategoryTabs();
+
+  const filtered = filterFoodItems(foodMenu, {
+    query: foodSearchQuery,
+    categoryKey: foodCurrentCategory,
+  });
   
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state col-span-3">
         <i data-lucide="utensils" class="w-8 h-8"></i>
-        <p class="text-sm">${foodCurrentCategory === "all" ? "No items available" : "No items in category"}</p>
+        <p class="text-sm">${foodMenu.length === 0 ? "No items available" : "No items match"}</p>
       </div>
     `;
     if (typeof lucide !== "undefined") lucide.createIcons();
     return;
   }
   
-  const categoryIcons = {
-    snacks: "🍿",
-    drinks: "🥤",
-    meals: "🍽️",
-    combos: "🎁"
-  };
-  
   container.innerHTML = filtered.map(item => {
-    const emoji = categoryIcons[item.category] || "🍽️";
+    const emoji = foodCategoryEmoji(item.categoryName || item.category);
     const isOutOfStock = item.stock !== null && item.stock <= 0;
+    const safeId = String(item.id).replace(/'/g, "\\'");
     
     return `
-      <div class="food-menu-item ${isOutOfStock ? 'out-of-stock' : ''}" onclick="addToFoodCart('${item.id}')">
+      <div class="food-menu-item ${isOutOfStock ? 'out-of-stock' : ''}" onclick="addToFoodCart('${safeId}')">
         <div class="item-emoji">${emoji}</div>
-        <div class="item-name">${item.name}</div>
+        <div class="item-name">${escapeFoodHtml(item.name)}</div>
         <div class="item-price">₹${item.price}</div>
       </div>
     `;
   }).join("");
 }
 
+window.searchFoodMenu = function(query) {
+  foodSearchQuery = query || "";
+  renderFoodMenu();
+};
+
 // Filter food menu by category
 window.filterFoodMenu = function(category) {
-  foodCurrentCategory = category;
-  
-  // Update button states
-  document.querySelectorAll(".food-cat").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.cat === category);
-  });
-  
+  foodCurrentCategory = category || "all";
   renderFoodMenu();
 };
 

@@ -1,52 +1,47 @@
 # Zentory HTTP API (OceanZ cafe bridge)
 
-**Source of truth for Zentory-side code lives here** (cafe repo). This Cloud Agent cannot push to `inventory-management-tool`. When Zentory needs a change, we update this folder; you paste the command below into a Cloud Agent started on the Zentory repo.
+**Source of truth for Zentory-side code lives here** (cafe repo). Paste the command below into a Cloud Agent started on `inventory-management-tool`.
 
 Live host: `https://inventory-management-tool-ten.vercel.app`
 
-## Command for the Zentory Cloud Agent
+## Command for the Zentory Cloud Agent (categories + API)
 
 Start a new agent on **`oceanz0604/inventory-management-tool`**, then paste:
 
 ```
-Copy the cafe HTTP API into THIS repo ROOT (do not nest under zentory-api/).
+Two jobs: (1) copy latest cafe HTTP API to this repo ROOT, (2) split the OceanZ product catalog into real food categories.
 
-Source (cafe branch, always use the latest commit on this path):
-https://github.com/oceanz0604/oceanz0604.github.io/tree/cursor/zentory-integration-6b9a/zentory-api
+1) Copy API from cafe branch (do not nest under zentory-api/):
+https://github.com/oceanz0604/oceanz0604.github.io/tree/cursor/food-menu-search-6b9a/zentory-api
 
-Required at repo root:
-- api/  (health.js, products.js, sales.js, sales/void.js, _lib/*)
-- vercel.json
-- package.json  (merge "type":"module" if this repo already has package.json)
+Required at repo root: api/, vercel.json, and package.json "type":"module" (merge if package.json exists).
+Keep the existing Zentory PWA (index.html, js/, css/, sw.js). Do not delete the storefront.
 
-Keep existing Zentory PWA files (index.html, js/, css/, etc.). Do not delete the storefront.
+API change vs previous: GET /api/products must return real category names (do NOT collapse everything to snacks/drinks/meals/combos). Each product should include categoryId, category (slug of the real name), categoryName. Also return a top-level "categories" array: [{ id, name, slug, count }].
 
-After copy: commit, push, open/update a PR, merge to the branch Vercel deploys (usually main).
+2) Catalog (OceanZ company, location Cafe Counter): create categories if missing and recategorize the ~38 cafe products so staff can filter by type. Suggested names:
+- Drinks
+- Fries
+- Maggi
+- Pasta
+- Sandwiches
+- Pizza
+- Momos
+- Other (only if needed)
 
-Vercel env (Project → Settings → Environment Variables):
-- ZENTORY_API_KEY = oz_zentory_7f3a9c2e1b8d4e6a90f2c5d8e1a4b7c3
-- ZENTORY_DEFAULT_OWNER_ID = co_mqgbs2zvzjfei8
-- ZENTORY_DEFAULT_LOCATION_ID = loc_26082747d7db19
-- FIREBASE_PROJECT_ID = inventory-management-oceanz
+Use product names to assign (e.g. "Cheese Maggi" → Maggi, "Salted Fries" → Fries, "White Sauce Pasta" → Pasta, "Pepsi"/"Water" → Drinks, "Paneer sandwich" → Sandwiches, pizzas → Pizza, momos → Momos). Do not rename products or change prices/stock unless required to attach a category.
 
-When done, confirm GET https://inventory-management-tool-ten.vercel.app/api/health returns {"ok":true,"service":"zentory-api",...}
+Commit, PR, merge to the branch Vercel deploys. Confirm:
+GET https://inventory-management-tool-ten.vercel.app/api/products?ownerId=co_mqgbs2zvzjfei8&locationId=loc_26082747d7db19
+with header X-Zentory-Key: oz_zentory_7f3a9c2e1b8d4e6a90f2c5d8e1a4b7c3
+returns products[].categoryName like Maggi/Fries/Drinks (not only Snacks/Drinks) and a categories[] list.
 ```
-
-If the cafe PR is already merged, change the source tree URL to:
-
-`https://github.com/oceanz0604/oceanz0604.github.io/tree/main/zentory-api`
 
 ## Endpoints
 
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/api/health` | No auth |
-| `GET` | `/api/products?ownerId=&locationId=` | Header `X-Zentory-Key` |
+| `GET` | `/api/products?ownerId=&locationId=` | Header `X-Zentory-Key`; includes `categories[]` |
 | `POST` | `/api/sales` | FEFO lot consume; idempotent on `externalId` |
 | `POST` | `/api/sales/void` | Restore lots |
-
-## Cafe wiring
-
-- Counter / Recharges: catalog from `GET /api/products`; after `food_sales` write, `POST /api/sales` with `externalId = food_sales/{date}/{id}`
-- Delete food sale: `POST /api/sales/void` with the same `externalId`
-- Cafe Manager: hub link to Zentory UI; purchase expenses stay manual in Finance
