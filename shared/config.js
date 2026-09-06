@@ -124,9 +124,23 @@ export const FB_PATHS = {
   FOOD_CREDITS: "food_credits",               // /food_credits/{customer_id} - outstanding credits
   FOOD_CREDIT_PAYMENTS: "food_credit_payments", // /food_credit_payments/{YYYY-MM-DD}/{payment_id}
 
-  // Food inventory / purchases (stock in → expenses)
+  // Food inventory / purchases (legacy — stock now owned by Zentory)
   FOOD_PURCHASES: "food_purchases",           // /food_purchases/{YYYY-MM-DD}/{purchase_id}
   FOOD_STOCK_LOG: "food_stock_log"            // /food_stock_log/{YYYY-MM-DD}/{log_id}
+};
+
+/**
+ * Zentory inventory HTTP API (OceanZ cafe dual-write).
+ * Deploy `zentory-api/` to Vercel (or copy into inventory-management-tool) then
+ * update API_BASE if your deployment URL differs.
+ */
+export const ZENTORY = {
+  API_BASE: "https://inventory-management-tool-ten.vercel.app",
+  API_KEY: "oz_zentory_7f3a9c2e1b8d4e6a90f2c5d8e1a4b7c3",
+  OWNER_ID: "co_mqgbs2zvzjfei8",
+  LOCATION_ID: "loc_26082747d7db19",
+  CHANNEL: "oceanz_cafe",
+  APP_URL: "https://inventory-management-tool-ten.vercel.app",
 };
 
 /**

@@ -25,6 +25,7 @@ import {
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
+import { fetchZentoryProducts, postZentorySale, voidZentorySale } from "../../shared/zentory-api.js";
 
 // ==================== FIREBASE ====================
 
@@ -208,16 +209,34 @@ async function loadFoodMenuItems() {
   if (!ready) return;
 
   try {
-    const snap = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
-    const data = snap.val() || {};
-    foodMenu = Object.entries(data)
-      .map(([id, item]) => ({ id, ...item }))
-      .filter(item => item.available !== false)
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const products = await fetchZentoryProducts();
+    foodMenu = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      category: p.category || "snacks",
+      stock: p.stock,
+      cafeExternalId: p.cafeExternalId || null,
+      available: true,
+      fromZentory: true,
+    }));
+    foodMenu.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     renderFoodMenuPicker();
   } catch (err) {
-    console.error("❌ RechargeFood: menu load failed", err);
-    foodMenu = [];
+    console.warn("[RechargeFood] Zentory catalog unavailable, falling back:", err);
+    try {
+      const snap = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
+      const data = snap.val() || {};
+      foodMenu = Object.entries(data)
+        .map(([id, item]) => ({ id, ...item, fromZentory: false }))
+        .filter(item => item.available !== false)
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      renderFoodMenuPicker();
+      toast("warning", "Zentory catalog unavailable — using local menu");
+    } catch (e2) {
+      console.error("❌ RechargeFood: menu load failed", e2);
+      foodMenu = [];
+    }
   }
 }
 
@@ -226,7 +245,7 @@ function renderFoodMenuPicker() {
   if (!container) return;
 
   if (foodMenu.length === 0) {
-    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-4 col-span-full">No menu items. Add items in Food Menu first.</div>`;
+    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-4 col-span-full">No menu items. Add products in Zentory inventory.</div>`;
     return;
   }
 
@@ -380,7 +399,9 @@ window.addFoodRechargeItem = function(itemId) {
       id: item.id,
       name: item.name,
       price: Number(item.price) || 0,
-      qty: 1
+      qty: 1,
+      cafeExternalId: item.cafeExternalId || null,
+      fromZentory: !!item.fromZentory
     });
   }
   renderFoodCart();
@@ -646,6 +667,12 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
   try {
     await initFoodFirebase();
 
+    // Restore Zentory stock for this cafe sale (soft-fail).
+    const zVoid = await voidZentorySale(`food_sales/${dateStr}/${id}`);
+    if (!zVoid?.ok) {
+      console.warn("[RechargeFood] Zentory void failed:", zVoid?.error);
+    }
+
     // Remove sale first, then scrub matching credit-collection log rows
     await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).remove();
 
@@ -769,10 +796,14 @@ window.saveFoodRechargeSale = async function() {
     const ready = await initFoodFirebase();
     if (!ready) throw new Error("Database not ready");
 
+    let saleId = foodEditId;
+    let saleRef = null;
     if (foodEditId) {
-      await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}/${foodEditId}`).update(saleData);
+      saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}/${foodEditId}`);
+      await saleRef.update(saleData);
     } else {
-      const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
+      saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
+      saleId = saleRef.key;
       await saleRef.set(saleData);
     }
 
@@ -783,13 +814,33 @@ window.saveFoodRechargeSale = async function() {
       await adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData);
     }
 
-    // Stock: only adjust on create (simple & safe). Edit does not re-adjust stock.
+    // Dual-write stock to Zentory on create only (edits do not re-adjust). Soft-fail.
     if (!foodEditId) {
-      for (const item of foodCart) {
-        const menuItem = foodMenu.find(m => m.id === item.id);
-        if (menuItem && menuItem.stock !== null && menuItem.stock !== undefined) {
-          const newStock = Math.max(0, Number(menuItem.stock) - item.qty);
-          await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
+      const zentoryItems = foodCart.filter((item) => {
+        const menu = foodMenu.find((m) => m.id === item.id);
+        return menu?.fromZentory || String(item.id || "").startsWith("prod_");
+      });
+      if (zentoryItems.length) {
+        const paymentMode = credit > 0 && cash === 0 && upi === 0
+          ? "credit"
+          : (cash > 0 && upi > 0) || (cash > 0 && credit > 0) || (upi > 0 && credit > 0)
+            ? "split"
+            : upi > 0 ? "upi" : "cash";
+        const zResult = await postZentorySale({
+          externalId: `food_sales/${saleDate}/${saleId}`,
+          customerName: customerInput,
+          paymentMode,
+          items: zentoryItems,
+          staff: session?.name || session?.email || "Admin",
+          note: ($("foodRechargeNote")?.value || "").trim() || "OceanZ Recharges",
+        });
+        if (zResult?.ok && zResult.saleId) {
+          await saleRef.update({
+            zentorySaleId: zResult.saleId,
+            zentoryReceipt: zResult.receiptNumber || null,
+          });
+        } else if (!zResult?.ok) {
+          toast("warning", "Sale saved. Stock sync to Zentory failed — check inventory later.");
         }
       }
     }
