@@ -24,6 +24,7 @@ import {
   buildFoodSalePayload,
   foodCreditKey
 } from "../../shared/food-stats.js";
+import { fetchZentoryProducts, postZentorySale } from "../../shared/zentory-api.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -1012,28 +1013,42 @@ let foodPaymentMode = "cash";
 let foodCurrentCategory = "all";
 let foodSearchTimeout = null;
 
-// Load food menu from Firebase
+// Load food menu from Zentory (fallback to local food_menu if API down)
 async function loadFoodMenu() {
   try {
-    const snapshot = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
-    foodMenu = [];
-    
-    if (snapshot.exists()) {
-      snapshot.forEach(child => {
-        const item = child.val();
-        if (item.available !== false) {
-          foodMenu.push({ id: child.key, ...item });
-        }
-      });
-    }
-    
-    // Sort by name
+    const products = await fetchZentoryProducts();
+    foodMenu = products.map(p => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      category: p.category || "snacks",
+      stock: p.stock,
+      cafeExternalId: p.cafeExternalId || null,
+      available: true,
+      fromZentory: true,
+    }));
     foodMenu.sort((a, b) => a.name.localeCompare(b.name));
-    console.log(`[Food] Loaded ${foodMenu.length} menu items`);
-    
+    console.log(`[Food] Loaded ${foodMenu.length} items from Zentory`);
     renderFoodMenu();
   } catch (err) {
-    console.error("[Food] Load menu error:", err);
+    console.warn("[Food] Zentory catalog unavailable, falling back:", err);
+    try {
+      const snapshot = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
+      foodMenu = [];
+      if (snapshot.exists()) {
+        snapshot.forEach(child => {
+          const item = child.val();
+          if (item.available !== false) {
+            foodMenu.push({ id: child.key, ...item, fromZentory: false });
+          }
+        });
+      }
+      foodMenu.sort((a, b) => a.name.localeCompare(b.name));
+      renderFoodMenu();
+      notifyWarning("Zentory catalog unavailable — using local menu");
+    } catch (e2) {
+      console.error("[Food] Load menu error:", e2);
+    }
   }
 }
 
@@ -1104,7 +1119,9 @@ window.addToFoodCart = function(itemId) {
       id: item.id,
       name: item.name,
       price: item.price,
-      qty: 1
+      qty: 1,
+      cafeExternalId: item.cafeExternalId || null,
+      fromZentory: !!item.fromZentory
     });
   }
   
@@ -1301,8 +1318,9 @@ window.completeFoodSale = async function() {
   });
   
   try {
-    // Save sale to food_sales
+    // Save sale to food_sales (cafe cash register source of truth for till money)
     const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${today}`).push();
+    const saleId = saleRef.key;
     await saleRef.set(saleData);
     
     // If credit, also update food_credits for the customer
@@ -1318,13 +1336,28 @@ window.completeFoodSale = async function() {
         lastUpdated: Date.now()
       });
     }
-    
-    // Update stock
-    for (const item of foodCart) {
-      const menuItem = foodMenu.find(m => m.id === item.id);
-      if (menuItem && menuItem.stock !== null) {
-        const newStock = Math.max(0, menuItem.stock - item.qty);
-        await bookingDb.ref(`${FB_PATHS.FOOD_MENU}/${item.id}/stock`).set(newStock);
+
+    // Dual-write stock consumption to Zentory. Soft-fail — cafe sale still posts.
+    const zentoryItems = foodCart.filter((item) => {
+      const menu = foodMenu.find((m) => m.id === item.id);
+      return menu?.fromZentory || String(item.id || "").startsWith("prod_");
+    });
+    if (zentoryItems.length) {
+      const zResult = await postZentorySale({
+        externalId: `food_sales/${today}/${saleId}`,
+        customerName: foodCustomer,
+        paymentMode: foodPaymentMode,
+        items: zentoryItems,
+        staff: session?.name || session?.id || "Counter",
+        note: "OceanZ Counter",
+      });
+      if (zResult?.ok && zResult.saleId) {
+        await saleRef.update({
+          zentorySaleId: zResult.saleId,
+          zentoryReceipt: zResult.receiptNumber || null,
+        });
+      } else if (!zResult?.ok) {
+        notifyWarning("Sale saved. Stock sync to Zentory failed — check inventory later.");
       }
     }
 
@@ -1340,7 +1373,7 @@ window.completeFoodSale = async function() {
     $("foodSplitUpi").value = "";
     setFoodPaymentMode("cash");
     renderFoodCart();
-    loadFoodMenu(); // Refresh to update stock
+    loadFoodMenu(); // Refresh stock from Zentory
     
     // Log activity
     logStaffActivity("food_sale", `Food sale ₹${total} to ${foodCustomer}`);

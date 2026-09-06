@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=noact1">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory1">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -2038,238 +2038,9 @@
         </div>
       </div>
 
-        <!-- Cafe Manager Section (menu + stock) -->
+        <!-- Cafe Manager Section (inventory → Zentory) -->
         <div id="cafe-manager-section" class="hidden">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 class="font-orbitron text-2xl font-bold flex items-center gap-3" style="color: var(--neon-orange);">
-                <i data-lucide="coffee" class="w-7 h-7"></i> CAFE MANAGER
-              </h2>
-              <p class="text-sm text-gray-500 mt-1">Products, stock, margin &amp; purchases</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" onclick="openFoodItemModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm" style="background: rgba(255,107,0,0.2); border: 1px solid var(--neon-orange); color: var(--neon-orange);">
-                <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i> Add Item
-              </button>
-              <button type="button" id="stockPurchaseBtn" onclick="openStockPurchaseModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm"
-                style="background: rgba(0,255,136,0.15); border: 1px solid var(--neon-green); color: var(--neon-green);">
-                + Record Purchase
-              </button>
-              <button type="button" onclick="openStockAdjustModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm border border-gray-700 text-gray-300 hover:border-cyan-500">
-                Adjust Stock
-              </button>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Products</div>
-              <div id="cafeStatItems" class="stock-kpi-value" style="color: var(--neon-cyan);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Low / Out</div>
-              <div id="cafeStatLow" class="stock-kpi-value" style="color: var(--neon-orange);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Units on hand</div>
-              <div id="cafeStatUnits" class="stock-kpi-value" style="color: var(--neon-green);">0</div>
-            </div>
-            <div class="stock-kpi">
-              <div class="stock-kpi-label">Purchases (30d)</div>
-              <div id="cafeStatPurchases" class="stock-kpi-value" style="color: var(--neon-purple);">₹0</div>
-            </div>
-          </div>
-
-          <div id="cafeLowAlert" class="hidden mb-4 p-3 rounded-xl text-sm" style="background: rgba(255,107,0,0.1); border: 1px solid rgba(255,107,0,0.35); color: #ffb347;"></div>
-
-          <div class="flex flex-wrap gap-2 mb-4">
-            <button type="button" class="stock-tab cafe-tab active" data-tab="products" onclick="setCafeTab('products')">Products</button>
-            <button type="button" class="stock-tab cafe-tab" data-tab="purchases" onclick="setCafeTab('purchases')">Purchases</button>
-            <button type="button" class="stock-tab cafe-tab" data-tab="log" onclick="setCafeTab('log')">Stock log</button>
-          </div>
-
-          <div id="cafeProductsPanel">
-            <div class="flex gap-2 mb-3 overflow-x-auto pb-1">
-              <button class="food-cat-btn cafe-cat-btn selected px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="all" onclick="filterFoodCategory('all')">All</button>
-              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="snacks" onclick="filterFoodCategory('snacks')">🍿 Snacks</button>
-              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="drinks" onclick="filterFoodCategory('drinks')">🥤 Drinks</button>
-              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="meals" onclick="filterFoodCategory('meals')">🍽️ Meals</button>
-              <button class="food-cat-btn cafe-cat-btn px-3 py-1.5 rounded-lg text-xs font-orbitron whitespace-nowrap" data-category="combos" onclick="filterFoodCategory('combos')">🎁 Combos</button>
-            </div>
-            <div class="flex flex-wrap gap-2 mb-3">
-              <input type="text" id="cafeSearch" class="neon-input flex-1 min-w-[160px] px-3 py-2 rounded-lg text-sm" placeholder="Search products…" oninput="filterCafeSearch()"/>
-              <select id="cafeStockFilter" class="neon-input px-3 py-2 rounded-lg text-xs" onchange="filterStockInventory()">
-                <option value="all">All items</option>
-                <option value="low">Low stock</option>
-                <option value="out">Out of stock</option>
-                <option value="untracked">Untracked (∞)</option>
-                <option value="tracked">Tracked only</option>
-              </select>
-            </div>
-            <div id="cafeProductList" class="space-y-2"></div>
-          </div>
-
-          <div id="stockPurchasesPanel" class="hidden">
-            <div id="stockPurchasesList" class="space-y-2"></div>
-          </div>
-
-          <div id="stockLogPanel" class="hidden">
-            <div id="stockLogList" class="space-y-2"></div>
-          </div>
-
-          <!-- Food Item Modal -->
-          <div id="foodItemModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
-            <div class="neon-card rounded-2xl w-full max-w-md overflow-hidden">
-              <div class="p-4 border-b border-gray-800">
-                <h3 id="foodItemModalTitle" class="font-orbitron text-lg" style="color: var(--neon-orange);">ADD FOOD ITEM</h3>
-              </div>
-              <form id="foodItemForm" class="p-4 space-y-4" onsubmit="saveFoodItem(event)">
-                <input type="hidden" id="foodItemId" value="">
-                <div>
-                  <label class="text-xs text-gray-400 uppercase block mb-2">Item Name</label>
-                  <input type="text" id="foodItemName" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="e.g. Maggi, Cold Coffee" required>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-2">Sell Price (₹)</label>
-                    <input type="number" id="foodItemPrice" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="0" min="1" required>
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-2">Cost (₹)</label>
-                    <input type="number" id="foodItemCost" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="optional" min="0" step="0.01">
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-2">Stock (optional)</label>
-                    <input type="number" id="foodItemStock" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="∞" min="0">
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-2">Category</label>
-                    <select id="foodItemCategory" class="neon-input w-full px-3 py-2 rounded-lg" required>
-                      <option value="snacks">🍿 Snacks</option>
-                      <option value="drinks">🥤 Drinks</option>
-                      <option value="meals">🍽️ Meals</option>
-                      <option value="combos">🎁 Combos</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3">
-                  <input type="checkbox" id="foodItemAvailable" checked class="w-4 h-4 rounded">
-                  <label for="foodItemAvailable" class="text-sm text-gray-400">Available for sale</label>
-                </div>
-                <div class="flex gap-3 pt-2">
-                  <button type="button" onclick="closeFoodItemModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
-                  <button type="submit" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(255,107,0,0.2); border: 1px solid var(--neon-orange); color: var(--neon-orange);">Save</button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          <!-- Food Delete Modal -->
-          <div id="foodDeleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
-            <div class="neon-card rounded-2xl w-full max-w-sm p-6 text-center">
-              <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style="background: rgba(255,0,68,0.2);">
-                <i data-lucide="trash-2" class="w-7 h-7" style="color: var(--neon-red);"></i>
-              </div>
-              <h3 class="font-orbitron text-lg mb-2" style="color: var(--neon-red);">Delete Food Item?</h3>
-              <p class="text-gray-400 text-sm mb-6">This item will be removed from the menu.</p>
-              <div class="flex gap-3">
-                <button onclick="closeFoodDeleteModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-800">Cancel</button>
-                <button onclick="confirmFoodDelete()" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(255,0,68,0.2); border: 1px solid var(--neon-red); color: var(--neon-red);">Delete</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Purchase Modal -->
-          <div id="stockPurchaseModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
-            <div class="neon-card rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-              <div class="p-4 border-b border-gray-800 flex items-center justify-between">
-                <h3 class="font-orbitron text-lg" style="color: var(--neon-green);">RECORD PURCHASE</h3>
-                <button type="button" onclick="closeStockPurchaseModal()" class="text-gray-400 hover:text-white">✕</button>
-              </div>
-              <form class="p-4 space-y-4" onsubmit="saveStockPurchase(event)">
-                <p class="text-[11px] text-gray-500">Adds stock and creates a Finance expense under <strong style="color:var(--neon-orange);">Food Purchase</strong>.</p>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Date</label>
-                    <input type="date" id="stockPurchaseDate" class="neon-input w-full px-3 py-2 rounded-lg" required>
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Vendor</label>
-                    <input type="text" id="stockPurchaseVendor" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="Supplier">
-                  </div>
-                </div>
-                <div>
-                  <label class="text-xs text-gray-400 uppercase block mb-1">Note</label>
-                  <input type="text" id="stockPurchaseNote" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="Weekly snacks restock">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Cash ₹</label>
-                    <input type="number" id="stockPurchaseCash" class="neon-input w-full px-3 py-2 rounded-lg" min="0" placeholder="0" oninput="syncStockPurchasePay()">
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Online ₹</label>
-                    <input type="number" id="stockPurchaseOnline" class="neon-input w-full px-3 py-2 rounded-lg" min="0" placeholder="0" oninput="syncStockPurchasePay()">
-                  </div>
-                </div>
-                <div class="flex justify-between text-xs">
-                  <span class="text-gray-500">Lines total</span>
-                  <span id="stockPurchaseLinesTotal" class="font-orbitron" style="color: var(--neon-cyan);">₹0</span>
-                </div>
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <label class="text-xs text-gray-400 uppercase">Line items</label>
-                    <button type="button" onclick="addStockPurchaseLine()" class="text-xs" style="color: var(--neon-cyan);">+ Add line</button>
-                  </div>
-                  <div id="stockPurchaseLines" class="space-y-2"></div>
-                </div>
-                <div class="flex gap-3 pt-1">
-                  <button type="button" onclick="closeStockPurchaseModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400">Cancel</button>
-                  <button type="submit" id="stockPurchaseSaveBtn" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(0,255,136,0.2); border: 1px solid var(--neon-green); color: var(--neon-green);">Save purchase</button>
-                </div>
-              </form>
-            </div>
-          </div>
-
-          <!-- Adjust Modal -->
-          <div id="stockAdjustModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
-            <div class="neon-card rounded-2xl w-full max-w-md">
-              <div class="p-4 border-b border-gray-800 flex items-center justify-between">
-                <h3 class="font-orbitron text-lg" style="color: var(--neon-cyan);">ADJUST STOCK</h3>
-                <button type="button" onclick="closeStockAdjustModal()" class="text-gray-400 hover:text-white">✕</button>
-              </div>
-              <form class="p-4 space-y-4" onsubmit="saveStockAdjust(event)">
-                <div>
-                  <label class="text-xs text-gray-400 uppercase block mb-1">Item</label>
-                  <select id="stockAdjustItem" class="neon-input w-full px-3 py-2 rounded-lg" required></select>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Delta (+/-)</label>
-                    <input type="number" id="stockAdjustDelta" class="neon-input w-full px-3 py-2 rounded-lg" required>
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-400 uppercase block mb-1">Reason</label>
-                    <select id="stockAdjustReason" class="neon-input w-full px-3 py-2 rounded-lg">
-                      <option value="adjust">Correction</option>
-                      <option value="waste">Waste / spoilage</option>
-                      <option value="count">Stock count</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label class="text-xs text-gray-400 uppercase block mb-1">Note</label>
-                  <input type="text" id="stockAdjustNote" class="neon-input w-full px-3 py-2 rounded-lg" placeholder="Optional">
-                </div>
-                <div class="flex gap-3">
-                  <button type="button" onclick="closeStockAdjustModal()" class="flex-1 py-2.5 rounded-lg border border-gray-700 text-gray-400">Cancel</button>
-                  <button type="submit" class="flex-1 py-2.5 rounded-lg font-semibold" style="background: rgba(0,240,255,0.15); border: 1px solid var(--neon-cyan); color: var(--neon-cyan);">Apply</button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <!-- Content rendered by cafe-manager.js -->
         </div>
 
     </main>
@@ -2414,7 +2185,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=noact1')
+        navigator.serviceWorker.register('../sw.js?v=zentory1')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -3194,11 +2965,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=noact1"></script>
-  <script type="module" src="js/bookings.js?v=noact1"></script>
+  <script type="module" src="js/dashboard.js?v=zentory1"></script>
+  <script type="module" src="js/bookings.js?v=zentory1"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
-  <script type="module" src="js/recharge-food.js"></script>
+  <script type="module" src="js/recharge-food.js?v=zentory1"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->

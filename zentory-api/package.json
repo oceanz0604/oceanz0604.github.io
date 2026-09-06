@@ -1,0 +1,8 @@
+{
+  "name": "zentory-api",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Zentory HTTP API for OceanZ cafe dual-write sales",
+  "engines": { "node": ">=18" }
+}

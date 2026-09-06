@@ -3,7 +3,7 @@
  * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v10-noact';
+const CACHE_NAME = 'oceanz-v11-zentory';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)
