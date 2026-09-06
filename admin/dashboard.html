@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory1">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory2">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -2185,7 +2185,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=zentory1')
+        navigator.serviceWorker.register('../sw.js?v=zentory2')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2965,11 +2965,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=zentory1"></script>
-  <script type="module" src="js/bookings.js?v=zentory1"></script>
+  <script type="module" src="js/dashboard.js?v=zentory2"></script>
+  <script type="module" src="js/bookings.js?v=zentory2"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
-  <script type="module" src="js/recharge-food.js?v=zentory1"></script>
+  <script type="module" src="js/recharge-food.js?v=zentory2"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->

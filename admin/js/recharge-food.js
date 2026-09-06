@@ -25,7 +25,7 @@ import {
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
-import { fetchZentoryProducts, postZentorySale } from "../../shared/zentory-api.js";
+import { fetchZentoryProducts, postZentorySale, voidZentorySale } from "../../shared/zentory-api.js";
 
 // ==================== FIREBASE ====================
 
@@ -666,6 +666,12 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
 
   try {
     await initFoodFirebase();
+
+    // Restore Zentory stock for this cafe sale (soft-fail).
+    const zVoid = await voidZentorySale(`food_sales/${dateStr}/${id}`);
+    if (!zVoid?.ok) {
+      console.warn("[RechargeFood] Zentory void failed:", zVoid?.error);
+    }
 
     // Remove sale first, then scrub matching credit-collection log rows
     await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).remove();
