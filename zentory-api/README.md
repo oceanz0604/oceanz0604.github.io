@@ -42,6 +42,17 @@ returns products[].categoryName like Maggi/Fries/Drinks (not only Snacks/Drinks)
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/api/health` | No auth |
-| `GET` | `/api/products?ownerId=&locationId=` | Header `X-Zentory-Key`; includes `categories[]` |
-| `POST` | `/api/sales` | FEFO lot consume; idempotent on `externalId` |
-| `POST` | `/api/sales/void` | Restore lots |
+| `GET` | `/api/products?ownerId=&locationId=` | `categories[]`; complex items include `makeToOrder` and `stock` = how many you can make from lots |
+| `POST` | `/api/sales` | Simple SKUs: FEFO finished goods. Complex MTO: deduct BOM lots immediately. **409** if an ingredient is short (`missingIngredient`). Idempotent on `externalId` |
+| `POST` | `/api/sales/void` | Restore consumed lots |
+
+## Command for the Zentory Cloud Agent (MTO sales.js)
+
+Live Zentory already has MTO (PR #4). If cafe `zentory-api/api/_lib/sales.js` is newer (named ingredient on 409), paste:
+
+```
+Copy api/_lib/sales.js and api/sales.js from
+https://github.com/oceanz0604/oceanz0604.github.io/tree/cursor/mto-food-sales-6b9a/zentory-api
+into this repo root api/ (do not nest under zentory-api/). Keep the PWA. Merge, deploy.
+409 responses should include error text naming the missing ingredient.
+```
