@@ -3,7 +3,7 @@
  * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v15-scroll';
+const CACHE_NAME = 'oceanz-v16-foodscroll';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)
