@@ -155,8 +155,8 @@ export const EXPENSE_CATEGORIES = [
   { id: "maintenance", name: "Maintenance", icon: "🔧", color: "#ff922b" },
   { id: "supplies", name: "Supplies", icon: "📦", color: "#845ef7" },
   { id: "equipment", name: "Equipment", icon: "🖥️", color: "#20c997" },
-  { id: "food_purchase", name: "Food Purchase", icon: "🍔", color: "#ff922b" },
-  { id: "food_supplies", name: "Food Supplies", icon: "🥤", color: "#fcc419" },
+  { id: "food_purchase", name: "Cafe stock", icon: "🍔", color: "#ff922b" },
+  { id: "food_supplies", name: "Cafe extras", icon: "🥤", color: "#fcc419" },
   { id: "other", name: "Other", icon: "📋", color: "#868e96" }
 ];
 
