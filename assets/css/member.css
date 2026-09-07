@@ -6,10 +6,6 @@
 /* ==================== MEMBER BODY BACKGROUND ==================== */
 body.member-page {
   background: var(--dark-bg);
-  background-image: 
-    linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
 }
 
 body.member-page::before {
@@ -59,7 +55,6 @@ body.member-page .neon-card::before {
 .tab-bar {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  backdrop-filter: blur(10px);
 }
 
 .tab-btn {
@@ -109,9 +104,8 @@ body.member-page .neon-btn:hover {
   left: 0;
   right: 0;
   height: 56px;
-  background: linear-gradient(180deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0.95) 100%);
+  background: #0c0c12;
   border-bottom: 1px solid rgba(0, 240, 255, 0.2);
-  backdrop-filter: blur(20px);
   z-index: 40;
   padding: 0 12px;
   display: flex;
@@ -439,9 +433,8 @@ body.member-page .booking-card:hover {
 
 /* ==================== MEMBER SIDEBAR ==================== */
 .member-sidebar {
-  background: rgba(10, 10, 15, 0.98);
+  background: #0c0c12;
   border-right: 1px solid var(--card-border);
-  backdrop-filter: blur(20px);
   transition: transform 0.3s ease;
   z-index: 60; /* Above mobile header */
   display: flex;
@@ -451,8 +444,7 @@ body.member-page .booking-card:hover {
 .member-sidebar-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.7);
   z-index: 55; /* Above mobile header but below sidebar */
   opacity: 0;
   pointer-events: none;
@@ -675,8 +667,7 @@ body.member-login::before {
     position: relative;
   }
   
-  /* Force all content to stay within bounds */
-  .neon-card, .card, section, article, div:not(.member-sidebar):not(.sidebar-backdrop):not(.modal) {
+  .neon-card, .card, section, article {
     max-width: 100% !important;
     box-sizing: border-box;
   }

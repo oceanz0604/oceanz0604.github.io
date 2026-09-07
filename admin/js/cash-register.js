@@ -15,6 +15,7 @@ import {
   SharedCache
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
+import { ensureJsPdf } from "../../shared/lazy-cdn.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -940,11 +941,13 @@ async function saveModalEntry() {
 
 // ==================== EXPORT ====================
 
-window.exportCashPDF = function() {
+window.exportCashPDF = async function() {
   if (cashData.length === 0) {
     notifyWarning("No data to export");
     return;
   }
+
+  await ensureJsPdf();
   
   // Calculate totals
   let totalSale = 0, totalWithdrawal = 0, totalExpenses = 0;

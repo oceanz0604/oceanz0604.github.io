@@ -13,14 +13,19 @@
   --neon-orange: #ff6b00;
   --neon-yellow: #ffff00;
   --dark-bg: #0a0a0f;
-  --card-bg: rgba(15, 15, 25, 0.85);
+  --card-bg: #12121c;
   --card-border: rgba(255, 0, 68, 0.2);
 }
 
 /* ==================== BASE STYLES ==================== */
-* {
-  font-family: 'Rajdhani', sans-serif;
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html, body, button, input, select, textarea {
+  font-family: 'Rajdhani', sans-serif;
 }
 
 /* Prevent horizontal overflow globally */
@@ -56,12 +61,21 @@ article {
   overflow-x: hidden;
 }
 
-/* Fix for tables on mobile */
+.main-content {
+  position: relative;
+  z-index: 1;
+}
+
 table {
   max-width: 100%;
-  display: block;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* Fix for pre/code blocks */
@@ -103,8 +117,7 @@ input, select, textarea {
 .neon-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  box-shadow: 0 0 30px rgba(255, 0, 68, 0.05);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .neon-card::before {
@@ -389,8 +402,7 @@ input, select, textarea {
 
 /* ==================== MODAL ==================== */
 .modal-bg {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .modal-card {
@@ -456,8 +468,7 @@ input, select, textarea {
     max-width: 100% !important;
   }
   
-  /* All images and media */
-  img, video, iframe, canvas, svg {
+  img, video, iframe {
     max-width: 100%;
     height: auto;
   }
@@ -476,11 +487,6 @@ input, select, textarea {
   /* Grid fixes */
   .grid {
     max-width: 100%;
-  }
-  
-  /* Flex container fixes */
-  .flex {
-    flex-wrap: wrap;
   }
   
   /* Button text wrapping */
@@ -523,5 +529,21 @@ input, select, textarea {
   input, select, textarea {
     color-scheme: dark;
   }
+}
+
+/* GPU blur on every card/overlay was the main scroll jank source */
+.neon-card,
+.sidebar,
+.mobile-header,
+.member-mobile-header,
+.member-sidebar,
+.tab-bar,
+.sidebar-backdrop,
+.member-sidebar-backdrop,
+.modal-bg,
+.pos-modal,
+.fixed.inset-0 {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 

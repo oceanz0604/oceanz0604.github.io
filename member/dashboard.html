@@ -17,12 +17,11 @@
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/member.css">
+  <link rel="stylesheet" href="../assets/css/common.css?v=scroll1">
+  <link rel="stylesheet" href="../assets/css/member.css?v=scroll1">
   <style>
     :root {
       --neon-cyan: #00f0ff;
@@ -41,10 +40,6 @@
 
     body {
       background: var(--dark-bg);
-      background-image: 
-        linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
-      background-size: 40px 40px;
     }
 
     body::before {
@@ -69,7 +64,7 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       box-shadow: 0 0 30px rgba(0, 240, 255, 0.05);
-      backdrop-filter: blur(10px);
+      backdrop-filter: none;
       position: relative;
     }
 
@@ -108,7 +103,7 @@
     .tab-bar {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      backdrop-filter: blur(10px);
+      backdrop-filter: none;
     }
 
     .tab-btn {
@@ -368,7 +363,7 @@
     .member-sidebar {
       background: rgba(10, 10, 15, 0.98);
       border-right: 1px solid var(--card-border);
-      backdrop-filter: blur(20px);
+      backdrop-filter: none;
       transition: transform 0.3s ease;
     }
 
@@ -376,7 +371,7 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(3px);
+      backdrop-filter: none;
       z-index: 55;
       opacity: 0;
       pointer-events: none;
@@ -452,7 +447,7 @@
     /* Modal */
     .modal-bg {
       background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(5px);
+      backdrop-filter: none;
     }
 
     .modal-card {
@@ -1055,7 +1050,7 @@
 
   <!-- Install App Banner -->
   <div id="installBanner" class="fixed bottom-4 left-4 right-4 mx-auto max-w-sm p-4 rounded-xl hidden z-50"
-    style="background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(0,240,255,0.5); backdrop-filter: blur(10px); animation: slideUp 0.3s ease-out;">
+    style="background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(0,240,255,0.5); animation: slideUp 0.3s ease-out;">
     <div class="flex items-center gap-3">
       <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(0,240,255,0.2);">
         <svg viewBox="0 0 100 100" class="w-8 h-8">
@@ -1085,7 +1080,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="../shared/notify.js" type="module"></script>
-  <script src="js/dashboard.js" type="module"></script>
+  <script src="js/dashboard.js?v=scroll1" type="module"></script>
 
   <script>
     lucide.createIcons();
@@ -1218,7 +1213,7 @@
 
       // Service Worker Registration
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js')
+        navigator.serviceWorker.register('../sw.js?v=scroll1')
           .then(reg => console.log('SW registered:', reg.scope))
           .catch(err => console.log('SW registration failed:', err));
       }
