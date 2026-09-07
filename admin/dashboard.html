@@ -18,14 +18,11 @@
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory3">
+  <link rel="stylesheet" href="../assets/css/common.css?v=scroll1">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=scroll1">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -33,7 +30,6 @@
     .sidebar {
       background: var(--card-bg);
       border-right: 1px solid var(--card-border);
-      backdrop-filter: blur(10px);
       transition: transform 0.3s ease;
     }
 
@@ -52,8 +48,7 @@
     .sidebar-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.75);
       z-index: 35;
       opacity: 0;
       visibility: hidden;
@@ -181,8 +176,7 @@
     .neon-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      box-shadow: 0 0 30px rgba(255, 0, 68, 0.05);
-      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
 
     .neon-card::before {
@@ -1924,7 +1918,7 @@
         </div>
 
         <!-- Finance Expense Modal -->
-        <div id="finExpenseModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
+        <div id="finExpenseModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8)">
           <div class="neon-card rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div class="p-4 border-b border-gray-800 flex items-center justify-between">
               <h3 id="finExpenseModalTitle" class="font-orbitron text-lg" style="color: var(--neon-cyan);">ADD EXPENSE</h3>
@@ -2023,7 +2017,7 @@
         </div>
 
         <!-- Finance Delete Modal -->
-        <div id="finDeleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);">
+        <div id="finDeleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background: rgba(0,0,0,0.8)">
           <div class="neon-card rounded-2xl w-full max-w-sm p-6 text-center">
             <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style="background: rgba(255,0,68,0.2);">
               <i data-lucide="trash-2" class="w-7 h-7" style="color: var(--neon-red);"></i>
@@ -2185,7 +2179,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=zentory3')
+        navigator.serviceWorker.register('../sw.js?v=scroll1')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2243,7 +2237,7 @@
 
   <!-- Install App Banner -->
   <div id="installBanner" class="fixed bottom-4 left-4 right-4 mx-auto max-w-sm p-4 rounded-xl hidden z-50"
-    style="background: linear-gradient(135deg, rgba(255,0,68,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(255,0,68,0.5); backdrop-filter: blur(10px); animation: slideUp 0.3s ease-out;">
+    style="background: linear-gradient(135deg, rgba(255,0,68,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(255,0,68,0.5); animation: slideUp 0.3s ease-out;">
     <div class="flex items-center gap-3">
       <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(255,0,68,0.2);">
         <svg viewBox="0 0 100 100" class="w-8 h-8">
@@ -2264,7 +2258,7 @@
   </div>
 
   <!-- Add Recharge Modal -->
-  <div id="addRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+  <div id="addRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8)">
     <div class="neon-card rounded-2xl w-full max-w-lg p-6 mx-4 relative" style="border-color: rgba(0,255,136,0.5);">
       <button onclick="closeAddRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
       
@@ -2340,7 +2334,7 @@
   </div>
 
   <!-- Add Food / Snacks Modal (from Recharges page) -->
-  <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+  <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8)">
     <div class="neon-card rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
       <button onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
 
@@ -2421,7 +2415,7 @@
   </div>
 
   <!-- Credit Collection Modal -->
-  <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
+  <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8)">
     <div class="neon-card rounded-2xl w-full max-w-md p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
       <button onclick="closeCollectModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white">✕</button>
       
@@ -2473,7 +2467,7 @@
   </div>
 
   <!-- Logout Confirmation Modal -->
-  <div id="logoutModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+  <div id="logoutModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85)">
     <div class="neon-card rounded-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all" style="border-color: rgba(255,0,68,0.5); animation: modalSlideIn 0.3s ease-out;">
       
       <!-- Icon -->
@@ -2510,7 +2504,7 @@
   </div>
 
   <!-- Database Sync Panel Modal -->
-  <div id="dbSyncPanel" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+  <div id="dbSyncPanel" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85)">
     <div class="neon-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden mx-4 relative" style="border-color: rgba(0,255,136,0.5); animation: modalSlideIn 0.3s ease-out;">
       <!-- Header -->
       <div class="p-4 border-b border-gray-800 flex items-center justify-between">
@@ -2626,7 +2620,7 @@
   </div>
 
   <!-- PanCafe Sync Modal -->
-  <div id="syncModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+  <div id="syncModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85)">
     <div class="neon-card rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden mx-4 relative" style="border-color: rgba(0,240,255,0.5); animation: modalSlideIn 0.3s ease-out;">
       <!-- Header -->
       <div class="p-4 border-b border-gray-800 flex items-center justify-between">
@@ -2699,7 +2693,7 @@
   </div>
 
   <!-- Member Dossier Modal -->
-  <div id="memberDossierModal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-6" style="background: rgba(0,0,0,0.88); backdrop-filter: blur(10px);">
+  <div id="memberDossierModal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-6" style="background: rgba(0,0,0,0.88)">
     <div class="dossier-panel neon-card rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden relative flex flex-col" style="border-color: rgba(0,240,255,0.35); animation: modalSlideIn 0.28s ease-out;">
       <div class="dossier-scanline" aria-hidden="true"></div>
       <button type="button" onclick="closeMemberDossier()" class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:text-white" style="background: rgba(0,0,0,0.45);">✕</button>
@@ -2802,7 +2796,7 @@
   </div>
 
   <!-- Booking Details Modal -->
-  <div id="bookingDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+  <div id="bookingDetailsModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.85)">
     <div class="neon-card rounded-2xl w-full max-w-md mx-4" style="animation: modalSlideIn 0.3s ease-out;">
       <!-- Header -->
       <div class="p-4 border-b border-gray-800 flex items-center justify-between">
@@ -2969,11 +2963,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=zentory3"></script>
-  <script type="module" src="js/bookings.js?v=zentory3"></script>
+  <script type="module" src="js/dashboard.js?v=scroll1"></script>
+  <script type="module" src="js/bookings.js?v=scroll1"></script>
   <script type="module" src="js/recharges.js"></script>
-  <script type="module" src="js/cash-register.js"></script>
-  <script type="module" src="js/recharge-food.js?v=zentory3"></script>
+  <script type="module" src="js/cash-register.js?v=scroll1"></script>
+  <script type="module" src="js/recharge-food.js?v=scroll1"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->
