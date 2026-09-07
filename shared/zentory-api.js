@@ -72,8 +72,9 @@ export function mapZentoryPayment(paymentMode) {
 }
 
 /**
- * Post sale to Zentory after cafe food_sales write.
- * Soft-fails — never blocks cafe till money.
+ * Post sale to Zentory (MTO items deduct BOM lots immediately).
+ * 409 / ingredient shortage → blocked: true (do not write cafe till).
+ * Network / 5xx → ok: false so cafe can still save and flag the row.
  */
 export async function postZentorySale({
   externalId,
@@ -111,9 +112,36 @@ export async function postZentorySale({
       idempotent: !!data.idempotent,
     };
   } catch (e) {
+    const blocked = e.status === 409;
     console.warn("[Zentory] sale post failed:", e.message);
-    return { ok: false, error: e.message };
+    return {
+      ok: false,
+      blocked,
+      status: e.status || 0,
+      error: e.message,
+      missingIngredient: e.body?.missingIngredient || null,
+    };
   }
+}
+
+/** Apply Zentory result onto a cafe food_sales record. Throws when shortage blocked the sale. */
+export function applyZentorySaleResult(saleData, zResult) {
+  if (!zResult) return saleData;
+  if (zResult.ok) {
+    saleData.zentorySaleId = zResult.saleId || null;
+    saleData.zentoryReceipt = zResult.receiptNumber || null;
+    saleData.zentorySyncStatus = "ok";
+    saleData.zentorySyncError = null;
+    return saleData;
+  }
+  if (zResult.blocked) {
+    const err = new Error(zResult.error || "Not enough ingredients to make this item");
+    err.blocked = true;
+    throw err;
+  }
+  saleData.zentorySyncStatus = "failed";
+  saleData.zentorySyncError = zResult.error || "Zentory unavailable";
+  return saleData;
 }
 
 export async function voidZentorySale(externalId) {

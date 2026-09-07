@@ -16,6 +16,11 @@ export default async function handler(req, res) {
       sale: result.sale,
     }, req);
   } catch (e) {
-    return json(res, e.status || 500, { ok: false, error: e.message || "Server error" }, req);
+    return json(res, e.status || 500, {
+      ok: false,
+      error: e.message || "Server error",
+      missingIngredient: e.missingIngredient || null,
+      productName: e.productName || null,
+    }, req);
   }
 }

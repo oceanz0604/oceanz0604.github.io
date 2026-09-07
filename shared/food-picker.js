@@ -27,6 +27,7 @@ export function foodCategoryLabel(item) {
 export function foodCategoryEmoji(label) {
   const s = String(label || "").toLowerCase();
   if (s.includes("drink") || s.includes("beverage") || s.includes("juice") || s.includes("cola")) return "🥤";
+  if (s.includes("tea") || s.includes("coffee") || s.includes("chai")) return "☕";
   if (s.includes("fries") || s.includes("fry")) return "🍟";
   if (s.includes("maggi") || s.includes("noodle")) return "🍜";
   if (s.includes("pasta")) return "🍝";
@@ -78,4 +79,40 @@ export function escapeFoodHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+export function mapZentoryMenuProduct(p) {
+  return indexFoodItem({
+    id: p.id,
+    name: p.name,
+    price: p.price,
+    category: p.category || "snacks",
+    categoryName: p.categoryName || p.category || "Snacks",
+    categoryId: p.categoryId || "",
+    sku: p.sku || "",
+    stock: p.stock,
+    makeToOrder: !!p.makeToOrder,
+    type: p.type || "simple",
+    cafeExternalId: p.cafeExternalId || null,
+    available: true,
+    fromZentory: true,
+  });
+}
+
+/** Zentory `stock` is on-hand for simple SKUs and makeable plates for MTO. */
+export function foodItemOutOfStock(item) {
+  if (item?.stock === null || item?.stock === undefined) return false;
+  return Number(item.stock) <= 0;
+}
+
+export function foodStockHint(item) {
+  if (item?.stock === null || item?.stock === undefined) return "";
+  const n = Number(item.stock) || 0;
+  if (item.makeToOrder) return n > 0 ? `${n} ready` : "Need ingredients";
+  return n > 0 ? String(n) : "Out";
+}
+
+export function canAddFoodQty(item, nextQty) {
+  if (item?.stock === null || item?.stock === undefined) return true;
+  return nextQty <= Number(item.stock);
 }

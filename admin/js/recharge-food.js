@@ -25,13 +25,17 @@ import {
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
-import { fetchZentoryProducts, postZentorySale, voidZentorySale, invalidateZentoryProductCache } from "../../shared/zentory-api.js";
+import { fetchZentoryProducts, postZentorySale, voidZentorySale, invalidateZentoryProductCache, applyZentorySaleResult } from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
   filterFoodItems,
   indexFoodItem,
   foodCategoryEmoji,
-  escapeFoodHtml
+  escapeFoodHtml,
+  mapZentoryMenuProduct,
+  foodItemOutOfStock,
+  foodStockHint,
+  canAddFoodQty,
 } from "../../shared/food-picker.js";
 
 // ==================== FIREBASE ====================
@@ -220,19 +224,7 @@ async function loadFoodMenuItems({ force = false } = {}) {
 
   try {
     const products = await fetchZentoryProducts({ force });
-    foodMenu = products.map((p) => indexFoodItem({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      category: p.category || "snacks",
-      categoryName: p.categoryName || p.category || "Snacks",
-      categoryId: p.categoryId || "",
-      sku: p.sku || "",
-      stock: p.stock,
-      cafeExternalId: p.cafeExternalId || null,
-      available: true,
-      fromZentory: true,
-    }));
+    foodMenu = products.map((p) => mapZentoryMenuProduct(p));
     foodMenu.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     renderFoodMenuPicker({ chips: true });
   } catch (err) {
@@ -299,13 +291,14 @@ function renderFoodMenuPicker({ chips = false } = {}) {
 
   let html = "";
   for (const item of filtered) {
-    const disabled = item.stock !== null && item.stock !== undefined && item.stock <= 0;
+    const disabled = foodItemOutOfStock(item);
     const cat = item.categoryName || item.category || "";
     const emoji = item._emoji || foodCategoryEmoji(cat);
+    const hint = foodStockHint(item);
     html += `<button type="button" data-food-id="${escapeFoodHtml(item.id)}" ${disabled ? "disabled" : ""} class="food-menu-tile${disabled ? " is-disabled" : ""}">`
       + `<span class="food-menu-tile-name">${emoji} ${escapeFoodHtml(item.name)}</span>`
       + `<span class="food-menu-tile-meta"><b>₹${item.price || 0}</b>`
-      + (item.stock != null ? `<span>${item.stock}</span>` : "")
+      + (hint ? `<span>${escapeFoodHtml(hint)}</span>` : "")
       + `</span></button>`;
   }
   container.innerHTML = html;
@@ -437,15 +430,15 @@ window.addFoodRechargeItem = function(itemId) {
   const item = foodMenu.find(m => m.id === itemId);
   if (!item) return;
 
-  if (item.stock !== null && item.stock !== undefined && item.stock <= 0) {
-    toast("warning", "Out of stock");
+  if (foodItemOutOfStock(item)) {
+    toast("warning", item.makeToOrder ? "Need ingredients in Zentory" : "Out of stock");
     return;
   }
 
   const existing = foodCart.find(c => c.id === itemId);
   if (existing) {
-    if (item.stock !== null && item.stock !== undefined && existing.qty >= item.stock) {
-      toast("warning", "Not enough stock");
+    if (!canAddFoodQty(item, existing.qty + 1)) {
+      toast("warning", item.makeToOrder ? "Not enough ingredients for another plate" : "Not enough stock");
       return;
     }
     existing.qty += 1;
@@ -865,18 +858,7 @@ window.saveFoodRechargeSale = async function() {
     } else {
       saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
       saleId = saleRef.key;
-      await saleRef.set(saleData);
-    }
 
-    // Sync aggregate food credit ledger by delta of pending credit
-    const newPending = Math.max(0, saleData.credit - (saleData.creditPaid || 0));
-    const creditDelta = newPending - previousPending;
-    if (creditDelta !== 0) {
-      await adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData);
-    }
-
-    // Dual-write stock to Zentory on create only (edits do not re-adjust). Soft-fail.
-    if (!foodEditId) {
       const zentoryItems = foodCart.filter((item) => {
         const menu = foodMenu.find((m) => m.id === item.id);
         return menu?.fromZentory || String(item.id || "").startsWith("prod_");
@@ -895,15 +877,26 @@ window.saveFoodRechargeSale = async function() {
           staff: session?.name || session?.email || "Admin",
           note: ($("foodRechargeNote")?.value || "").trim() || "OceanZ Recharges",
         });
-        if (zResult?.ok && zResult.saleId) {
-          await saleRef.update({
-            zentorySaleId: zResult.saleId,
-            zentoryReceipt: zResult.receiptNumber || null,
-          });
-        } else if (!zResult?.ok) {
-          toast("warning", "Sale saved. Stock sync to Zentory failed — check inventory later.");
+        applyZentorySaleResult(saleData, zResult);
+        if (zResult.ok === false && !zResult.blocked) {
+          toast("warning", "Sale saved. Stock sync to Zentory failed — check this row later.");
         }
       }
+      try {
+        await saleRef.set(saleData);
+      } catch (writeErr) {
+        if (saleData.zentorySaleId) {
+          await voidZentorySale(`food_sales/${saleDate}/${saleId}`);
+        }
+        throw writeErr;
+      }
+    }
+
+    // Sync aggregate food credit ledger by delta of pending credit
+    const newPending = Math.max(0, saleData.credit - (saleData.creditPaid || 0));
+    const creditDelta = newPending - previousPending;
+    if (creditDelta !== 0) {
+      await adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData);
     }
 
     SharedCache.invalidateFoodSales();

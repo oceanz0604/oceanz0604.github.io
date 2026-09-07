@@ -278,7 +278,9 @@ export function foodSaleToLedger(sale = {}) {
     admin: sale.admin || sale.staffName || "Admin",
     createdAt,
     items: normalized.items,
-    pendingCredit: Math.max(0, credit - creditPaid)
+    pendingCredit: Math.max(0, credit - creditPaid),
+    zentorySyncStatus: sale.zentorySyncStatus || (sale.zentorySaleId ? "ok" : null),
+    zentorySyncError: sale.zentorySyncError || null,
   };
 }
 

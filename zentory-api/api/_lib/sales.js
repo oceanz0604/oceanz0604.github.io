@@ -7,6 +7,16 @@ function lotSort(a, b) {
   return new Date(a.purchaseDate || a.createdAt || 0) - new Date(b.purchaseDate || b.createdAt || 0);
 }
 
+function isComplexRecipe(product) {
+  const recipe = product?.recipe;
+  return (
+    (product?.type || "simple") === "complex" &&
+    recipe &&
+    Array.isArray(recipe.ingredients) &&
+    recipe.ingredients.length > 0
+  );
+}
+
 async function availableLots(productId, locationId, ownerId) {
   const batches = await listByOwner("batches", ownerId);
   return batches
@@ -38,6 +48,43 @@ async function pickLots(productId, locationId, ownerId, qty) {
     need -= take;
   }
   return need > 0.0001 ? null : picks;
+}
+
+function shortageError(productName, ingredientName, need) {
+  const ing = ingredientName || "an ingredient";
+  const err = new Error(`Cannot make ${productName}: not enough ${ing}${need != null ? ` (need ${need})` : ""}`);
+  err.status = 409;
+  err.code = "INSUFFICIENT_INGREDIENT";
+  err.missingIngredient = ing;
+  err.productName = productName;
+  return err;
+}
+
+/** Simple SKU: FEFO the finished goods. Complex MTO: FEFO each BOM ingredient. */
+async function consumeSaleQty(product, locationId, ownerId, qty, productById) {
+  if (isComplexRecipe(product)) {
+    const recipe = product.recipe;
+    const scale = qty / Math.max(1, Number(recipe.outputQty) || 1);
+    const picks = [];
+    for (const ing of recipe.ingredients) {
+      const need = (Number(ing.qty) || 0) * scale;
+      if (need <= 0) continue;
+      const lotPicks = await pickLots(ing.productId, locationId, ownerId, need);
+      if (!lotPicks) {
+        const ingProd = productById?.[ing.productId];
+        throw shortageError(product.name, ingProd?.name || ing.name, Math.round(need * 1000) / 1000);
+      }
+      picks.push(...lotPicks.map((pk) => ({ ...pk, productId: ing.productId })));
+    }
+    const costTotal = await consumeLots(picks, ownerId);
+    return { picks, costTotal };
+  }
+
+  const lotPicks = await pickLots(product.id, locationId, ownerId, qty);
+  if (!lotPicks) throw shortageError(product.name, product.name, qty);
+  const picks = lotPicks.map((pk) => ({ ...pk, productId: product.id }));
+  const costTotal = await consumeLots(picks, ownerId);
+  return { picks, costTotal };
 }
 
 async function consumeLots(picks, ownerId) {
@@ -80,15 +127,32 @@ async function findSaleByExternalId(ownerId, externalId) {
 }
 
 export async function listProducts({ ownerId, locationId }) {
-  const [productDocs, categoryDocs, stock] = await Promise.all([
+  const [productDocs, categoryDocs, stock, batches] = await Promise.all([
     listByOwner("products", ownerId),
     listCollection("categories"),
     listByOwner("stock", ownerId),
+    listByOwner("batches", ownerId),
   ]);
   const catById = Object.fromEntries(categoryDocs.map((c) => [c.id, c]));
   const stockMap = {};
   stock.filter((s) => !locationId || s.locationId === locationId)
     .forEach((s) => { stockMap[s.productId] = (stockMap[s.productId] || 0) + (Number(s.quantity) || 0); });
+  const batchQty = {};
+  batches.filter((b) => b && (!locationId || b.locationId === locationId) && (b.qty || 0) > 0)
+    .forEach((b) => { batchQty[b.productId] = (batchQty[b.productId] || 0) + (Number(b.qty) || 0); });
+
+  function makeableQty(p) {
+    if (!isComplexRecipe(p)) return stockMap[p.id] ?? 0;
+    const out = Math.max(1, Number(p.recipe.outputQty) || 1);
+    let max = Infinity;
+    p.recipe.ingredients.forEach((ing) => {
+      const per = Number(ing.qty) || 0;
+      if (per <= 0) return;
+      const have = batchQty[ing.productId] || 0;
+      max = Math.min(max, Math.floor((have / per) * out + 1e-9));
+    });
+    return max === Infinity ? 0 : Math.max(0, max);
+  }
 
   const productsOut = productDocs
     .filter((p) => {
@@ -110,7 +174,8 @@ export async function listProducts({ ownerId, locationId }) {
         categoryId: p.categoryId || "",
         category: slugifyCategory(categoryName),
         categoryName,
-        stock: stockMap[p.id] ?? 0,
+        stock: makeableQty(p),
+        makeToOrder: isComplexRecipe(p),
         cafeExternalId: p.cafeExternalId || null,
         type: p.type || "simple",
       };
@@ -161,10 +226,8 @@ export async function createSale(payload) {
     const product = byId[productId];
     if (!product) throw Object.assign(new Error(`Unknown productId: ${productId}`), { status: 400 });
     const price = raw.unitPrice != null ? Number(raw.unitPrice) : Number(product.price) || 0;
-    const picks = await pickLots(productId, locationId, ownerId, qty);
-    if (!picks) throw Object.assign(new Error(`Insufficient stock for ${product.name} (need ${qty})`), { status: 409 });
-    const costTotal = await consumeLots(picks, ownerId);
-    allConsumed.push(...picks.map((pk) => ({ ...pk, productId })));
+    const { picks, costTotal } = await consumeSaleQty(product, locationId, ownerId, qty, byId);
+    allConsumed.push(...picks);
     lineItems.push({
       productId,
       name: product.name,

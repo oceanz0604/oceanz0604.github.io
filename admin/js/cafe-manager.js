@@ -36,7 +36,7 @@ function renderZentoryHub() {
         <h3 class="font-orbitron text-sm mb-2" style="color: var(--neon-cyan);">Where things live</h3>
         <ul class="text-sm text-gray-400 space-y-2 list-disc list-inside">
           <li><span class="text-gray-200">Zentory</span> — products, stock levels, purchases, inventory analytics</li>
-          <li><span class="text-gray-200">Counter / Recharges</span> — sell food; stock deducts in Zentory automatically</li>
+          <li><span class="text-gray-200">Counter / Recharges</span> — sell food; Zentory deducts bottles <em>or</em> recipe ingredients for make-to-order items (fries, sandwiches, momos, tea/coffee)</li>
           <li><span class="text-gray-200">Finance</span> — cash register, food credits, gaming; enter food purchase expenses manually</li>
         </ul>
       </div>
@@ -44,8 +44,8 @@ function renderZentoryHub() {
       <div>
         <h3 class="font-orbitron text-sm mb-2" style="color: var(--neon-green);">Staff checklist</h3>
         <ol class="text-sm text-gray-400 space-y-2 list-decimal list-inside">
-          <li>Add or edit products and receive stock in <strong class="text-gray-200">Zentory</strong> (location: Cafe Counter).</li>
-          <li>Sell from Counter or Recharges as usual — do not adjust local menu stock.</li>
+          <li>Add or edit products and receive <strong class="text-gray-200">raw lots</strong> in Zentory (location: Cafe Counter). Cooked items do not need a Produce step.</li>
+          <li>Sell from Counter or Recharges. If ingredients are short, the sale is blocked and names the missing item.</li>
           <li>When you buy stock, record the spend in <strong class="text-gray-200">Finance → Expenses</strong> (Food Purchase).</li>
         </ol>
       </div>

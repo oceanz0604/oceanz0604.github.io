@@ -1304,6 +1304,9 @@ function render() {
     const typeBadge = isFood
       ? `<span class="txn-type-badge" style="background: rgba(255,107,0,0.2); color: var(--neon-orange);">Food</span>`
       : `<span class="txn-type-badge" style="background: rgba(0,240,255,0.12); color: var(--neon-cyan);">Game</span>`;
+    const stockWarn = isFood && r.zentorySyncStatus === "failed"
+      ? `<span class="txn-type-badge" title="${String(r.zentorySyncError || "Zentory stock sync failed").replace(/"/g, "&quot;")}" style="background: rgba(255,0,68,0.2); color: #ff6688;">Stock?</span>`
+      : "";
 
     const editFn = isFood ? `editFoodRecharge('${r.id}')` : `editRecharge('${r.id}')`;
     const deleteFn = isFood ? `deleteFoodRecharge('${r.id}')` : `deleteRecharge('${r.id}')`;
@@ -1327,7 +1330,7 @@ function render() {
       <td>
         <div class="flex items-center gap-1 min-w-0">
           <span class="txn-member font-orbitron font-bold truncate" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${r.member || r.customerName || "—"}</span>
-          ${typeBadge}
+          ${typeBadge}${stockWarn}
         </div>
         ${isFood && itemsText
           ? `<div class="txn-items" title="${itemsText}">${itemsText}</div>`

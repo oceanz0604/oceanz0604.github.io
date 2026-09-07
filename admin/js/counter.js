@@ -24,12 +24,16 @@ import {
   buildFoodSalePayload,
   foodCreditKey
 } from "../../shared/food-stats.js";
-import { fetchZentoryProducts, postZentorySale } from "../../shared/zentory-api.js";
+import { fetchZentoryProducts, postZentorySale, applyZentorySaleResult, voidZentorySale } from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
   filterFoodItems,
   foodCategoryEmoji,
-  escapeFoodHtml
+  escapeFoodHtml,
+  mapZentoryMenuProduct,
+  foodItemOutOfStock,
+  foodStockHint,
+  canAddFoodQty,
 } from "../../shared/food-picker.js";
 
 // ==================== FIREBASE INIT ====================
@@ -1024,19 +1028,7 @@ let foodSearchTimeout = null;
 async function loadFoodMenu() {
   try {
     const products = await fetchZentoryProducts();
-    foodMenu = products.map(p => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      category: p.category || "snacks",
-      categoryName: p.categoryName || p.category || "Snacks",
-      categoryId: p.categoryId || "",
-      sku: p.sku || "",
-      stock: p.stock,
-      cafeExternalId: p.cafeExternalId || null,
-      available: true,
-      fromZentory: true,
-    }));
+    foodMenu = products.map((p) => mapZentoryMenuProduct(p));
     foodMenu.sort((a, b) => a.name.localeCompare(b.name));
     console.log(`[Food] Loaded ${foodMenu.length} items from Zentory`);
     renderFoodMenu();
@@ -1101,14 +1093,15 @@ function renderFoodMenu() {
   
   container.innerHTML = filtered.map(item => {
     const emoji = foodCategoryEmoji(item.categoryName || item.category);
-    const isOutOfStock = item.stock !== null && item.stock <= 0;
+    const isOutOfStock = foodItemOutOfStock(item);
+    const hint = foodStockHint(item);
     const safeId = String(item.id).replace(/'/g, "\\'");
     
     return `
       <div class="food-menu-item ${isOutOfStock ? 'out-of-stock' : ''}" onclick="addToFoodCart('${safeId}')">
         <div class="item-emoji">${emoji}</div>
         <div class="item-name">${escapeFoodHtml(item.name)}</div>
-        <div class="item-price">₹${item.price}</div>
+        <div class="item-price">₹${item.price}${hint ? ` · ${escapeFoodHtml(hint)}` : ""}</div>
       </div>
     `;
   }).join("");
@@ -1129,11 +1122,20 @@ window.filterFoodMenu = function(category) {
 window.addToFoodCart = function(itemId) {
   const item = foodMenu.find(i => i.id === itemId);
   if (!item) return;
-  
-  // Check if already in cart
+
+  if (foodItemOutOfStock(item)) {
+    notifyWarning(item.makeToOrder ? "Need ingredients in Zentory" : "Out of stock");
+    return;
+  }
+
   const existingIndex = foodCart.findIndex(c => c.id === itemId);
   if (existingIndex >= 0) {
-    foodCart[existingIndex].qty += 1;
+    const nextQty = foodCart[existingIndex].qty + 1;
+    if (!canAddFoodQty(item, nextQty)) {
+      notifyWarning(item.makeToOrder ? "Not enough ingredients for another plate" : "Not enough stock");
+      return;
+    }
+    foodCart[existingIndex].qty = nextQty;
   } else {
     foodCart.push({
       id: item.id,
@@ -1152,13 +1154,16 @@ window.addToFoodCart = function(itemId) {
 window.updateFoodCartQty = function(itemId, delta) {
   const index = foodCart.findIndex(c => c.id === itemId);
   if (index < 0) return;
-  
-  foodCart[index].qty += delta;
-  
+  const item = foodMenu.find(i => i.id === itemId);
+  const nextQty = foodCart[index].qty + delta;
+  if (nextQty > 0 && item && !canAddFoodQty(item, nextQty)) {
+    notifyWarning(item.makeToOrder ? "Not enough ingredients for another plate" : "Not enough stock");
+    return;
+  }
+  foodCart[index].qty = nextQty;
   if (foodCart[index].qty <= 0) {
     foodCart.splice(index, 1);
   }
-  
   renderFoodCart();
 };
 
@@ -1338,10 +1343,36 @@ window.completeFoodSale = async function() {
   });
   
   try {
-    // Save sale to food_sales (cafe cash register source of truth for till money)
     const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${today}`).push();
     const saleId = saleRef.key;
-    await saleRef.set(saleData);
+    const zentoryItems = foodCart.filter((item) => {
+      const menu = foodMenu.find((m) => m.id === item.id);
+      return menu?.fromZentory || String(item.id || "").startsWith("prod_");
+    });
+
+    if (zentoryItems.length) {
+      const zResult = await postZentorySale({
+        externalId: `food_sales/${today}/${saleId}`,
+        customerName: foodCustomer,
+        paymentMode: foodPaymentMode,
+        items: zentoryItems,
+        staff: session?.name || session?.id || "Counter",
+        note: "OceanZ Counter",
+      });
+      applyZentorySaleResult(saleData, zResult);
+      if (zResult.ok === false && !zResult.blocked) {
+        notifyWarning("Sale saved. Stock sync to Zentory failed — check this row later.");
+      }
+    }
+
+    try {
+      await saleRef.set(saleData);
+    } catch (writeErr) {
+      if (saleData.zentorySaleId) {
+        await voidZentorySale(`food_sales/${today}/${saleId}`);
+      }
+      throw writeErr;
+    }
     
     // If credit, also update food_credits for the customer
     if (foodPaymentMode === "credit" && foodCustomer) {
@@ -1355,30 +1386,6 @@ window.completeFoodSale = async function() {
         outstanding: (existing.outstanding || 0) + total,
         lastUpdated: Date.now()
       });
-    }
-
-    // Dual-write stock consumption to Zentory. Soft-fail — cafe sale still posts.
-    const zentoryItems = foodCart.filter((item) => {
-      const menu = foodMenu.find((m) => m.id === item.id);
-      return menu?.fromZentory || String(item.id || "").startsWith("prod_");
-    });
-    if (zentoryItems.length) {
-      const zResult = await postZentorySale({
-        externalId: `food_sales/${today}/${saleId}`,
-        customerName: foodCustomer,
-        paymentMode: foodPaymentMode,
-        items: zentoryItems,
-        staff: session?.name || session?.id || "Counter",
-        note: "OceanZ Counter",
-      });
-      if (zResult?.ok && zResult.saleId) {
-        await saleRef.update({
-          zentorySaleId: zResult.saleId,
-          zentoryReceipt: zResult.receiptNumber || null,
-        });
-      } else if (!zResult?.ok) {
-        notifyWarning("Sale saved. Stock sync to Zentory failed — check inventory later.");
-      }
     }
 
     SharedCache.invalidateFoodSales();
