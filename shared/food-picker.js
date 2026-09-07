@@ -64,12 +64,23 @@ export function indexFoodItem(item) {
 
 export function filterFoodItems(items, { query = "", categoryKey = "all" } = {}) {
   const q = String(query || "").trim().toLowerCase();
-  return (items || []).filter((item) => {
+  const filtered = (items || []).filter((item) => {
     const key = item._catKey || foodCategoryKey(item);
     if (categoryKey && categoryKey !== "all" && key !== categoryKey) return false;
     if (!q) return true;
     const hay = item._q || `${item.name || ""} ${item.categoryName || ""} ${item.category || ""} ${item.sku || ""}`.toLowerCase();
     return hay.includes(q);
+  });
+  return sortFoodItemsAvailableFirst(filtered);
+}
+
+/** In-stock / makeable items first, then out of stock. */
+export function sortFoodItemsAvailableFirst(items) {
+  return [...(items || [])].sort((a, b) => {
+    const ao = foodItemOutOfStock(a) ? 1 : 0;
+    const bo = foodItemOutOfStock(b) ? 1 : 0;
+    if (ao !== bo) return ao - bo;
+    return String(a.name || "").localeCompare(String(b.name || ""));
   });
 }
 

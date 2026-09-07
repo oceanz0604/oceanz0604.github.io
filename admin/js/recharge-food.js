@@ -264,7 +264,7 @@ function renderFoodCatChips() {
     const on = foodMenuCategory === key;
     const safe = String(key).replace(/'/g, "\\'");
     return `<button type="button" data-cat="${escapeFoodHtml(key)}" onclick="filterFoodRechargeMenu('${safe}')"
-      class="food-cat-btn shrink-0 px-3 py-1.5 rounded-full text-[11px] font-orbitron whitespace-nowrap ${on ? "selected" : ""}">${escapeFoodHtml(label)}${extra}</button>`;
+      class="food-cat-btn ${on ? "selected" : ""}">${escapeFoodHtml(label)}${extra}</button>`;
   };
   bar.innerHTML = [
     chip("all", "All", foodMenu.length ? ` (${foodMenu.length})` : ""),
@@ -502,7 +502,42 @@ function renderFoodCart() {
   const total = getFoodCartTotal();
   if (totalEl) totalEl.textContent = `₹${total}`;
   updateFoodSplitRemaining();
+  updateFoodSaleMenuSummary();
 }
+
+function updateFoodSaleMenuSummary() {
+  const el = $("foodSaleMenuCartSummary");
+  if (!el) return;
+  const n = foodCart.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const total = getFoodCartTotal();
+  el.textContent = n ? `${n} item${n === 1 ? "" : "s"} · ₹${total}` : "Empty";
+}
+
+function setFoodSaleStep(step) {
+  const menu = $("foodSaleStepMenu");
+  const checkout = $("foodSaleStepCheckout");
+  const hint = $("foodSaleStepHint");
+  menu?.classList.toggle("is-active", step === 1);
+  checkout?.classList.toggle("is-active", step === 2);
+  if (hint) {
+    hint.textContent = step === 2
+      ? "Step 2 of 2 — check the cart and take payment."
+      : "Step 1 of 2 — pick items. Cart and payment are next.";
+  }
+  if (step === 2) renderFoodCart();
+}
+
+window.goFoodSaleCheckout = function() {
+  if (!foodCart.length) {
+    toast("warning", "Add at least one item first");
+    return;
+  }
+  setFoodSaleStep(2);
+};
+
+window.goFoodSaleMenu = function() {
+  setFoodSaleStep(1);
+};
 
 window.setFoodRechargePaymentMode = function(mode) {
   foodPaymentMode = mode;
@@ -579,7 +614,7 @@ window.openAddFoodRechargeModal = function(isEdit = false) {
     modal.classList.add("flex");
   }
 
-  // Never block the button on a network round-trip. Init already warmed the cache.
+  setFoodSaleStep(isEdit ? 2 : 1);
   loadFoodMenuItems({ force: false });
   setTimeout(() => $("foodMemberInput")?.focus(), 30);
 };
@@ -609,6 +644,7 @@ function resetFoodForm() {
   if ($("foodRechargeCash")) $("foodRechargeCash").value = "";
   if ($("foodRechargeUpi")) $("foodRechargeUpi").value = "";
   if ($("foodRechargeCredit")) $("foodRechargeCredit").value = "";
+  setFoodSaleStep(1);
   setFoodRechargePaymentMode("cash");
   renderFoodCart();
   renderFoodMenuPicker({ chips: true });

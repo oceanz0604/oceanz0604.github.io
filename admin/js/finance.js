@@ -653,7 +653,7 @@ function getDateRange() {
 
 // ==================== EXPENSE CRUD ====================
 
-function openFinanceExpenseModal(expenseId = null) {
+function openFinanceExpenseModal(expenseId = null, options = {}) {
   console.log("📝 openFinanceExpenseModal called with:", expenseId);
   
   if (!canEditData()) {
@@ -691,7 +691,10 @@ function openFinanceExpenseModal(expenseId = null) {
       document.getElementById("finExpenseDate").value = expense.date;
       document.getElementById("finExpenseDesc").value = expense.description || "";
       document.getElementById("finExpenseVendor").value = expense.vendor || "";
-      selectFinanceCategory(expense.category);
+      selectFinanceCategory(expense.category === "food_supplies" ? "food_purchase" : expense.category);
+      if (expense.category === "food_supplies") {
+        document.getElementById("finExpenseCategory").value = "food_supplies";
+      }
       
       // Populate cash/online split
       if (expense.cash !== undefined || expense.online !== undefined) {
@@ -708,8 +711,14 @@ function openFinanceExpenseModal(expenseId = null) {
       return;
     }
   } else {
-    title.textContent = "ADD EXPENSE";
+    const cafe = !!options.cafePurchase;
+    title.textContent = cafe ? "ADD CAFE PURCHASE" : "ADD EXPENSE";
     document.getElementById("finExpenseDate").value = formatDateForInput(getISTDate());
+    if (cafe) {
+      selectFinanceCategory("food_purchase");
+      const desc = document.getElementById("finExpenseDesc");
+      if (desc) desc.placeholder = "e.g. Frozen fries, bread, Pepsi crate";
+    }
   }
 
   modal.classList.remove("hidden");
@@ -871,9 +880,12 @@ function renderExpenses() {
   const emptyState = document.getElementById("finExpensesEmpty");
   if (!container) return;
 
-  const filtered = financeState.currentFilter === "all" 
-    ? financeState.expenses 
-    : financeState.expenses.filter(e => e.category === financeState.currentFilter);
+  const filter = financeState.currentFilter;
+  const filtered = filter === "all"
+    ? financeState.expenses
+    : filter === "cafe"
+      ? financeState.expenses.filter(e => e.category === "food_purchase" || e.category === "food_supplies")
+      : financeState.expenses.filter(e => e.category === filter);
 
   if (filtered.length === 0) {
     container.innerHTML = "";
