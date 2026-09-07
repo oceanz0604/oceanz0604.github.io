@@ -21,8 +21,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/common.css?v=mto1">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=mto1">
+  <link rel="stylesheet" href="../assets/css/common.css?v=foodui1">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=foodui1">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -135,20 +135,46 @@
 
     /* Food Category Buttons */
     .food-cat-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
-      color: var(--text-secondary);
-      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      min-height: 36px;
+      padding: 0 14px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #c4c4c4;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0;
+      line-height: 1;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
     .food-cat-btn:hover {
-      background: rgba(255, 107, 0, 0.1);
-      border-color: rgba(255, 107, 0, 0.3);
+      background: rgba(255, 107, 0, 0.12);
+      border-color: rgba(255, 107, 0, 0.35);
     }
     .food-cat-btn.selected {
       border-color: var(--neon-orange) !important;
-      background: rgba(255, 107, 0, 0.15) !important;
+      background: rgba(255, 107, 0, 0.18) !important;
       color: var(--neon-orange) !important;
     }
+    .food-cat-chips {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 8px;
+      height: 40px;
+      min-height: 40px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      margin-bottom: 8px;
+      padding: 2px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .food-cat-chips::-webkit-scrollbar { height: 0; }
 
     .food-sale-overlay {
       background: rgba(0, 0, 0, 0.82);
@@ -156,18 +182,23 @@
     .food-sale-panel {
       background: #121212;
       border: 1px solid rgba(255, 107, 0, 0.45);
-      padding: 1.25rem 1.5rem 1.5rem;
-      max-height: 92vh;
+      padding: 1.25rem 1.5rem 1.25rem;
+      width: 100%;
+      max-width: 42rem;
+      height: min(92vh, 760px);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
     .food-sale-body {
       min-height: 0;
+      flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
+    .food-sale-step { display: none; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+    .food-sale-step.is-active { display: flex; }
     .food-sale-menu {
       min-height: 0;
       display: flex;
@@ -180,11 +211,21 @@
       gap: 6px;
       overflow-y: auto;
       overflow-x: hidden;
-      max-height: min(15.5rem, 34vh);
+      flex: 1 1 auto;
+      min-height: 12rem;
       padding: 2px;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       contain: content;
+    }
+    .food-sale-continue {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 10px;
+      flex-shrink: 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
     }
     @media (min-width: 640px) {
       .food-menu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1879,7 +1920,11 @@
                 <h3 class="font-orbitron text-sm font-semibold" style="color: var(--neon-cyan);">EXPENSES</h3>
                 <p class="text-xs text-gray-500">Manage daily expenses</p>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" onclick="openFinanceExpenseModal(null, { cafePurchase: true })" class="px-4 py-2 rounded-lg font-orbitron text-sm flex items-center gap-2 transition-all" style="background: rgba(255, 107, 0, 0.18); border: 1px solid var(--neon-orange); color: var(--neon-orange);">
+                  <i data-lucide="coffee" class="w-4 h-4"></i>
+                  <span>Add cafe purchase</span>
+                </button>
                 <button id="finAddExpenseBtn" onclick="openFinanceExpenseModal()" class="px-4 py-2 rounded-lg font-orbitron text-sm flex items-center gap-2 transition-all" style="background: rgba(0, 255, 136, 0.2); border: 1px solid var(--neon-green); color: var(--neon-green);">
                   <i data-lucide="plus" class="w-4 h-4"></i>
                   <span>Add Expense</span>
@@ -1900,8 +1945,7 @@
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="maintenance" onclick="filterFinanceExpenses('maintenance')">🔧 Maint.</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="supplies" onclick="filterFinanceExpenses('supplies')">📦 Supplies</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="equipment" onclick="filterFinanceExpenses('equipment')">🖥️ Equip.</button>
-              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="food_purchase" onclick="filterFinanceExpenses('food_purchase')">🍔 Food Stock</button>
-              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="food_supplies" onclick="filterFinanceExpenses('food_supplies')">🥤 Food Supplies</button>
+              <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="cafe" onclick="filterFinanceExpenses('cafe')">🍔 Cafe</button>
               <button class="fin-filter-tab px-3 py-1.5 rounded-lg text-xs" data-category="other" onclick="filterFinanceExpenses('other')">📋 Other</button>
             </div>
 
@@ -2027,10 +2071,7 @@
                     <div class="text-xl">🖥️</div><div class="text-xs text-gray-500">Equip.</div>
                   </button>
                   <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="food_purchase" onclick="selectFinanceCategory('food_purchase')">
-                    <div class="text-xl">🍔</div><div class="text-xs text-gray-500">Food</div>
-                  </button>
-                  <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="food_supplies" onclick="selectFinanceCategory('food_supplies')">
-                    <div class="text-xl">🥤</div><div class="text-xs text-gray-500">F.Supply</div>
+                    <div class="text-xl">🍔</div><div class="text-xs text-gray-500">Cafe</div>
                   </button>
                   <button type="button" class="fin-cat-btn p-2 rounded-lg border border-gray-700 text-center hover:bg-gray-800" data-cat="other" onclick="selectFinanceCategory('other')">
                     <div class="text-xl">📋</div><div class="text-xs text-gray-500">Other</div>
@@ -2252,7 +2293,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=mto1')
+        navigator.serviceWorker.register('../sw.js?v=foodui1')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2412,76 +2453,93 @@
       <button type="button" onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
 
       <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">ADD FOOD / SNACKS</h3>
-      <p class="text-xs text-gray-500 mb-3">Same cash / UPI / credit workflow as gaming recharges — shared counter drawer</p>
+      <p id="foodSaleStepHint" class="text-xs text-gray-500 mb-3">Step 1 of 2 — pick items. Cart and payment are next.</p>
 
-      <div class="food-sale-body space-y-3">
-        <div class="relative shrink-0">
-          <div class="flex items-center justify-between mb-1">
-            <label class="text-xs text-gray-500">Member / PC</label>
-            <span id="foodCustomerTypeBadge" class="text-[10px] font-orbitron" style="color: var(--neon-green);">Member</span>
-          </div>
-          <div class="flex gap-2">
-            <input id="foodMemberInput" placeholder="Search member or type name..." class="neon-input flex-1 px-3 py-2 rounded-lg text-white"/>
-            <select id="foodGuestTerminalSelect" class="neon-input px-2 py-2 rounded-lg text-white text-xs" style="width: auto; min-width: 110px;" onchange="selectFoodRechargeTerminal(this)">
-              <option value="">PC / Guest ▾</option>
-            </select>
-          </div>
-          <div id="foodMemberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
-        </div>
-
-        <div class="food-sale-menu">
-          <label class="text-xs text-gray-500 mb-2 block">Menu</label>
-          <input id="foodRechargeItemSearch" type="search" placeholder="Search Maggi, fries, pasta…"
-            class="neon-input w-full px-3 py-2 rounded-lg text-white text-sm mb-2"
-            oninput="searchFoodRechargeMenu(this.value)" autocomplete="off"/>
-          <div id="foodRechargeCatChips" class="flex gap-1.5 overflow-x-auto pb-2 mb-1"></div>
-          <div id="foodRechargeMenuGrid" class="food-menu-grid"></div>
-        </div>
-
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">Cart</label>
-          <div id="foodRechargeCart" class="rounded-lg p-2 max-h-40 overflow-y-auto" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,107,0,0.25);"></div>
-          <div class="flex items-center justify-between mt-2">
-            <span class="text-xs text-gray-500">Total</span>
-            <span id="foodRechargeTotal" class="font-orbitron text-xl" style="color: var(--neon-orange);">₹0</span>
-          </div>
-        </div>
-
-        <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs text-gray-400 uppercase tracking-wider">Payment</span>
-            <span id="foodRechargeSplitRemaining" class="text-xs font-orbitron" style="color: var(--neon-orange);">Total ₹0</span>
-          </div>
-          <div class="grid grid-cols-4 gap-2 mb-3">
-            <button type="button" class="food-recharge-pay-btn active px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="cash" onclick="setFoodRechargePaymentMode('cash')" style="border: 1px solid var(--neon-orange); background: rgba(255,107,0,0.15); color: var(--neon-orange);">Cash</button>
-            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="upi" onclick="setFoodRechargePaymentMode('upi')" style="border: 1px solid #374151; color: #9ca3af;">UPI</button>
-            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="split" onclick="setFoodRechargePaymentMode('split')" style="border: 1px solid #374151; color: #9ca3af;">Split</button>
-            <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="credit" onclick="setFoodRechargePaymentMode('credit')" style="border: 1px solid #374151; color: #9ca3af;">Credit</button>
-          </div>
-          <div id="foodRechargeSplitFields" class="grid grid-cols-3 gap-3">
-            <div>
-              <label class="text-xs mb-1 block" style="color: #00f0ff;">💵 Cash</label>
-              <input id="foodRechargeCash" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+      <div class="food-sale-body">
+        <div id="foodSaleStepMenu" class="food-sale-step is-active">
+          <div class="relative shrink-0 mb-3">
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs text-gray-500">Member / PC</label>
+              <span id="foodCustomerTypeBadge" class="text-[10px] font-orbitron" style="color: var(--neon-green);">Member</span>
             </div>
-            <div>
-              <label class="text-xs mb-1 block" style="color: #b829ff;">📱 UPI</label>
-              <input id="foodRechargeUpi" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+            <div class="flex gap-2">
+              <input id="foodMemberInput" placeholder="Search member or type name..." class="neon-input flex-1 px-3 py-2 rounded-lg text-white"/>
+              <select id="foodGuestTerminalSelect" class="neon-input px-2 py-2 rounded-lg text-white text-xs" style="width: auto; min-width: 110px;" onchange="selectFoodRechargeTerminal(this)">
+                <option value="">PC / Guest ▾</option>
+              </select>
             </div>
-            <div>
-              <label class="text-xs mb-1 block" style="color: #ff6b00;">🔖 Credit</label>
-              <input id="foodRechargeCredit" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+            <div id="foodMemberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
+          </div>
+
+          <div class="food-sale-menu">
+            <label class="text-xs text-gray-500 mb-2 block">Menu</label>
+            <input id="foodRechargeItemSearch" type="search" placeholder="Search Maggi, fries, pasta…"
+              class="neon-input w-full px-3 py-2 rounded-lg text-white text-sm mb-2 shrink-0"
+              oninput="searchFoodRechargeMenu(this.value)" autocomplete="off"/>
+            <div id="foodRechargeCatChips" class="food-cat-chips"></div>
+            <div id="foodRechargeMenuGrid" class="food-menu-grid"></div>
+          </div>
+
+          <div class="food-sale-continue">
+            <div class="min-w-0">
+              <div class="text-[10px] text-gray-500 uppercase tracking-wider">Cart</div>
+              <div id="foodSaleMenuCartSummary" class="text-sm text-gray-300 truncate">Empty</div>
             </div>
+            <button type="button" onclick="goFoodSaleCheckout()" class="px-4 py-2.5 rounded-lg font-orbitron text-xs shrink-0"
+              style="background: linear-gradient(135deg, rgba(255,107,0,0.3), rgba(255,107,0,0.15)); border: 1px solid var(--neon-orange); color: var(--neon-orange);">
+              Next: Cart &amp; pay →
+            </button>
           </div>
         </div>
 
-        <div>
-          <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
-          <input id="foodRechargeNote" placeholder="Add a note..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
-        </div>
+        <div id="foodSaleStepCheckout" class="food-sale-step">
+          <div class="min-h-0 flex-1 overflow-y-auto space-y-3 pr-0.5">
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Cart</label>
+              <div id="foodRechargeCart" class="rounded-lg p-2 overflow-y-auto" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,107,0,0.25); max-height: 28vh;"></div>
+              <div class="flex items-center justify-between mt-2">
+                <span class="text-xs text-gray-500">Total</span>
+                <span id="foodRechargeTotal" class="font-orbitron text-xl" style="color: var(--neon-orange);">₹0</span>
+              </div>
+            </div>
 
-        <div class="flex gap-3 pt-2">
-          <button onclick="closeAddFoodRechargeModal()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: rgba(255,255,255,0.05); color: #888;">Cancel</button>
-          <button onclick="saveFoodRechargeSale()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: linear-gradient(135deg, rgba(255,107,0,0.3), rgba(255,107,0,0.15)); border: 1px solid var(--neon-orange); color: var(--neon-orange);">💾 Save Food Sale</button>
+            <div class="p-3 rounded-lg" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs text-gray-400 uppercase tracking-wider">Payment</span>
+                <span id="foodRechargeSplitRemaining" class="text-xs font-orbitron" style="color: var(--neon-orange);">Total ₹0</span>
+              </div>
+              <div class="grid grid-cols-4 gap-2 mb-3">
+                <button type="button" class="food-recharge-pay-btn active px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="cash" onclick="setFoodRechargePaymentMode('cash')" style="border: 1px solid var(--neon-orange); background: rgba(255,107,0,0.15); color: var(--neon-orange);">Cash</button>
+                <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="upi" onclick="setFoodRechargePaymentMode('upi')" style="border: 1px solid #374151; color: #9ca3af;">UPI</button>
+                <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="split" onclick="setFoodRechargePaymentMode('split')" style="border: 1px solid #374151; color: #9ca3af;">Split</button>
+                <button type="button" class="food-recharge-pay-btn px-2 py-2 rounded-lg text-xs font-orbitron" data-mode="credit" onclick="setFoodRechargePaymentMode('credit')" style="border: 1px solid #374151; color: #9ca3af;">Credit</button>
+              </div>
+              <div id="foodRechargeSplitFields" class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="text-xs mb-1 block" style="color: #00f0ff;">💵 Cash</label>
+                  <input id="foodRechargeCash" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+                </div>
+                <div>
+                  <label class="text-xs mb-1 block" style="color: #b829ff;">📱 UPI</label>
+                  <input id="foodRechargeUpi" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+                </div>
+                <div>
+                  <label class="text-xs mb-1 block" style="color: #ff6b00;">🔖 Credit</label>
+                  <input id="foodRechargeCredit" type="number" placeholder="₹0" class="neon-input w-full px-3 py-2 rounded-lg text-white text-center" oninput="updateFoodRechargeSplit()" onfocus="this.select()"/>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Note (Optional)</label>
+              <input id="foodRechargeNote" placeholder="Add a note..." class="neon-input w-full px-3 py-2 rounded-lg text-white"/>
+            </div>
+          </div>
+
+          <div class="flex gap-3 pt-3 shrink-0">
+            <button type="button" onclick="goFoodSaleMenu()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: rgba(255,255,255,0.05); color: #888;">← Menu</button>
+            <button type="button" onclick="saveFoodRechargeSale()" class="flex-1 py-3 rounded-lg font-orbitron text-sm" style="background: linear-gradient(135deg, rgba(255,107,0,0.3), rgba(255,107,0,0.15)); border: 1px solid var(--neon-orange); color: var(--neon-orange);">💾 Save Food Sale</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3036,11 +3094,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=mto1"></script>
-  <script type="module" src="js/bookings.js?v=mto1"></script>
+  <script type="module" src="js/dashboard.js?v=foodui1"></script>
+  <script type="module" src="js/bookings.js?v=foodui1"></script>
   <script type="module" src="js/recharges.js"></script>
-  <script type="module" src="js/cash-register.js?v=mto1"></script>
-  <script type="module" src="js/recharge-food.js?v=mto1"></script>
+  <script type="module" src="js/cash-register.js?v=foodui1"></script>
+  <script type="module" src="js/recharge-food.js?v=foodui1"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->
