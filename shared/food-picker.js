@@ -52,12 +52,22 @@ export function uniqueFoodCategories(items) {
   return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
+export function indexFoodItem(item) {
+  const categoryName = item.categoryName || item.category || "Snacks";
+  item.categoryName = categoryName;
+  item._catKey = foodCategoryKey(item);
+  item._q = `${item.name || ""} ${categoryName} ${item.category || ""} ${item.sku || ""}`.toLowerCase();
+  item._emoji = foodCategoryEmoji(categoryName);
+  return item;
+}
+
 export function filterFoodItems(items, { query = "", categoryKey = "all" } = {}) {
   const q = String(query || "").trim().toLowerCase();
   return (items || []).filter((item) => {
-    if (categoryKey && categoryKey !== "all" && foodCategoryKey(item) !== categoryKey) return false;
+    const key = item._catKey || foodCategoryKey(item);
+    if (categoryKey && categoryKey !== "all" && key !== categoryKey) return false;
     if (!q) return true;
-    const hay = `${item.name || ""} ${item.categoryName || ""} ${item.category || ""} ${item.sku || ""}`.toLowerCase();
+    const hay = item._q || `${item.name || ""} ${item.categoryName || ""} ${item.category || ""} ${item.sku || ""}`.toLowerCase();
     return hay.includes(q);
   });
 }

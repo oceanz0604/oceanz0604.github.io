@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory3">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=zentory4">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -153,6 +153,79 @@
       border-color: var(--neon-orange) !important;
       background: rgba(255, 107, 0, 0.15) !important;
       color: var(--neon-orange) !important;
+    }
+
+    .food-sale-overlay {
+      background: rgba(0, 0, 0, 0.82);
+    }
+    .food-sale-panel {
+      background: #121212;
+      border: 1px solid rgba(255, 107, 0, 0.45);
+      padding: 1.25rem 1.5rem 1.5rem;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .food-sale-body {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .food-sale-menu {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+    }
+    .food-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: min(15.5rem, 34vh);
+      padding: 2px;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      contain: content;
+    }
+    @media (min-width: 640px) {
+      .food-menu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    .food-menu-tile {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 107, 0, 0.2);
+      background: #1a1a1a;
+      color: #fff;
+    }
+    .food-menu-tile.is-disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    .food-menu-tile-name {
+      font-size: 0.82rem;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .food-menu-tile-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #9ca3af;
+    }
+    .food-menu-tile-meta b {
+      font-family: Orbitron, sans-serif;
+      font-weight: 600;
+      color: var(--neon-orange);
     }
 
     /* Food Menu Item Card */
@@ -2185,7 +2258,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=zentory3')
+        navigator.serviceWorker.register('../sw.js?v=zentory4')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2340,15 +2413,15 @@
   </div>
 
   <!-- Add Food / Snacks Modal (from Recharges page) -->
-  <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);">
-    <div class="neon-card rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
-      <button onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
+  <div id="addFoodRechargeModal" class="fixed inset-0 z-50 hidden items-center justify-center food-sale-overlay">
+    <div class="food-sale-panel rounded-2xl w-full max-w-3xl mx-4 relative">
+      <button type="button" onclick="closeAddFoodRechargeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-xl">✕</button>
 
-      <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">🍔 ADD FOOD / SNACKS</h3>
-      <p class="text-xs text-gray-500 mb-4">Same cash / UPI / credit workflow as gaming recharges — shared counter drawer</p>
+      <h3 class="font-orbitron text-lg font-bold mb-1" style="color: var(--neon-orange);">ADD FOOD / SNACKS</h3>
+      <p class="text-xs text-gray-500 mb-3">Same cash / UPI / credit workflow as gaming recharges — shared counter drawer</p>
 
-      <div class="space-y-4">
-        <div class="relative">
+      <div class="food-sale-body space-y-3">
+        <div class="relative shrink-0">
           <div class="flex items-center justify-between mb-1">
             <label class="text-xs text-gray-500">Member / PC</label>
             <span id="foodCustomerTypeBadge" class="text-[10px] font-orbitron" style="color: var(--neon-green);">Member</span>
@@ -2362,13 +2435,13 @@
           <div id="foodMemberSuggestions" class="absolute hidden w-full bg-gray-900 border border-gray-700 rounded-lg mt-1 max-h-40 overflow-y-auto z-50"></div>
         </div>
 
-        <div>
+        <div class="food-sale-menu">
           <label class="text-xs text-gray-500 mb-2 block">Menu</label>
           <input id="foodRechargeItemSearch" type="search" placeholder="Search Maggi, fries, pasta…"
             class="neon-input w-full px-3 py-2 rounded-lg text-white text-sm mb-2"
             oninput="searchFoodRechargeMenu(this.value)" autocomplete="off"/>
-          <div id="foodRechargeCatChips" class="flex gap-1.5 overflow-x-auto pb-2 mb-1" style="scrollbar-width: thin;"></div>
-          <div id="foodRechargeMenuGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1"></div>
+          <div id="foodRechargeCatChips" class="flex gap-1.5 overflow-x-auto pb-2 mb-1"></div>
+          <div id="foodRechargeMenuGrid" class="food-menu-grid"></div>
         </div>
 
         <div>
@@ -2969,11 +3042,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=zentory3"></script>
-  <script type="module" src="js/bookings.js?v=zentory3"></script>
+  <script type="module" src="js/dashboard.js?v=zentory4"></script>
+  <script type="module" src="js/bookings.js?v=zentory4"></script>
   <script type="module" src="js/recharges.js"></script>
   <script type="module" src="js/cash-register.js"></script>
-  <script type="module" src="js/recharge-food.js?v=zentory3"></script>
+  <script type="module" src="js/recharge-food.js?v=zentory4"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->

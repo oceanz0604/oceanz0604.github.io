@@ -33,14 +33,35 @@ async function zentoryFetch(path, options = {}) {
   return body;
 }
 
-/** Load sellable products (+ stock) for Cafe Counter. */
-export async function fetchZentoryProducts() {
+const PRODUCT_CACHE_MS = 60_000;
+let productCache = { products: null, at: 0 };
+let productInflight = null;
+
+export function invalidateZentoryProductCache() {
+  productCache = { products: null, at: 0 };
+  productInflight = null;
+}
+
+/** Load sellable products (+ stock) for Cafe Counter. Cached ~60s to keep POS snappy. */
+export async function fetchZentoryProducts({ force = false } = {}) {
+  if (!force && productCache.products && Date.now() - productCache.at < PRODUCT_CACHE_MS) {
+    return productCache.products;
+  }
+  if (!force && productInflight) return productInflight;
   const q = new URLSearchParams({
     ownerId: ZENTORY.OWNER_ID,
     locationId: ZENTORY.LOCATION_ID,
   });
-  const data = await zentoryFetch(`/api/products?${q}`);
-  return Array.isArray(data.products) ? data.products : [];
+  productInflight = zentoryFetch(`/api/products?${q}`)
+    .then((data) => {
+      const products = Array.isArray(data.products) ? data.products : [];
+      productCache = { products, at: Date.now() };
+      return products;
+    })
+    .finally(() => {
+      productInflight = null;
+    });
+  return productInflight;
 }
 
 export function mapZentoryPayment(paymentMode) {

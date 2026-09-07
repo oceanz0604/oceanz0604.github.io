@@ -25,10 +25,11 @@ import {
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
-import { fetchZentoryProducts, postZentorySale, voidZentorySale } from "../../shared/zentory-api.js";
+import { fetchZentoryProducts, postZentorySale, voidZentorySale, invalidateZentoryProductCache } from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
   filterFoodItems,
+  indexFoodItem,
   foodCategoryEmoji,
   escapeFoodHtml
 } from "../../shared/food-picker.js";
@@ -84,6 +85,7 @@ let foodMenu = [];
 let foodCart = [];
 let foodMenuQuery = "";
 let foodMenuCategory = "all";
+let foodMenuSearchTimer = null;
 let foodPaymentMode = "cash"; // cash | upi | split | credit — UI mode
 let foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
 let selectedMemberName = "";
@@ -187,7 +189,7 @@ export async function initRechargeFood() {
   initFoodGuestTerminalDropdown();
   setupFoodMemberAutocomplete();
   bindDatePickerHook();
-  await loadFoodMenuItems();
+  await loadFoodMenuItems({ force: false });
   await loadFoodDay(getSelectedRechargeDate());
   console.log("✅ RechargeFood: initialized");
 }
@@ -212,13 +214,13 @@ function initFoodGuestTerminalDropdown() {
 
 // ==================== MENU ====================
 
-async function loadFoodMenuItems() {
+async function loadFoodMenuItems({ force = false } = {}) {
   const ready = await initFoodFirebase();
   if (!ready) return;
 
   try {
-    const products = await fetchZentoryProducts();
-    foodMenu = products.map((p) => ({
+    const products = await fetchZentoryProducts({ force });
+    foodMenu = products.map((p) => indexFoodItem({
       id: p.id,
       name: p.name,
       price: p.price,
@@ -232,17 +234,17 @@ async function loadFoodMenuItems() {
       fromZentory: true,
     }));
     foodMenu.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    renderFoodMenuPicker();
+    renderFoodMenuPicker({ chips: true });
   } catch (err) {
     console.warn("[RechargeFood] Zentory catalog unavailable, falling back:", err);
     try {
       const snap = await bookingDb.ref(FB_PATHS.FOOD_MENU).once("value");
       const data = snap.val() || {};
       foodMenu = Object.entries(data)
-        .map(([id, item]) => ({ id, ...item, fromZentory: false }))
+        .map(([id, item]) => indexFoodItem({ id, ...item, fromZentory: false }))
         .filter(item => item.available !== false)
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      renderFoodMenuPicker();
+      renderFoodMenuPicker({ chips: true });
       toast("warning", "Zentory catalog unavailable — using local menu");
     } catch (e2) {
       console.error("❌ RechargeFood: menu load failed", e2);
@@ -251,13 +253,25 @@ async function loadFoodMenuItems() {
   }
 }
 
+function bindFoodMenuGridOnce() {
+  const container = $("foodRechargeMenuGrid");
+  if (!container || container.dataset.bound === "1") return;
+  container.dataset.bound = "1";
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-food-id]");
+    if (!btn || btn.disabled) return;
+    window.addFoodRechargeItem(btn.dataset.foodId);
+  });
+}
+
 function renderFoodCatChips() {
   const bar = $("foodRechargeCatChips");
   if (!bar) return;
   const cats = uniqueFoodCategories(foodMenu);
   const chip = (key, label, extra = "") => {
     const on = foodMenuCategory === key;
-    return `<button type="button" data-cat="${escapeFoodHtml(key)}" onclick="filterFoodRechargeMenu('${String(key).replace(/'/g, "\\'")}')"
+    const safe = String(key).replace(/'/g, "\\'");
+    return `<button type="button" data-cat="${escapeFoodHtml(key)}" onclick="filterFoodRechargeMenu('${safe}')"
       class="food-cat-btn shrink-0 px-3 py-1.5 rounded-full text-[11px] font-orbitron whitespace-nowrap ${on ? "selected" : ""}">${escapeFoodHtml(label)}${extra}</button>`;
   };
   bar.innerHTML = [
@@ -266,13 +280,14 @@ function renderFoodCatChips() {
   ].join("");
 }
 
-function renderFoodMenuPicker() {
+function renderFoodMenuPicker({ chips = false } = {}) {
   const container = $("foodRechargeMenuGrid");
   if (!container) return;
-  renderFoodCatChips();
+  bindFoodMenuGridOnce();
+  if (chips) renderFoodCatChips();
 
   if (foodMenu.length === 0) {
-    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-6 col-span-full">No menu items. Add products in Zentory inventory.</div>`;
+    container.innerHTML = `<div class="text-center text-gray-500 text-sm py-6 col-span-full">Loading menu…</div>`;
     return;
   }
 
@@ -282,40 +297,30 @@ function renderFoodMenuPicker() {
     return;
   }
 
-  container.innerHTML = filtered.map(item => {
-    const stockLabel = item.stock === null || item.stock === undefined
-      ? ""
-      : `<span class="text-[10px] text-gray-500">${item.stock} left</span>`;
+  let html = "";
+  for (const item of filtered) {
     const disabled = item.stock !== null && item.stock !== undefined && item.stock <= 0;
     const cat = item.categoryName || item.category || "";
-    const emoji = foodCategoryEmoji(cat);
-    const safeId = String(item.id).replace(/'/g, "\\'");
-    return `
-      <button type="button" ${disabled ? "disabled" : ""} onclick="addFoodRechargeItem('${safeId}')"
-        class="p-2.5 rounded-xl text-left transition-all ${disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-800"}"
-        style="border: 1px solid rgba(255,107,0,0.22); background: rgba(0,0,0,0.28);">
-        <div class="flex items-start justify-between gap-1">
-          <span class="text-base leading-none">${emoji}</span>
-          ${stockLabel}
-        </div>
-        <div class="text-sm text-white mt-1 leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeFoodHtml(item.name)}</div>
-        <div class="flex items-center justify-between mt-1.5">
-          <span class="font-orbitron text-xs" style="color: var(--neon-orange);">₹${item.price || 0}</span>
-          <span class="text-[9px] uppercase tracking-wide text-gray-500 truncate max-w-[50%]">${escapeFoodHtml(cat)}</span>
-        </div>
-      </button>
-    `;
-  }).join("");
+    const emoji = item._emoji || foodCategoryEmoji(cat);
+    html += `<button type="button" data-food-id="${escapeFoodHtml(item.id)}" ${disabled ? "disabled" : ""} class="food-menu-tile${disabled ? " is-disabled" : ""}">`
+      + `<span class="food-menu-tile-name">${emoji} ${escapeFoodHtml(item.name)}</span>`
+      + `<span class="food-menu-tile-meta"><b>₹${item.price || 0}</b>`
+      + (item.stock != null ? `<span>${item.stock}</span>` : "")
+      + `</span></button>`;
+  }
+  container.innerHTML = html;
 }
 
 window.searchFoodRechargeMenu = function(query) {
   foodMenuQuery = query || "";
-  renderFoodMenuPicker();
+  clearTimeout(foodMenuSearchTimer);
+  foodMenuSearchTimer = setTimeout(() => renderFoodMenuPicker({ chips: false }), 40);
 };
 
 window.filterFoodRechargeMenu = function(categoryKey) {
   foodMenuCategory = categoryKey || "all";
-  renderFoodMenuPicker();
+  renderFoodCatChips();
+  renderFoodMenuPicker({ chips: false });
 };
 
 // ==================== CUSTOMER ====================
@@ -564,24 +569,26 @@ function updateFoodSplitRemaining() {
 
 // ==================== MODAL ====================
 
-window.openAddFoodRechargeModal = async function(isEdit = false) {
+window.openAddFoodRechargeModal = function(isEdit = false) {
   if (!canEditData()) {
     toast("warning", "You have view-only access. Editing is not allowed.");
     return;
   }
 
-  await loadFoodMenuItems();
-  if (!isEdit) resetFoodForm();
-
   const modal = $("addFoodRechargeModal");
   const title = modal?.querySelector("h3");
-  if (title) title.innerHTML = isEdit ? "✏️ EDIT FOOD / SNACKS" : "🍔 ADD FOOD / SNACKS";
+  if (title) title.textContent = isEdit ? "EDIT FOOD / SNACKS" : "ADD FOOD / SNACKS";
+
+  if (!isEdit) resetFoodForm();
 
   if (modal) {
     modal.classList.remove("hidden");
     modal.classList.add("flex");
   }
-  setTimeout(() => $("foodMemberInput")?.focus(), 100);
+
+  // Never block the button on a network round-trip. Init already warmed the cache.
+  loadFoodMenuItems({ force: false });
+  setTimeout(() => $("foodMemberInput")?.focus(), 30);
 };
 
 window.closeAddFoodRechargeModal = function() {
@@ -611,7 +618,7 @@ function resetFoodForm() {
   if ($("foodRechargeCredit")) $("foodRechargeCredit").value = "";
   setFoodRechargePaymentMode("cash");
   renderFoodCart();
-  renderFoodMenuPicker();
+  renderFoodMenuPicker({ chips: true });
   updateFoodCustomerBadge();
 }
 
@@ -627,7 +634,7 @@ window.editFoodRecharge = async function(id) {
     return;
   }
 
-  await loadFoodMenuItems();
+  await loadFoodMenuItems({ force: false });
   foodEditId = id;
   foodCart = (sale.items || []).map(i => ({
     id: i.id,
@@ -902,7 +909,8 @@ window.saveFoodRechargeSale = async function() {
     SharedCache.invalidateFoodSales();
     toast("success", foodEditId ? `Food sale updated: ₹${total}` : `Food sale saved: ₹${total}`);
     closeAddFoodRechargeModal();
-    await loadFoodMenuItems();
+    invalidateZentoryProductCache();
+    loadFoodMenuItems({ force: true });
     if (typeof window.loadAllOutstandingCredits === "function") {
       window.loadAllOutstandingCredits();
     }
