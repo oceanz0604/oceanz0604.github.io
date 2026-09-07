@@ -21,6 +21,7 @@ import {
   aggregateFoodStats,
   sumFoodExpenses
 } from "../../shared/food-stats.js";
+import { ensureChartJs, ensureJsPdf } from "../../shared/lazy-cdn.js";
 
 // ==================== CONSTANTS ====================
 // EXPENSE_CATEGORIES imported from shared/config.js (includes food categories)
@@ -182,6 +183,7 @@ async function loadFinanceData() {
       await loadExpenses();
       calculateExpenseOnlySummary();
       renderExpenses();
+      await ensureChartJs();
       renderExpenseChart();
       return;
     }
@@ -196,6 +198,7 @@ async function loadFinanceData() {
 
     calculateSummary();
     renderExpenses();
+    await ensureChartJs();
     renderCharts();
     
   } catch (error) {
@@ -1273,12 +1276,13 @@ function updateExpenseTotal() {
 
 // ==================== EXPORT ====================
 
-function exportFinanceExpenses() {
+async function exportFinanceExpenses() {
   if (financeState.expenses.length === 0) {
     showFinanceToast("No expenses to export", "error");
     return;
   }
 
+  await ensureJsPdf();
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const periodLabel = financeState.period === "month" 

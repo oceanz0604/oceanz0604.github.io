@@ -19,8 +19,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/common.css">
-  <link rel="stylesheet" href="../assets/css/member.css">
+  <link rel="stylesheet" href="../assets/css/common.css?v=foodscroll1">
+  <link rel="stylesheet" href="../assets/css/member.css?v=foodscroll1">
   <style>
     :root {
       --neon-cyan: #00f0ff;
@@ -63,8 +63,7 @@
       border: 1px solid rgba(0, 240, 255, 0.3);
       box-shadow: 
         0 0 20px rgba(0, 240, 255, 0.1),
-        inset 0 0 60px rgba(0, 240, 255, 0.03);
-      backdrop-filter: blur(10px);
+        inset 0 0 60px rgba(0, 240, 255, 0.03)
     }
 
     .neon-glow {
@@ -335,7 +334,7 @@
 
   <!-- Install App Banner -->
   <div id="installBanner" class="fixed bottom-4 left-4 right-4 mx-auto max-w-sm p-4 rounded-xl hidden z-50"
-    style="background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(0,240,255,0.5); backdrop-filter: blur(10px);">
+    style="background: linear-gradient(135deg, rgba(0,240,255,0.15), rgba(184,41,255,0.15)); border: 1px solid rgba(0,240,255,0.5)">
     <div class="flex items-center gap-3">
       <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(0,240,255,0.2);">
         <svg viewBox="0 0 100 100" class="w-8 h-8">
@@ -364,7 +363,7 @@
     // Service Worker Registration
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('../sw.js')
+        navigator.serviceWorker.register('../sw.js?v=foodscroll1')
           .then(reg => console.log('SW registered:', reg.scope))
           .catch(err => console.log('SW registration failed:', err));
       });

@@ -8,6 +8,7 @@ import {
   getActivityIcon, getAvatarUrl, filterToCurrentMonth, calculateStreak 
 } from '../../shared/utils.js';
 import { loadHallOfFame, loadMonthlyLeaderboard as loadMonthlyLB } from '../../shared/leaderboard.js';
+import { ensureChartJs } from '../../shared/lazy-cdn.js';
 
 // ==================== FIREBASE INIT ====================
 
@@ -601,7 +602,7 @@ async function loadAnalytics(memberId) {
   // Check cache first
   if (isCacheValid(memberCache.sessions)) {
     console.log("📦 Using cached sessions for analytics");
-    renderAnalyticsFromSessions(memberCache.sessions.data);
+    await renderAnalyticsFromSessions(memberCache.sessions.data);
     return;
   }
   
@@ -612,10 +613,10 @@ async function loadAnalytics(memberId) {
   const sessions = Object.values(snapshot.val());
   setCache(memberCache.sessions, sessions);
   
-  renderAnalyticsFromSessions(sessions);
+  await renderAnalyticsFromSessions(sessions);
 }
 
-function renderAnalyticsFromSessions(sessions) {
+async function renderAnalyticsFromSessions(sessions) {
   const totalSessions = sessions.length;
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.USINGMIN || 0), 0);
   const totalSpent = sessions.reduce((sum, s) => sum + (s.TOTALPRICE > 0 ? s.TOTALPRICE : 0), 0);
@@ -638,6 +639,7 @@ function renderAnalyticsFromSessions(sessions) {
   document.getElementById("totalSpent").textContent = `₹${totalSpent}`;
   document.getElementById("mostUsedPC").textContent = mostUsedPC;
 
+  await ensureChartJs();
   renderCharts(terminalCount);
   renderRecentSessions(sessions);
   setupChartToggles();
