@@ -84,6 +84,9 @@ export async function postZentorySale({
   staff,
   note = "",
 }) {
+  if (ZENTORY.PUSH_SALES === false) {
+    return { ok: true, skipped: true };
+  }
   try {
     const payload = {
       externalId,
@@ -127,6 +130,11 @@ export async function postZentorySale({
 /** Apply Zentory result onto a cafe food_sales record. Throws when shortage blocked the sale. */
 export function applyZentorySaleResult(saleData, zResult) {
   if (!zResult) return saleData;
+  if (zResult.skipped) {
+    saleData.zentorySyncStatus = "skipped";
+    saleData.zentorySyncError = null;
+    return saleData;
+  }
   if (zResult.ok) {
     saleData.zentorySaleId = zResult.saleId || null;
     saleData.zentoryReceipt = zResult.receiptNumber || null;
@@ -145,6 +153,9 @@ export function applyZentorySaleResult(saleData, zResult) {
 }
 
 export async function voidZentorySale(externalId) {
+  if (ZENTORY.PUSH_SALES === false) {
+    return { ok: true, skipped: true };
+  }
   try {
     const data = await zentoryFetch("/api/sales/void", {
       method: "POST",
