@@ -1,7 +1,4 @@
-/**
- * Shared food-menu picker helpers (Counter + Recharges).
- * Categories come from Zentory product.categoryName / categoryId.
- */
+import { ZENTORY } from "./config.js";
 
 export function slugifyCategory(name) {
   return String(name || "")
@@ -112,6 +109,7 @@ export function mapZentoryMenuProduct(p) {
 
 /** Zentory `stock` is on-hand for simple SKUs and makeable plates for MTO. */
 export function foodItemOutOfStock(item) {
+  if (ZENTORY.PUSH_SALES === false) return false;
   if (item?.stock === null || item?.stock === undefined) return false;
   return Number(item.stock) <= 0;
 }
@@ -119,11 +117,13 @@ export function foodItemOutOfStock(item) {
 export function foodStockHint(item) {
   if (item?.stock === null || item?.stock === undefined) return "";
   const n = Number(item.stock) || 0;
+  if (ZENTORY.PUSH_SALES === false) return n > 0 ? String(n) : "";
   if (item.makeToOrder) return n > 0 ? `${n} ready` : "Need ingredients";
   return n > 0 ? String(n) : "Out";
 }
 
 export function canAddFoodQty(item, nextQty) {
+  if (ZENTORY.PUSH_SALES === false) return true;
   if (item?.stock === null || item?.stock === undefined) return true;
   return nextQty <= Number(item.stock);
 }
