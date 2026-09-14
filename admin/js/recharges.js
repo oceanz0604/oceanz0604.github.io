@@ -783,73 +783,232 @@ function loadAllOutstandingCredits() {
 
 window.loadAllOutstandingCredits = loadAllOutstandingCredits;
 
+const CREDITS_PREVIEW_LIMIT = 4;
+let outstandingCreditsCache = [];
+let creditsLedgerKind = "all";
+let creditsLedgerSort = "oldest";
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(str) {
+  return String(str ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function creditAgeDays(r) {
+  const now = getISTDate();
+  if (r.createdAt) return Math.floor((now - new Date(r.createdAt)) / 86400000);
+  return Math.floor((now - new Date(r.date + "T00:00:00")) / 86400000);
+}
+
+function creditCreatedLabel(r) {
+  return r.createdAt
+    ? formatToIST(r.createdAt, { dateStyle: "medium", timeStyle: undefined })
+    : r.date;
+}
+
+function outstandingCreditItemHtml(r) {
+  const createdDate = creditCreatedLabel(r);
+  const daysSince = creditAgeDays(r);
+  const urgencyColor = daysSince > 7 ? "#ff0044" : daysSince > 3 ? "#ff6b00" : "#ffff00";
+  const urgencyBg = daysSince > 7 ? "rgba(255,0,68,0.1)" : "rgba(255,107,0,0.1)";
+  const member = escapeHtml(r.member);
+  const note = r.note ? escapeHtml(r.note) : "";
+  const kind = r.kind === "food" ? "food" : "recharge";
+  const dateAttr = escapeAttr(r.date);
+  const idAttr = escapeAttr(r.id);
+
+  const partialInfo = r.creditPaid > 0
+    ? `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,255,136,0.2); color: #00ff88;">₹${r.creditPaid} already paid</span>`
+    : "";
+
+  return `
+    <div class="credit-item flex items-center justify-between gap-4" style="background: ${urgencyBg};">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-orbitron font-bold" style="color: #00f0ff;">${member}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded" style="background: ${kind === "food" ? "rgba(255,107,0,0.2)" : "rgba(0,240,255,0.15)"}; color: ${kind === "food" ? "#ff6b00" : "#00f0ff"};">${kind === "food" ? "🍔 Food" : "🎮 Game"}</span>
+          <span class="font-orbitron font-bold" style="color: #ff6b00;">₹${r.amount}</span>
+          ${daysSince > 0
+            ? `<span class="text-xs px-2 py-0.5 rounded" style="background: ${urgencyColor}20; color: ${urgencyColor};">${daysSince}d</span>`
+            : '<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,0,0.2); color: #ffff00;">Today</span>'}
+          ${partialInfo}
+        </div>
+        <div class="text-xs text-gray-500 mt-1 truncate">
+          📅 ${escapeHtml(createdDate)}
+          ${note ? ` • 📝 ${note}` : ""}
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" onclick="collectCreditGlobal('${dateAttr}', '${idAttr}', ${Number(r.amount) || 0}, ${!!r.isNewFormat}, '${kind}')" class="mark-paid-btn flex items-center gap-1">
+          💰 Collect
+        </button>
+        <button type="button" onclick="deleteCreditGlobal('${dateAttr}', '${idAttr}', '${kind}')"
+          class="hover:scale-110 transition-transform p-1" style="color: #ff0044;" aria-label="Delete credit">✖</button>
+      </div>
+    </div>
+  `;
+}
+
+function getFilteredOutstandingCredits() {
+  const q = ($("creditsLedgerSearch")?.value || "").trim().toLowerCase();
+  let list = outstandingCreditsCache.slice();
+  if (creditsLedgerKind === "food" || creditsLedgerKind === "recharge") {
+    list = list.filter((r) => (r.kind || "recharge") === creditsLedgerKind);
+  }
+  if (q) {
+    list = list.filter((r) => {
+      const hay = `${r.member || ""} ${r.note || ""} ${r.amount} ${r.date} ${creditCreatedLabel(r)} ${r.kind || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  list.sort((a, b) => {
+    if (creditsLedgerSort === "newest") {
+      return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
+    }
+    if (creditsLedgerSort === "amount") return (b.amount || 0) - (a.amount || 0);
+    if (creditsLedgerSort === "name") {
+      return String(a.member || "").localeCompare(String(b.member || ""), undefined, { sensitivity: "base" });
+    }
+    return new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date);
+  });
+  return list;
+}
+
+function updateCreditsKindButtons() {
+  const map = {
+    all: $("creditsKindAll"),
+    recharge: $("creditsKindRecharge"),
+    food: $("creditsKindFood")
+  };
+  Object.entries(map).forEach(([key, btn]) => {
+    if (!btn) return;
+    btn.classList.toggle("active", creditsLedgerKind === key);
+  });
+}
+
+function renderCreditsLedgerList() {
+  const listEl = $("creditsLedgerList");
+  if (!listEl) return;
+
+  const filtered = getFilteredOutstandingCredits();
+  const filteredTotal = filtered.reduce((sum, r) => sum + (r.amount || 0), 0);
+  const gameTotal = outstandingCreditsCache.filter((r) => r.kind !== "food").reduce((s, r) => s + (r.amount || 0), 0);
+  const foodTotal = outstandingCreditsCache.filter((r) => r.kind === "food").reduce((s, r) => s + (r.amount || 0), 0);
+
+  const countEl = $("creditsLedgerFilteredCount");
+  const totalEl = $("creditsLedgerFilteredTotal");
+  const kindTotalsEl = $("creditsLedgerKindTotals");
+  if (countEl) countEl.textContent = String(filtered.length);
+  if (totalEl) totalEl.textContent = `₹${filteredTotal}`;
+  if (kindTotalsEl) {
+    kindTotalsEl.textContent = `🎮 ₹${gameTotal}  ·  🍔 ₹${foodTotal}`;
+  }
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div class="text-center py-10 text-gray-500 text-sm">
+        ${outstandingCreditsCache.length === 0 ? "No outstanding credits" : "No credits match this search"}
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(outstandingCreditItemHtml).join("");
+}
+
+function isCreditsLedgerOpen() {
+  const modal = $("creditsLedgerModal");
+  return modal && !modal.classList.contains("hidden");
+}
+
+window.openCreditsLedger = () => {
+  const modal = $("creditsLedgerModal");
+  if (!modal) return;
+  updateCreditsKindButtons();
+  const sortEl = $("creditsLedgerSort");
+  if (sortEl) sortEl.value = creditsLedgerSort;
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  renderCreditsLedgerList();
+  requestAnimationFrame(() => $("creditsLedgerSearch")?.focus());
+};
+
+window.closeCreditsLedger = () => {
+  const modal = $("creditsLedgerModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+};
+
+window.filterCreditsLedger = () => {
+  renderCreditsLedgerList();
+};
+
+window.setCreditsLedgerKind = (kind) => {
+  creditsLedgerKind = kind === "food" || kind === "recharge" ? kind : "all";
+  updateCreditsKindButtons();
+  renderCreditsLedgerList();
+};
+
+window.setCreditsLedgerSort = (sort) => {
+  creditsLedgerSort = sort || "oldest";
+  renderCreditsLedgerList();
+};
+
 function renderAllOutstandingCredits(credits) {
   if (!elements.outstandingSection) return;
 
-  if (credits.length === 0) {
+  outstandingCreditsCache = credits || [];
+
+  if (outstandingCreditsCache.length === 0) {
     elements.outstandingSection.classList.add("hidden");
+    if (isCreditsLedgerOpen()) closeCreditsLedger();
     updateCreditsRowLayout();
     return;
   }
 
-  const totalPending = credits.reduce((sum, r) => sum + r.amount, 0);
+  const totalPending = outstandingCreditsCache.reduce((sum, r) => sum + r.amount, 0);
 
   elements.outstandingSection.classList.remove("hidden");
-  if (elements.outstandingCount) elements.outstandingCount.textContent = credits.length;
+  if (elements.outstandingCount) elements.outstandingCount.textContent = outstandingCreditsCache.length;
   if (elements.outstandingTotal) elements.outstandingTotal.textContent = `₹${totalPending}`;
 
+  const headerCount = $("creditsLedgerHeaderCount");
+  const headerTotal = $("creditsLedgerHeaderTotal");
+  if (headerCount) headerCount.textContent = String(outstandingCreditsCache.length);
+  if (headerTotal) headerTotal.textContent = `₹${totalPending}`;
+
   if (elements.outstandingList) {
-    elements.outstandingList.innerHTML = credits.map(r => {
-      // Use IST for date formatting
-      const createdDate = r.createdAt 
-        ? formatToIST(r.createdAt, { dateStyle: "medium", timeStyle: undefined })
-        : r.date;
-      
-      // Calculate days since in IST
-      const now = getISTDate();
-      const daysSince = r.createdAt 
-        ? Math.floor((now - new Date(r.createdAt)) / 86400000)
-        : Math.floor((now - new Date(r.date)) / 86400000);
-      
-      const urgencyColor = daysSince > 7 ? "#ff0044" : daysSince > 3 ? "#ff6b00" : "#ffff00";
-      const urgencyBg = daysSince > 7 ? "rgba(255,0,68,0.1)" : "rgba(255,107,0,0.1)";
-
-      // Show partial payment info if applicable
-      const partialInfo = r.creditPaid > 0 
-        ? `<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(0,255,136,0.2); color: #00ff88;">₹${r.creditPaid} already paid</span>`
-        : "";
-
-      return `
-        <div class="credit-item flex items-center justify-between gap-4" style="background: ${urgencyBg};">
-          <div class="flex-1">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="font-orbitron font-bold" style="color: #00f0ff;">${r.member}</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded" style="background: ${r.kind === "food" ? "rgba(255,107,0,0.2)" : "rgba(0,240,255,0.15)"}; color: ${r.kind === "food" ? "#ff6b00" : "#00f0ff"};">${r.kind === "food" ? "🍔 Food" : "🎮 Game"}</span>
-              <span class="font-orbitron font-bold" style="color: #ff6b00;">₹${r.amount}</span>
-              ${daysSince > 0 
-                ? `<span class="text-xs px-2 py-0.5 rounded" style="background: ${urgencyColor}20; color: ${urgencyColor};">${daysSince}d</span>` 
-                : '<span class="text-xs px-2 py-0.5 rounded" style="background: rgba(255,255,0,0.2); color: #ffff00;">Today</span>'}
-              ${partialInfo}
-            </div>
-            <div class="text-xs text-gray-500 mt-1">
-              📅 ${createdDate}
-              ${r.note ? ` • 📝 ${r.note}` : ""}
-            </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <button onclick="collectCreditGlobal('${r.date}', '${r.id}', ${r.amount}, ${r.isNewFormat}, '${r.kind || "recharge"}')" class="mark-paid-btn flex items-center gap-1">
-              💰 Collect
-            </button>
-            <button onclick="deleteCreditGlobal('${r.date}', '${r.id}', '${r.kind || "recharge"}')" 
-              class="hover:scale-110 transition-transform p-1" style="color: #ff0044;">✖</button>
-          </div>
-        </div>
-      `;
-    }).join("");
+    const preview = outstandingCreditsCache.slice(0, CREDITS_PREVIEW_LIMIT);
+    const extra = outstandingCreditsCache.length - preview.length;
+    elements.outstandingList.innerHTML =
+      preview.map(outstandingCreditItemHtml).join("") +
+      (extra > 0
+        ? `<button type="button" onclick="openCreditsLedger()" class="credits-more-btn">
+             + ${extra} more pending — search &amp; collect
+           </button>`
+        : "");
   }
-  
+
+  if (isCreditsLedgerOpen()) renderCreditsLedgerList();
   updateCreditsRowLayout();
 }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const collect = $("collectCreditModal");
+  if (collect && !collect.classList.contains("hidden")) {
+    window.closeCollectModal?.();
+    return;
+  }
+  if (isCreditsLedgerOpen()) closeCreditsLedger();
+});
 
 // Global credit collection function - opens the modal
 window.collectCreditGlobal = (date, id, amount, isNewFormat, kind = "recharge") => {

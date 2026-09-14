@@ -1972,6 +1972,64 @@ table.recharge-table th {
   color: #000;
 }
 
+.credits-expand-btn {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 107, 0, 0.45);
+  background: rgba(255, 107, 0, 0.12);
+  color: #ff8a3d;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.credits-expand-btn:hover {
+  background: rgba(255, 107, 0, 0.22);
+  color: #ffb347;
+}
+
+.credits-more-btn {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 107, 0, 0.35);
+  background: rgba(255, 107, 0, 0.06);
+  color: #ff8a3d;
+}
+
+.credits-more-btn:hover {
+  background: rgba(255, 107, 0, 0.12);
+}
+
+.credits-ledger-panel {
+  max-height: min(92vh, 860px);
+  height: min(92vh, 860px);
+  background: rgba(8, 8, 14, 0.96);
+}
+
+.credits-kind-btn {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #374151;
+  background: rgba(255, 255, 255, 0.04);
+  color: #9ca3af;
+}
+
+.credits-kind-btn.active {
+  border-color: rgba(255, 107, 0, 0.55);
+  background: rgba(255, 107, 0, 0.15);
+  color: #ff8a3d;
+}
+
+#creditsLedgerList .credit-item {
+  background: rgba(255, 107, 0, 0.08);
+}
+
 /* ==================== TIMETABLE ==================== */
 .timetable-row {
   background: rgba(0, 0, 0, 0.3);
@@ -2453,6 +2511,15 @@ body.admin-login::before {
     padding: 1rem !important;
     border-radius: 16px !important;
   }
+
+  .credits-ledger-panel {
+    height: calc(100dvh - 1rem) !important;
+    max-height: calc(100dvh - 1rem) !important;
+  }
+
+  #creditsLedgerSearch {
+    padding-left: 40px !important;
+  }
   
   #addRechargeModal .grid-cols-2,
   #addRechargeModal .grid-cols-3 {
@@ -2574,10 +2641,10 @@ body.admin-login::before {
     min-width: fit-content;
   }
   
-  /* Outstanding credits section */
+  /* Outstanding credits section — compact preview; full list is the ledger modal */
   #outstandingCreditsList {
-    max-height: 300px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
   }
   
   /* Outstanding credit items - mobile layout */

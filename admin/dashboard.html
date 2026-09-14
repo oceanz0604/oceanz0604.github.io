@@ -21,8 +21,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/common.css?v=zpause1">
-  <link rel="stylesheet" href="../assets/css/admin.css?v=zpause1">
+  <link rel="stylesheet" href="../assets/css/common.css?v=credits1">
+  <link rel="stylesheet" href="../assets/css/admin.css?v=credits1">
   <style>
     /* Page-specific styles - most styles are in common.css and admin.css */
 
@@ -880,7 +880,8 @@
       
       /* Add recharge modal mobile */
       #addRechargeModal > div,
-      #collectCreditModal > div {
+      #collectCreditModal > div,
+      #creditsLedgerModal > div {
         padding: 1rem !important;
         border-radius: 16px !important;
       }
@@ -1473,14 +1474,19 @@
               <!-- Outstanding Credits Section -->
               <div id="outstandingCreditsSection" class="hidden">
                 <div class="neon-card rounded-xl p-4 relative h-full" style="border-color: rgba(255,107,0,0.3);">
-                  <div class="flex items-center justify-between mb-3">
-                    <h3 class="font-orbitron text-xs font-bold flex items-center gap-2" style="color: var(--neon-orange);">
+                  <div class="flex items-center justify-between gap-2 mb-3">
+                    <h3 class="font-orbitron text-xs font-bold flex items-center gap-2 min-w-0" style="color: var(--neon-orange);">
                       🔖 OUTSTANDING CREDITS
                       <span id="outstandingCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2);">0</span>
                     </h3>
-                    <span id="outstandingTotal" class="font-orbitron text-sm font-bold" style="color: var(--neon-orange);">₹0</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span id="outstandingTotal" class="font-orbitron text-sm font-bold" style="color: var(--neon-orange);">₹0</span>
+                      <button type="button" onclick="openCreditsLedger()" class="credits-expand-btn" title="Open searchable credits ledger">
+                        Expand
+                      </button>
+                    </div>
                   </div>
-                  <div id="outstandingCreditsList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                  <div id="outstandingCreditsList" class="space-y-2"></div>
                 </div>
               </div>
 
@@ -2293,7 +2299,7 @@
 
       // Service Worker Registration — force update so Floor Monitor deploys appear
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('../sw.js?v=zpause1')
+        navigator.serviceWorker.register('../sw.js?v=credits1')
           .then(async reg => {
             console.log('SW registered:', reg.scope);
             try { await reg.update(); } catch (_) {}
@@ -2545,8 +2551,58 @@
     </div>
   </div>
 
+  <!-- Outstanding credits ledger (search / filter / collect) -->
+  <div id="creditsLedgerModal" class="fixed inset-0 z-[60] hidden items-center justify-center p-3 sm:p-6" style="background: rgba(0,0,0,0.82);" onclick="if (event.target === this) closeCreditsLedger()">
+    <div class="neon-card rounded-2xl w-full max-w-4xl mx-auto relative flex flex-col credits-ledger-panel" style="border-color: rgba(255,107,0,0.45);">
+      <div class="flex items-start justify-between gap-3 p-4 sm:p-5 pb-3 shrink-0">
+        <div class="min-w-0">
+          <h3 class="font-orbitron text-base sm:text-lg font-bold" style="color: #ff6b00;">🔖 CREDITS LEDGER</h3>
+          <p class="text-xs text-gray-500 mt-1">Search, filter, and collect pending game &amp; food credits</p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="text-right hidden sm:block">
+            <div class="text-[10px] uppercase tracking-wider text-gray-500">Pending</div>
+            <div class="flex items-center gap-2">
+              <span id="creditsLedgerHeaderCount" class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(255,107,0,0.2); color: #ff6b00;">0</span>
+              <span id="creditsLedgerHeaderTotal" class="font-orbitron text-lg font-bold" style="color: #ff6b00;">₹0</span>
+            </div>
+          </div>
+          <button type="button" onclick="closeCreditsLedger()" class="text-gray-500 hover:text-white text-xl leading-none px-1" aria-label="Close">✕</button>
+        </div>
+      </div>
+
+      <div class="px-4 sm:px-5 pb-3 shrink-0 space-y-3">
+        <div class="relative">
+          <input type="search" id="creditsLedgerSearch" placeholder="Search name, note, amount, date…"
+            class="neon-input w-full px-3 py-2 pl-9 rounded-lg text-sm text-white"
+            oninput="filterCreditsLedger()" autocomplete="off"/>
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex gap-1.5">
+            <button type="button" id="creditsKindAll" class="credits-kind-btn active" onclick="setCreditsLedgerKind('all')">All</button>
+            <button type="button" id="creditsKindRecharge" class="credits-kind-btn" onclick="setCreditsLedgerKind('recharge')">🎮 Game</button>
+            <button type="button" id="creditsKindFood" class="credits-kind-btn" onclick="setCreditsLedgerKind('food')">🍔 Food</button>
+          </div>
+          <select id="creditsLedgerSort" class="neon-select text-xs px-2 py-1.5 rounded-lg ml-auto" onchange="setCreditsLedgerSort(this.value)">
+            <option value="oldest">Oldest first</option>
+            <option value="newest">Newest first</option>
+            <option value="amount">Highest amount</option>
+            <option value="name">Name A–Z</option>
+          </select>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+          <span>Showing <span id="creditsLedgerFilteredCount">0</span> · <span id="creditsLedgerFilteredTotal" class="font-orbitron" style="color: #ff6b00;">₹0</span></span>
+          <span id="creditsLedgerKindTotals" class="text-gray-500"></span>
+        </div>
+      </div>
+
+      <div id="creditsLedgerList" class="flex-1 overflow-y-auto px-4 sm:px-5 pb-4 space-y-2 min-h-0" data-modal-scroll></div>
+    </div>
+  </div>
+
   <!-- Credit Collection Modal -->
-  <div id="collectCreditModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background: rgba(0,0,0,0.8)">
+  <div id="collectCreditModal" class="fixed inset-0 z-[80] hidden items-center justify-center" style="background: rgba(0,0,0,0.8)">
     <div class="neon-card rounded-2xl w-full max-w-md p-6 mx-4 relative" style="border-color: rgba(255,107,0,0.5);">
       <button onclick="closeCollectModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white">✕</button>
       
@@ -3094,11 +3150,11 @@
   <script src="../shared/pdf-export.js"></script>
   <script type="module" src="../shared/notify.js"></script>
   <script type="module" src="../shared/leaderboard.js"></script>
-  <script type="module" src="js/dashboard.js?v=zpause1"></script>
-  <script type="module" src="js/bookings.js?v=zpause1"></script>
-  <script type="module" src="js/recharges.js"></script>
-  <script type="module" src="js/cash-register.js?v=zpause1"></script>
-  <script type="module" src="js/recharge-food.js?v=zpause1"></script>
+  <script type="module" src="js/dashboard.js?v=credits1"></script>
+  <script type="module" src="js/bookings.js?v=credits1"></script>
+  <script type="module" src="js/recharges.js?v=credits1"></script>
+  <script type="module" src="js/cash-register.js?v=credits1"></script>
+  <script type="module" src="js/recharge-food.js?v=credits1"></script>
   <!-- finance / staff / cafe-manager / members are lazy-loaded on first open -->
   
   <!-- Leaderboard handlers -->
