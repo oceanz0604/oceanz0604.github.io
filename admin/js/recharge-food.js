@@ -21,6 +21,7 @@ import {
   FOOD_SALE_SOURCES,
   buildFoodLedgerSale,
   foodCreditKey,
+  foodIssuedCredit,
   foodSaleToLedger,
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
@@ -962,7 +963,11 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
   const ledger = foodSaleToLedger({ id, date, ...original });
   const today = getTodayISTString();
   const now = new Date().toISOString();
-  const newCreditPaid = (ledger.creditPaid || 0) + collected;
+  let issuedCredit = foodIssuedCredit(original);
+  if (issuedCredit <= 0) issuedCredit = Number(ledger.credit) || 0;
+  const nextPaid = (Number(original.creditPaid) || 0) + collected;
+  if (issuedCredit <= 0) issuedCredit = nextPaid;
+  const newCreditPaid = Math.min(issuedCredit, nextPaid);
 
   const existingPayments = ledger.creditPayments || {};
   const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
@@ -977,6 +982,7 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
   };
 
   await ref.update({
+    credit: issuedCredit,
     creditPaid: newCreditPaid,
     creditPayments: updatedPayments,
     lastPaidAt: now,

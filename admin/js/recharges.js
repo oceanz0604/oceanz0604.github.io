@@ -720,7 +720,7 @@ function loadAllOutstandingCredits() {
       Object.entries(dayData).forEach(([id, r]) => {
         // Handle new split format
         if (r.total !== undefined) {
-          const pendingCredit = (r.credit || 0) - (r.creditPaid || 0);
+          const pendingCredit = Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0));
           if (pendingCredit > 0) {
             allCredits.push({ 
               id, 
@@ -1309,7 +1309,7 @@ function render() {
       
       const collected = (r.cash || 0) + (r.upi || 0) + sameDayCreditPaid;
       totalCollected += collected;
-      creditPending += (r.credit || 0) - (r.creditPaid || 0);
+      creditPending += Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0));
     } else if (r.amount !== undefined) {
       if (r.mode === "credit") {
         if (r.paid) {
@@ -1359,7 +1359,7 @@ function render() {
     const isFood = r.entryType === "food";
     
     const hasPendingCredit = r.total !== undefined 
-      ? ((r.credit || 0) - (r.creditPaid || 0)) > 0
+      ? Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0)) > 0
       : (r.mode === "credit" && !r.paid);
     
     if (hasPendingCredit) {
@@ -1385,7 +1385,7 @@ function render() {
       if (r.free > 0) badges.push(`<span class="payment-badge free">🎁 ₹${r.free}</span>`);
       
       if (r.credit > 0) {
-        const remaining = (r.credit || 0) - (r.creditPaid || 0);
+        const remaining = Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0));
         if (remaining > 0) {
           badges.push(`<span class="payment-badge credit-pending">🔖 ₹${remaining}</span>`);
         }
@@ -1457,7 +1457,7 @@ function render() {
     }
 
     const pendingCreditAmount = r.total !== undefined 
-      ? (r.credit || 0) - (r.creditPaid || 0)
+      ? Math.max(0, (Number(r.credit) || 0) - (Number(r.creditPaid) || 0))
       : (r.mode === "credit" && !r.paid ? r.amount : 0);
 
     const typeBadge = isFood
@@ -1723,6 +1723,8 @@ window.confirmCollectCredit = async () => {
   if (isNewFormat) {
     // New split format - update the record with payment history
     const newCreditPaid = (originalRecord.creditPaid || 0) + collected;
+    const issuedCredit = Number(originalRecord.credit) || 0;
+    const cappedPaid = issuedCredit > 0 ? Math.min(issuedCredit, newCreditPaid) : newCreditPaid;
     const today = getISTDateString();
     const now = new Date().toISOString();
     
@@ -1742,7 +1744,7 @@ window.confirmCollectCredit = async () => {
     };
     
     rechargeDb.ref(`recharges/${date}/${id}`).update({
-      creditPaid: newCreditPaid,
+      creditPaid: cappedPaid,
       creditPayments: updatedPayments,
       // Keep lastPaid fields for backward compatibility
       lastPaidAt: now,
@@ -2048,7 +2050,7 @@ window.exportMonthPDF = async () => {
 
       totalCash += cash + (r.lastPaidCash || 0);
       totalUPI += upi + (r.lastPaidUpi || 0);
-      totalCredit += (credit - (r.creditPaid || 0));
+      totalCredit += Math.max(0, credit - (r.creditPaid || 0));
       totalFree += free;
       grandTotal += total;
     };

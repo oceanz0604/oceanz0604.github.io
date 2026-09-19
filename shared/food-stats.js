@@ -226,26 +226,36 @@ export function sumFoodExpenses(expenses = [], foodCategoryIds = ["food_purchase
 }
 
 /**
+ * Credit originally issued on a food sale.
+ * Do not treat `creditPaid` as proof of ledger fields — collecting on a
+ * legacy POS row (paymentMode/creditAmount only) used to flip mapping to
+ * credit=0 and make pending go negative.
+ */
+export function foodIssuedCredit(sale = {}) {
+  if (sale.credit !== undefined && sale.credit !== null && sale.credit !== "") {
+    return Number(sale.credit) || 0;
+  }
+  const amounts = getSaleCollectedAmounts(sale);
+  return Number(amounts.credit) || 0;
+}
+
+export function foodPendingCredit(sale = {}) {
+  const paid = Number(sale.creditPaid) || 0;
+  return Math.max(0, foodIssuedCredit(sale) - paid);
+}
+
+/**
  * Map any food sale (legacy POS or new ledger) into recharge-compatible payment fields.
  * @param {object} sale
  * @returns {object}
  */
 export function foodSaleToLedger(sale = {}) {
   const normalized = normalizeFoodSale(sale);
-  const amounts = getSaleCollectedAmounts(normalized);
+  const amounts = getSaleCollectedAmounts(sale);
 
-  // Prefer explicit ledger fields when present (recharges-style)
-  const hasLedger =
-    sale.cash !== undefined ||
-    sale.upi !== undefined ||
-    sale.credit !== undefined ||
-    sale.creditPaid !== undefined;
-
-  const cash = hasLedger ? (Number(sale.cash) || 0) : amounts.cash;
-  const upi = hasLedger ? (Number(sale.upi) || 0) : amounts.upi;
-  const credit = hasLedger
-    ? (Number(sale.credit) || 0)
-    : (amounts.credit || (normalized.paymentMode === "credit" ? normalized.total : 0));
+  const cash = sale.cash !== undefined ? (Number(sale.cash) || 0) : amounts.cash;
+  const upi = sale.upi !== undefined ? (Number(sale.upi) || 0) : amounts.upi;
+  const credit = sale.credit !== undefined ? (Number(sale.credit) || 0) : foodIssuedCredit(sale);
   const creditPaid = Number(sale.creditPaid) || 0;
 
   const member =
