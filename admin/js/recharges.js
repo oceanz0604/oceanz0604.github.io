@@ -1813,7 +1813,7 @@ window.editRecharge = id => {
     // UPI = original upi + any upi used to settle credit
     const actualUpi = (r.upi || 0) + (r.lastPaidUpi || 0);
     // Credit = remaining unpaid credit
-    const actualCredit = (r.credit || 0) - (r.creditPaid || 0);
+    const actualCredit = Math.max(0, (r.credit || 0) - (r.creditPaid || 0));
     
     if (elements.totalAmountInput) elements.totalAmountInput.value = r.total;
     if (elements.cashInput) elements.cashInput.value = actualCash || "";
