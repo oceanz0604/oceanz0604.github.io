@@ -989,12 +989,20 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
   const now = new Date().toISOString();
   let applied = null;
 
+  // Firebase calls this with null before the sale is in the local cache.
+  // Returning undefined aborts the whole collect. Return null so it retries
+  // with the real record.
+  let blocked = false;
   const tx = await ref.transaction((current) => {
-    if (!current) return;
+    if (!current) return current;
     const issued = issuedFoodCredit(current);
     const already = Number(current.creditPaid) || 0;
     const room = Math.max(0, issued - already);
-    if (collected > room + 0.001) return;
+    if (collected > room + 0.001) {
+      blocked = true;
+      return;
+    }
+    blocked = false;
     const existingPayments = current.creditPayments || {};
     const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
     const updatedPayments = {
@@ -1018,10 +1026,11 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
     };
   });
 
-  if (!tx.committed) {
-    const snap = await ref.once("value");
-    if (!snap.val()) throw new Error("Food sale not found");
-    throw new Error("This credit was already collected. Refresh the list and try again.");
+  if (!tx.committed || !tx.snapshot?.val()) {
+    if (blocked) {
+      throw new Error("This credit was already collected. Refresh the list and try again.");
+    }
+    throw new Error("Food sale not found");
   }
   applied = tx.snapshot.val() || {};
   const ledger = foodSaleToLedger({ ...applied, id, date });
