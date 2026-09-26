@@ -16,6 +16,7 @@ import {
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
 import { ensureJsPdf } from "../../shared/lazy-cdn.js";
+import { countableCollectionOnDate } from "../../shared/sale-cash.js";
 
 // ==================== FIREBASE INIT ====================
 
@@ -822,17 +823,12 @@ async function calculateSaleFromRecharges(targetDate) {
       }
     });
     
-    // Gaming credit collections that happened on the target date
-    Object.entries(allRecharges).forEach(([date, dayData]) => {
-      Object.values(dayData).forEach(r => {
-        if (r.creditPayments?.[dateStr]) {
-          creditCash += r.creditPayments[dateStr].cash || 0;
-        } else if (r.lastPaidAt?.split("T")[0] === dateStr) {
-          creditCash += r.lastPaidCash || 0;
-        }
-        if (r.paidAt?.split("T")[0] === dateStr && r.mode === "credit" && r.paid && r.paidVia === "cash") {
-          creditCash += r.amount;
-        }
+    // Gaming credit collections that happened on the target date.
+    // Capped so a collection is not added again when it was already folded into cash.
+    Object.entries(allRecharges).forEach(([, dayData]) => {
+      Object.values(dayData || {}).forEach(r => {
+        if (!r || typeof r !== "object") return;
+        creditCash += countableCollectionOnDate(r, dateStr).cash;
       });
     });
 
@@ -848,14 +844,11 @@ async function calculateSaleFromRecharges(targetDate) {
       }
     });
 
-    // Food credit collections (per-sale creditPayments + food_credit_payments cash)
-    Object.entries(allFood).forEach(([date, dayData]) => {
+    // Food credit collections. Same cap: upfront cash + collection cannot exceed the sale.
+    Object.entries(allFood).forEach(([, dayData]) => {
       Object.values(dayData || {}).forEach(r => {
-        if (r.creditPayments?.[dateStr]) {
-          creditCash += r.creditPayments[dateStr].cash || 0;
-        } else if (r.lastPaidAt?.split("T")[0] === dateStr) {
-          creditCash += r.lastPaidCash || 0;
-        }
+        if (!r || typeof r !== "object") return;
+        creditCash += countableCollectionOnDate(r, dateStr).cash;
       });
     });
     

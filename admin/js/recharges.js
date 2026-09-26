@@ -21,6 +21,7 @@ import { getStaffSession, canEditData } from "./permissions.js";
 import {
   foodSaleToLedger
 } from "../../shared/food-stats.js";
+import { countableCollectionOnDate } from "../../shared/sale-cash.js";
 import {
   getFoodDayState,
   onFoodDayChange,
@@ -443,73 +444,27 @@ async function loadCreditCollectionsForDate(targetDate) {
     let sameDayCash = 0, sameDayUpi = 0;
     let otherDayCash = 0, otherDayUpi = 0;
 
-    const foldDayTree = (allDays, { includeLegacy = false } = {}) => {
+    const foldDayTree = (allDays) => {
       Object.entries(allDays || {}).forEach(([transactionDate, dayData]) => {
         Object.values(dayData || {}).forEach(r => {
           if (!r || typeof r !== "object") return;
 
-          // NEW FORMAT with creditPayments history
-          if (r.creditPayments && r.creditPayments[targetDate]) {
-            const payment = r.creditPayments[targetDate];
+          const counted = countableCollectionOnDate(r, targetDate);
+          if (counted.cash || counted.upi) {
             if (transactionDate === targetDate) {
-              sameDayCash += payment.cash || 0;
-              sameDayUpi += payment.upi || 0;
+              sameDayCash += counted.cash;
+              sameDayUpi += counted.upi;
             } else {
-              otherDayCash += payment.cash || 0;
-              otherDayUpi += payment.upi || 0;
-            }
-          }
-          // FALLBACK: Old format with lastPaidAt (single payment only)
-          else if (r.lastPaidAt && !r.creditPayments) {
-            const paidDate = r.lastPaidAt.split("T")[0];
-            if (paidDate === targetDate) {
-              if (transactionDate === targetDate) {
-                sameDayCash += r.lastPaidCash || 0;
-                sameDayUpi += r.lastPaidUpi || 0;
-              } else {
-                otherDayCash += r.lastPaidCash || 0;
-                otherDayUpi += r.lastPaidUpi || 0;
-              }
-            }
-          }
-
-          // LEGACY gaming-only: paidAt credit mode
-          if (
-            includeLegacy &&
-            r.paidAt &&
-            r.mode === "credit" &&
-            r.paid &&
-            !r.creditPayments &&
-            !r.lastPaidCash &&
-            !r.lastPaidUpi
-          ) {
-            const paidDate = r.paidAt.split("T")[0];
-            if (paidDate === targetDate) {
-              let cash = 0, upi = 0;
-              if (r.paidVia === "cash") cash = r.amount;
-              else if (r.paidVia === "upi") upi = r.amount;
-              else if (r.paidVia === "cash+upi") {
-                cash = Math.floor(r.amount / 2);
-                upi = r.amount - Math.floor(r.amount / 2);
-              } else {
-                cash = r.amount;
-              }
-
-              if (transactionDate === targetDate) {
-                sameDayCash += cash;
-                sameDayUpi += upi;
-              } else {
-                otherDayCash += cash;
-                otherDayUpi += upi;
-              }
+              otherDayCash += counted.cash;
+              otherDayUpi += counted.upi;
             }
           }
         });
       });
     };
 
-    foldDayTree(allRecharges, { includeLegacy: true });
-    foldDayTree(allFood, { includeLegacy: false });
+    foldDayTree(allRecharges);
+    foldDayTree(allFood);
     
     const totalCollectedCash = sameDayCash + otherDayCash;
     const totalCollectedUpi = sameDayUpi + otherDayUpi;
@@ -571,76 +526,21 @@ async function loadOtherDayCollections(targetDate) {
           if (!r || typeof r !== "object") return;
           const member = r.member || r.customerName || r.memberName || r.pcName || "—";
 
-          if (r.creditPayments && r.creditPayments[targetDate]) {
-            const payment = r.creditPayments[targetDate];
-            const totalCollected = (payment.cash || 0) + (payment.upi || 0);
-            if (totalCollected > 0) {
-              collections.push({
-                id,
-                kind,
-                transactionDate,
-                member,
-                cash: payment.cash || 0,
-                upi: payment.upi || 0,
-                total: totalCollected,
-                collectedAt: payment.at,
-                collectedBy: payment.by
-              });
-            }
-          } else if (r.lastPaidAt && !r.creditPayments) {
-            const paidDate = r.lastPaidAt.split("T")[0];
-            if (paidDate === targetDate) {
-              const totalCollected = (r.lastPaidCash || 0) + (r.lastPaidUpi || 0);
-              if (totalCollected > 0) {
-                collections.push({
-                  id,
-                  kind,
-                  transactionDate,
-                  member,
-                  cash: r.lastPaidCash || 0,
-                  upi: r.lastPaidUpi || 0,
-                  total: totalCollected,
-                  collectedAt: r.lastPaidAt,
-                  collectedBy: r.lastPaidBy
-                });
-              }
-            }
-          }
-
-          // Legacy gaming credit paidAt
-          if (
-            kind === "recharge" &&
-            r.paidAt &&
-            r.mode === "credit" &&
-            r.paid &&
-            !r.creditPayments &&
-            !r.lastPaidCash &&
-            !r.lastPaidUpi
-          ) {
-            const paidDate = r.paidAt.split("T")[0];
-            if (paidDate === targetDate) {
-              let cash = 0, upi = 0;
-              if (r.paidVia === "cash") cash = r.amount;
-              else if (r.paidVia === "upi") upi = r.amount;
-              else if (r.paidVia === "cash+upi") {
-                cash = Math.floor(r.amount / 2);
-                upi = r.amount - Math.floor(r.amount / 2);
-              } else {
-                cash = r.amount;
-              }
-
-              collections.push({
-                id,
-                kind,
-                transactionDate,
-                member,
-                cash,
-                upi,
-                total: cash + upi,
-                collectedAt: r.paidAt,
-                collectedBy: r.paidBy
-              });
-            }
+          const counted = countableCollectionOnDate(r, targetDate);
+          const totalCollected = counted.cash + counted.upi;
+          if (totalCollected > 0) {
+            const payment = r.creditPayments?.[targetDate];
+            collections.push({
+              id,
+              kind,
+              transactionDate,
+              member,
+              cash: counted.cash,
+              upi: counted.upi,
+              total: totalCollected,
+              collectedAt: payment?.at || r.lastPaidAt || r.paidAt,
+              collectedBy: payment?.by || r.lastPaidBy || r.paidBy
+            });
           }
         });
       });
@@ -755,7 +655,7 @@ function loadAllOutstandingCredits() {
     // Food sales with pending credit
     Object.entries(allFood || {}).forEach(([date, dayData]) => {
       Object.entries(dayData || {}).forEach(([id, raw]) => {
-        const r = foodSaleToLedger({ id, date, ...raw });
+        const r = foodSaleToLedger({ ...raw, id, date });
         const pendingCredit = Math.max(0, (r.credit || 0) - (r.creditPaid || 0));
         if (pendingCredit > 0) {
           allCredits.push({
@@ -1016,7 +916,7 @@ window.collectCreditGlobal = (date, id, amount, isNewFormat, kind = "recharge") 
     getAllFoodSalesTree().then(tree => {
       const r = tree?.[date]?.[id];
       if (!r) return;
-      const ledger = foodSaleToLedger({ id, date, ...r });
+      const ledger = foodSaleToLedger({ ...r, id, date });
       openCollectModal({
         date,
         id,
@@ -1245,6 +1145,18 @@ window.filterRechargeList = () => {
   render();
 };
 
+function escHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escJsAttr(value) {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 function render() {
   if (!elements.listEl) return;
   elements.listEl.innerHTML = "";
@@ -1293,19 +1205,8 @@ function render() {
       upiTotal += r.upi || 0;
       freeTotal += r.free || 0;
       
-      let sameDayCreditPaid = 0;
-      
-      if (r.creditPayments && r.creditPayments[selectedDate]) {
-        const todayPayment = r.creditPayments[selectedDate];
-        sameDayCreditPaid = (todayPayment.cash || 0) + (todayPayment.upi || 0);
-      } else if (r.creditPaid > 0 && r.lastPaidAt && !r.creditPayments) {
-        const paidDate = r.lastPaidAt.split("T")[0];
-        if (paidDate === selectedDate) {
-          sameDayCreditPaid = r.creditPaid;
-        }
-      } else if (r.creditPaid > 0 && !r.lastPaidAt && !r.creditPayments) {
-        sameDayCreditPaid = r.creditPaid;
-      }
+      const todayCollection = countableCollectionOnDate(r, selectedDate);
+      const sameDayCreditPaid = todayCollection.cash + todayCollection.upi;
       
       const collected = (r.cash || 0) + (r.upi || 0) + sameDayCreditPaid;
       totalCollected += collected;
@@ -1467,16 +1368,22 @@ function render() {
       ? `<span class="txn-type-badge" title="${String(r.zentorySyncError || "Zentory stock sync failed").replace(/"/g, "&quot;")}" style="background: rgba(255,0,68,0.2); color: #ff6688;">Stock?</span>`
       : "";
 
-    const editFn = isFood ? `editFoodRecharge('${r.id}')` : `editRecharge('${r.id}')`;
-    const deleteFn = isFood ? `deleteFoodRecharge('${r.id}')` : `deleteRecharge('${r.id}')`;
+    const jsId = escJsAttr(r.id);
+    const jsDate = escJsAttr(r.date || selectedDate);
+    const editFn = isFood ? `editFoodRecharge('${jsId}','${jsDate}')` : `editRecharge('${jsId}')`;
+    const deleteFn = isFood ? `deleteFoodRecharge('${jsId}','${jsDate}')` : `deleteRecharge('${jsId}')`;
     const collectFn = isFood
-      ? `collectCredit('${r.id}', ${pendingCreditAmount}, 'food')`
-      : `collectCredit('${r.id}', ${pendingCreditAmount})`;
+      ? `collectCredit('${jsId}', ${pendingCreditAmount}, 'food')`
+      : `collectCredit('${jsId}', ${pendingCreditAmount})`;
 
     const itemsText = (r.items || []).map(i => `${i.qty || 1}× ${i.name}`).join(", ");
     // Avoid duplicating auto-generated item notes in the Note column
     const rawNote = (r.note || "").trim();
     const displayNote = isFood && itemsText && rawNote === itemsText ? "" : rawNote;
+    const safeMember = escHtml(r.member || r.customerName || "—");
+    const safeItems = escHtml(itemsText);
+    const safeNote = escHtml(displayNote || "");
+    const safeAdmin = escHtml(r.admin || r.staffName || "Admin");
 
     row.innerHTML = `
       <td class="text-center">
@@ -1488,11 +1395,11 @@ function render() {
       </td>
       <td>
         <div class="flex items-center gap-1 min-w-0">
-          <span class="txn-member font-orbitron font-bold truncate" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${r.member || r.customerName || "—"}</span>
+          <span class="txn-member font-orbitron font-bold truncate" style="color: ${isFood ? "var(--neon-orange)" : "var(--neon-cyan)"};">${safeMember}</span>
           ${typeBadge}${stockWarn}
         </div>
         ${isFood && itemsText
-          ? `<div class="txn-items" title="${itemsText}">${itemsText}</div>`
+          ? `<div class="txn-items" title="${safeItems}">${safeItems}</div>`
           : ""}
       </td>
       <td class="text-right">
@@ -1502,11 +1409,11 @@ function render() {
       <td class="recharge-col-payment">
         <div class="flex flex-wrap gap-0.5">${paymentBadges}</div>
       </td>
-      <td class="text-gray-400 text-[11px] truncate recharge-col-note" title="${displayNote || ""}">
-        ${displayNote || "—"}
+      <td class="text-gray-400 text-[11px] truncate recharge-col-note" title="${safeNote}">
+        ${safeNote || "—"}
       </td>
       <td class="recharge-col-admin">
-        <span class="txn-admin" title="${r.admin || r.staffName || "Admin"}">${r.admin || r.staffName || "Admin"}</span>
+        <span class="txn-admin" title="${safeAdmin}">${safeAdmin}</span>
       </td>
       <td class="text-right">
         <div class="txn-actions">
@@ -1721,35 +1628,40 @@ window.confirmCollectCredit = async () => {
   }
   
   if (isNewFormat) {
-    // New split format - update the record with payment history
-    const newCreditPaid = (originalRecord.creditPaid || 0) + collected;
     const today = getISTDateString();
     const now = new Date().toISOString();
-    
-    // Build credit payments history (supports multiple partial payments across days)
-    const existingPayments = originalRecord.creditPayments || {};
-    const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
-    
-    // Add today's payment to the history
-    const updatedPayments = {
-      ...existingPayments,
-      [today]: {
-        cash: todayPayment.cash + cash,
-        upi: todayPayment.upi + upi,
-        at: now,
-        by: getAdminName()
-      }
-    };
-    
-    rechargeDb.ref(`recharges/${date}/${id}`).update({
-      creditPaid: newCreditPaid,
-      creditPayments: updatedPayments,
-      // Keep lastPaid fields for backward compatibility
-      lastPaidAt: now,
-      lastPaidCash: cash,
-      lastPaidUpi: upi,
-      lastPaidBy: getAdminName()
+    const ref = rechargeDb.ref(`recharges/${date}/${id}`);
+    const tx = await ref.transaction((current) => {
+      if (!current) return;
+      const issued = Number(current.credit) || 0;
+      const already = Number(current.creditPaid) || 0;
+      const room = Math.max(0, issued - already);
+      if (collected > room + 0.001) return;
+      const existingPayments = current.creditPayments || {};
+      const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
+      return {
+        ...current,
+        creditPaid: already + collected,
+        creditPayments: {
+          ...existingPayments,
+          [today]: {
+            cash: (Number(todayPayment.cash) || 0) + cash,
+            upi: (Number(todayPayment.upi) || 0) + upi,
+            at: now,
+            by: getAdminName()
+          }
+        },
+        lastPaidAt: now,
+        lastPaidCash: cash,
+        lastPaidUpi: upi,
+        lastPaidBy: getAdminName()
+      };
     });
+    if (!tx.committed) {
+      notifyError("This credit was already collected. Refresh the list and try again.");
+      closeCollectModal();
+      return;
+    }
   } else {
     // Old format
     if (stillCredit > 0) {

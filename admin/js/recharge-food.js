@@ -25,6 +25,7 @@ import {
   removeFoodCreditPaymentsForSale,
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
+import { fitCollectionsToSale } from "../../shared/sale-cash.js";
 import { fetchZentoryProducts, postZentorySale, voidZentorySale, invalidateZentoryProductCache, applyZentorySaleResult } from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
@@ -95,8 +96,10 @@ let foodCustomerType = FOOD_CUSTOMER_TYPES.MEMBER;
 let selectedMemberName = "";
 let selectedPcName = "";
 let foodEditId = null;
+let foodEditCollected = 0;
 let foodDayState = [];
 let foodSalesListener = null;
+let foodSalesHandler = null;
 let currentFoodDate = null;
 let onFoodStateChange = null;
 
@@ -137,24 +140,25 @@ export async function loadFoodDay(dateStr) {
 
   currentFoodDate = dateStr;
 
-  if (foodSalesListener) {
-    foodSalesListener.off();
+  if (foodSalesListener && foodSalesHandler) {
+    foodSalesListener.off("value", foodSalesHandler);
     foodSalesListener = null;
+    foodSalesHandler = null;
   }
 
   return new Promise(resolve => {
     const ref = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}`);
     foodSalesListener = ref;
-    ref.on("value", snap => {
+    foodSalesHandler = snap => {
       const data = snap.val() || {};
       foodDayState = Object.entries(data).map(([id, sale]) =>
-        foodSaleToLedger({ id, date: dateStr, ...sale })
+        foodSaleToLedger({ ...sale, id, date: dateStr })
       );
       if (typeof onFoodStateChange === "function") onFoodStateChange(foodDayState);
-      // Hide legacy separate food block if still in DOM
       hideLegacyFoodBlock();
       resolve(foodDayState);
-    }, err => {
+    };
+    ref.on("value", foodSalesHandler, err => {
       console.error("❌ RechargeFood: day listen failed", err);
       foodDayState = [];
       if (typeof onFoodStateChange === "function") onFoodStateChange(foodDayState);
@@ -583,14 +587,15 @@ function updateFoodSplitRemaining() {
   const upi = Number($("foodRechargeUpi")?.value) || 0;
   const credit = Number($("foodRechargeCredit")?.value) || 0;
   const remaining = total - (cash + upi + credit);
+  const collectedNote = foodEditCollected > 0 ? ` · ₹${foodEditCollected} already collected` : "";
   if (total === 0) {
-    el.textContent = "Add items first";
+    el.textContent = "Add items first" + collectedNote;
     el.style.color = "var(--neon-orange)";
   } else if (remaining === 0) {
-    el.textContent = "Split OK";
+    el.textContent = "Split OK" + collectedNote;
     el.style.color = "var(--neon-green)";
   } else {
-    el.textContent = `Remaining ₹${remaining}`;
+    el.textContent = `Remaining ₹${remaining}` + collectedNote;
     el.style.color = remaining > 0 ? "var(--neon-orange)" : "var(--neon-red)";
   }
 }
@@ -635,6 +640,7 @@ function resetFoodForm() {
   selectedMemberName = "";
   selectedPcName = "";
   foodEditId = null;
+  foodEditCollected = 0;
   foodMenuQuery = "";
   foodMenuCategory = "all";
   if ($("foodRechargeItemSearch")) $("foodRechargeItemSearch").value = "";
@@ -651,13 +657,22 @@ function resetFoodForm() {
   updateFoodCustomerBadge();
 }
 
-window.editFoodRecharge = async function(id) {
+async function resolveFoodSale(id, dateOverride) {
+  const inMemory = foodDayState.find(s => s.id === id);
+  const dateStr = dateOverride || inMemory?.date || currentFoodDate || getSelectedRechargeDate();
+  if (inMemory && (!dateOverride || dateOverride === inMemory.date)) return inMemory;
+  const raw = await fetchFoodSale(dateStr, id);
+  if (!raw) return null;
+  return foodSaleToLedger({ ...raw, id, date: dateStr });
+}
+
+window.editFoodRecharge = async function(id, dateOverride) {
   if (!canEditData()) {
     toast("warning", "You have view-only access.");
     return;
   }
 
-  const sale = foodDayState.find(s => s.id === id);
+  const sale = await resolveFoodSale(id, dateOverride);
   if (!sale) {
     toast("error", "Food entry not found");
     return;
@@ -688,25 +703,23 @@ window.editFoodRecharge = async function(id) {
 
   if ($("foodRechargeNote")) $("foodRechargeNote").value = sale.note || "";
 
-  // Show remaining credit as editable credit portion
-  const pendingCredit = Math.max(0, (sale.credit || 0) - (sale.creditPaid || 0));
-  const actualCash = (sale.cash || 0) + (sale.lastPaidCash || 0);
-  const actualUpi = (sale.upi || 0) + (sale.lastPaidUpi || 0);
+  // Keep the original split. Collected credit stays in creditPayments and must
+  // not be copied into cash/upi or the cash register counts it twice.
+  const actualCash = Number(sale.cash) || 0;
+  const actualUpi = Number(sale.upi) || 0;
+  const issuedCredit = Number(sale.credit) || 0;
+  const alreadyCollected = Number(sale.creditPaid) || 0;
+  foodEditCollected = alreadyCollected;
 
-  if ($("foodRechargeCash")) $("foodRechargeCash").value = actualCash || "";
-  if ($("foodRechargeUpi")) $("foodRechargeUpi").value = actualUpi || "";
-  if ($("foodRechargeCredit")) $("foodRechargeCredit").value = pendingCredit || "";
-
-  if (pendingCredit > 0 && actualCash === 0 && actualUpi === 0) foodPaymentMode = "credit";
-  else if (pendingCredit > 0 || (actualCash > 0 && actualUpi > 0)) foodPaymentMode = "split";
+  if (issuedCredit > 0 && actualCash === 0 && actualUpi === 0) foodPaymentMode = "credit";
+  else if (issuedCredit > 0 || (actualCash > 0 && actualUpi > 0)) foodPaymentMode = "split";
   else if (actualUpi > 0 && actualCash === 0) foodPaymentMode = "upi";
   else foodPaymentMode = "cash";
 
   setFoodRechargePaymentMode(foodPaymentMode);
-  // Restore amounts after mode auto-fill
   if ($("foodRechargeCash")) $("foodRechargeCash").value = actualCash || "";
   if ($("foodRechargeUpi")) $("foodRechargeUpi").value = actualUpi || "";
-  if ($("foodRechargeCredit")) $("foodRechargeCredit").value = pendingCredit || "";
+  if ($("foodRechargeCredit")) $("foodRechargeCredit").value = issuedCredit || "";
 
   renderFoodCart();
   updateFoodCustomerBadge();
@@ -719,14 +732,8 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
     return;
   }
 
-  const dateStr = dateOverride || currentFoodDate || getSelectedRechargeDate();
-  let sale = null;
-  if ((!dateOverride || dateOverride === currentFoodDate) && foodDayState.find(s => s.id === id)) {
-    sale = foodDayState.find(s => s.id === id);
-  } else {
-    const raw = await fetchFoodSale(dateStr, id);
-    if (raw) sale = foodSaleToLedger({ id, date: dateStr, ...raw });
-  }
+  const sale = await resolveFoodSale(id, dateOverride);
+  const dateStr = sale?.date || dateOverride || currentFoodDate || getSelectedRechargeDate();
 
   if (!sale) {
     toast("error", "Food entry not found");
@@ -877,9 +884,23 @@ window.saveFoodRechargeSale = async function() {
     creditPayments: foodEditId ? (previous?.creditPayments || {}) : {}
   });
 
-  // If editing and reducing credit below already paid, clamp
-  if (saleData.creditPaid > saleData.credit) {
-    saleData.creditPaid = saleData.credit;
+  if (foodEditId) {
+    const fitted = fitCollectionsToSale({
+      total: saleData.total,
+      cash: saleData.cash,
+      upi: saleData.upi,
+      credit: saleData.credit,
+      creditPaid: saleData.creditPaid,
+      creditPayments: saleData.creditPayments,
+    });
+    saleData.creditPaid = fitted.creditPaid;
+    saleData.creditPayments = fitted.creditPayments;
+    saleData.lastPaidCash = fitted.lastPaidCash;
+    saleData.lastPaidUpi = fitted.lastPaidUpi;
+    if (fitted.clearLastPaid) {
+      saleData.lastPaidAt = null;
+      saleData.lastPaidBy = null;
+    }
   }
 
   try {
@@ -952,38 +973,58 @@ window.saveFoodRechargeSale = async function() {
 /**
  * Collect food credit against a specific food_sales entry (same UX as gaming).
  */
+function issuedFoodCredit(sale = {}) {
+  if (sale.credit !== undefined && sale.credit !== null && sale.credit !== "") {
+    return Number(sale.credit) || 0;
+  }
+  if (sale.paymentMode === "credit") return Number(sale.creditAmount || sale.total) || 0;
+  if (sale.paymentMode === "split") return Number(sale.creditAmount) || 0;
+  return Number(sale.creditAmount) || 0;
+}
+
 export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, collected, adminName }) {
   await initFoodFirebase();
   const ref = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${date}/${id}`);
-  const snap = await ref.once("value");
-  const original = snap.val();
-  if (!original) throw new Error("Food sale not found");
-
-  const ledger = foodSaleToLedger({ id, date, ...original });
   const today = getTodayISTString();
   const now = new Date().toISOString();
-  const newCreditPaid = (ledger.creditPaid || 0) + collected;
+  let applied = null;
 
-  const existingPayments = ledger.creditPayments || {};
-  const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
-  const updatedPayments = {
-    ...existingPayments,
-    [today]: {
-      cash: (todayPayment.cash || 0) + cash,
-      upi: (todayPayment.upi || 0) + upi,
-      at: now,
-      by: adminName || getAdminName()
-    }
-  };
-
-  await ref.update({
-    creditPaid: newCreditPaid,
-    creditPayments: updatedPayments,
-    lastPaidAt: now,
-    lastPaidCash: cash,
-    lastPaidUpi: upi,
-    lastPaidBy: adminName || getAdminName()
+  const tx = await ref.transaction((current) => {
+    if (!current) return;
+    const issued = issuedFoodCredit(current);
+    const already = Number(current.creditPaid) || 0;
+    const room = Math.max(0, issued - already);
+    if (collected > room + 0.001) return;
+    const existingPayments = current.creditPayments || {};
+    const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
+    const updatedPayments = {
+      ...existingPayments,
+      [today]: {
+        cash: (Number(todayPayment.cash) || 0) + cash,
+        upi: (Number(todayPayment.upi) || 0) + upi,
+        at: now,
+        by: adminName || getAdminName()
+      }
+    };
+    return {
+      ...current,
+      credit: issued,
+      creditPaid: already + collected,
+      creditPayments: updatedPayments,
+      lastPaidAt: now,
+      lastPaidCash: cash,
+      lastPaidUpi: upi,
+      lastPaidBy: adminName || getAdminName()
+    };
   });
+
+  if (!tx.committed) {
+    const snap = await ref.once("value");
+    if (!snap.val()) throw new Error("Food sale not found");
+    throw new Error("This credit was already collected. Refresh the list and try again.");
+  }
+  applied = tx.snapshot.val() || {};
+  const ledger = foodSaleToLedger({ ...applied, id, date });
 
   // Also log in food_credit_payments + reduce food_credits outstanding
   if (collected > 0) {
