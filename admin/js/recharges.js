@@ -1631,12 +1631,19 @@ window.confirmCollectCredit = async () => {
     const today = getISTDateString();
     const now = new Date().toISOString();
     const ref = rechargeDb.ref(`recharges/${date}/${id}`);
+    // Null on the first call means the record is not cached yet, not that it
+    // was already collected. Returning undefined aborts; return null to retry.
+    let blocked = false;
     const tx = await ref.transaction((current) => {
-      if (!current) return;
+      if (!current) return current;
       const issued = Number(current.credit) || 0;
       const already = Number(current.creditPaid) || 0;
       const room = Math.max(0, issued - already);
-      if (collected > room + 0.001) return;
+      if (collected > room + 0.001) {
+        blocked = true;
+        return;
+      }
+      blocked = false;
       const existingPayments = current.creditPayments || {};
       const todayPayment = existingPayments[today] || { cash: 0, upi: 0 };
       return {
@@ -1657,8 +1664,10 @@ window.confirmCollectCredit = async () => {
         lastPaidBy: getAdminName()
       };
     });
-    if (!tx.committed) {
-      notifyError("This credit was already collected. Refresh the list and try again.");
+    if (!tx.committed || !tx.snapshot?.val()) {
+      notifyError(blocked
+        ? "This credit was already collected. Refresh the list and try again."
+        : "Credit entry not found. Refresh the list and try again.");
       closeCollectModal();
       return;
     }
