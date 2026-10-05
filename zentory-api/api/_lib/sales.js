@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { genId, getDoc, setDoc, listByOwner, listCollection } from "./firestore.js";
 
 function lotSort(a, b) {
@@ -113,6 +114,71 @@ function nextReceipt() {
   return `RCT-${Date.now().toString(36).toUpperCase()}`;
 }
 
+function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+function khataDocId(externalId) {
+  return `kh_${createHash("sha256").update(String(externalId)).digest("hex").slice(0, 20)}`;
+}
+
+function partyIdFromName(name) {
+  const s = String(name || "Walk-in").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return s || "walk_in";
+}
+
+function saleSoldAt(payload) {
+  const raw = payload.soldAt || payload.createdAt;
+  if (raw) {
+    const t = new Date(raw);
+    if (!Number.isNaN(t.getTime()) && t.getTime() <= Date.now() + 86400000) return t.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function paymentsOf(payload, total) {
+  let cash = round2(payload.cash);
+  let upi = round2(payload.upi);
+  let credit = round2(payload.credit);
+  let card = round2(payload.card);
+  if (cash + upi + credit + card <= 0.001) {
+    const method = String(payload.paymentMethod || "cash").toLowerCase();
+    const all = round2(total);
+    if (method === "upi") upi = all;
+    else if (method === "card") card = all;
+    else if (method === "credit") credit = all;
+    else cash = all;
+  }
+  const parts = [cash, upi, credit, card].filter((n) => n > 0.001).length;
+  let paymentMethod = "cash";
+  if (parts > 1) paymentMethod = "split";
+  else if (credit > 0) paymentMethod = "credit";
+  else if (upi > 0) paymentMethod = "upi";
+  else if (card > 0) paymentMethod = "card";
+  return { cash, upi, credit, card, paymentMethod };
+}
+
+async function writeCreditKhata(sale) {
+  const credit = round2(sale.credit);
+  if (credit <= 0.001 || !sale.externalId) return;
+  const externalId = `${sale.externalId}#credit`;
+  const id = khataDocId(externalId);
+  const partyName = sale.customerName || "Walk-in";
+  await setDoc("khata", id, {
+    id,
+    ownerId: sale.ownerId,
+    partyId: partyIdFromName(partyName),
+    partyName,
+    type: "credit",
+    amount: credit,
+    description: `Food sale ${sale.receiptNumber || ""}`.trim(),
+    externalId,
+    saleExternalId: sale.externalId,
+    entryNumber: `KH-${id.slice(3, 9).toUpperCase()}`,
+    createdAt: sale.createdAt,
+  }, false);
+}
+
 export function slugifyCategory(name) {
   return String(name || "")
     .trim()
@@ -212,7 +278,19 @@ export async function createSale(payload) {
   if (!externalId) throw Object.assign(new Error("externalId is required"), { status: 400 });
 
   const existing = await findSaleByExternalId(ownerId, externalId);
-  if (existing && !existing.voided) return { sale: existing, idempotent: true };
+  if (existing && !existing.voided) {
+    const pay = paymentsOf(payload, Number(existing.total) || 0);
+    const createdAt = (payload.soldAt || payload.createdAt) ? saleSoldAt(payload) : (existing.createdAt || saleSoldAt({}));
+    const patched = {
+      ...existing,
+      ...pay,
+      customerName: payload.customerName || existing.customerName || "Walk-in",
+      createdAt,
+    };
+    await setDoc("pos_sales", existing.id, patched);
+    await writeCreditKhata(patched);
+    return { sale: patched, idempotent: true };
+  }
 
   const products = await listByOwner("products", ownerId);
   const byId = Object.fromEntries(products.map((p) => [p.id, p]));
@@ -240,11 +318,10 @@ export async function createSale(payload) {
     });
   }
 
-  let paymentMethod = String(payload.paymentMethod || "cash").toLowerCase();
-  if (!["cash", "upi", "card"].includes(paymentMethod)) paymentMethod = "cash";
-
   const subtotal = lineItems.reduce((s, i) => s + i.qty * i.price, 0);
   const taxAmount = lineItems.reduce((s, i) => s + i.qty * i.price * ((i.gstRate || 0) / 100), 0);
+  const total = subtotal + taxAmount;
+  const pay = paymentsOf(payload, total);
   const sale = {
     id: genId("sale_"),
     receiptNumber: nextReceipt(),
@@ -253,8 +330,8 @@ export async function createSale(payload) {
     items: lineItems,
     subtotal,
     taxAmount,
-    total: subtotal + taxAmount,
-    paymentMethod,
+    total,
+    ...pay,
     customerName: payload.customerName || "Walk-in",
     channel,
     externalId,
@@ -262,9 +339,10 @@ export async function createSale(payload) {
     note: payload.note || "",
     consumedLots: allConsumed,
     voided: false,
-    createdAt: new Date().toISOString(),
+    createdAt: saleSoldAt(payload),
   };
   await setDoc("pos_sales", sale.id, sale, false);
+  await writeCreditKhata(sale);
   return { sale, idempotent: false };
 }
 
