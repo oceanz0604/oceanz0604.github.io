@@ -141,9 +141,8 @@ export const ZENTORY = {
   LOCATION_ID: "loc_26082747d7db19",
   CHANNEL: "oceanz_cafe",
   APP_URL: "https://inventory-management-tool-ten.vercel.app",
-  // Temporary: catalog still loads from Zentory, but cafe food sales do not
-  // post/void stock. Flip to true when BOMs and lots are ready.
-  PUSH_SALES: false,
+  // Food sales post to Zentory (stock, POS reports, and credit Khata).
+  PUSH_SALES: true,
 };
 
 /**

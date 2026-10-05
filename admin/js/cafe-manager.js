@@ -2,7 +2,7 @@
  * OceanZ Gaming Cafe - Cafe Manager
  * Inventory (products / stock / purchases) lives in Zentory.
  * This view is a staff hub: open Zentory + short ops notes.
- * Food purchase expenses stay manual in Finance.
+ * Food sales post into Zentory stock, reports, and Khata.
  */
 
 import { ZENTORY } from "../../shared/config.js";
@@ -35,18 +35,18 @@ function renderZentoryHub() {
       <div>
         <h3 class="font-orbitron text-sm mb-2" style="color: var(--neon-cyan);">Where things live</h3>
         <ul class="text-sm text-gray-400 space-y-2 list-disc list-inside">
-          <li><span class="text-gray-200">Zentory</span> — products, stock levels, purchases, inventory analytics</li>
-          <li><span class="text-gray-200">Counter / Recharges</span> — sell food from the Zentory menu. Stock is <em>not</em> deducted in Zentory until recipes/lots are finished (flip <code class="text-gray-400">ZENTORY.PUSH_SALES</code>).</li>
-          <li><span class="text-gray-200">Finance</span> — cash register, food credits, gaming; enter food purchase expenses manually</li>
+          <li><span class="text-gray-200">Zentory</span> — products, stock, purchases, POS reports, and food credit (Khata)</li>
+          <li><span class="text-gray-200">Counter / Recharges</span> — food sales deduct Zentory stock and record cash, UPI, and credit there</li>
+          <li><span class="text-gray-200">OceanZ Finance</span> — cash register and gaming. Food credit also stays here so the till can collect it</li>
         </ul>
       </div>
 
       <div>
         <h3 class="font-orbitron text-sm mb-2" style="color: var(--neon-green);">Staff checklist</h3>
         <ol class="text-sm text-gray-400 space-y-2 list-decimal list-inside">
-          <li>Add or edit products and receive <strong class="text-gray-200">raw lots</strong> in Zentory when you are ready. Until then, cafe food sales stay in OceanZ only.</li>
-          <li>Sell from Counter or Recharges as usual — Zentory inventory is not changed by those sales right now.</li>
-          <li>When you buy stock, record the spend in <strong class="text-gray-200">Finance → Add cafe purchase</strong>.</li>
+          <li>Receive raw lots in Zentory before the rush. A sale blocks when an ingredient is short.</li>
+          <li>Sell from Counter or Recharges. The same sale updates Zentory stock, reports, and Khata when any amount is credit.</li>
+          <li>Collect food credit in OceanZ. The collection is written to that customer's Khata.</li>
         </ol>
       </div>
 
