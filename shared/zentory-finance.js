@@ -115,6 +115,90 @@ async function writeKhata({ externalId, partyName, type, amount, soldAt, descrip
   return id;
 }
 
+async function docId(seed, prefix) {
+  const data = new TextEncoder().encode(String(seed));
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${prefix}${hex.slice(0, 18)}`;
+}
+
+/**
+ * Put a past cafe sale on Zentory reports and Khata without touching lots.
+ * Used when current stock cannot cover food that was already sold.
+ * The id is stable, so running it again updates the same sale.
+ */
+export async function bookHistoricalFoodSale({
+  externalId,
+  customerName,
+  items = [],
+  cash,
+  upi,
+  credit,
+  paymentMode,
+  soldAt,
+  staff,
+  note,
+  productsById = {},
+}) {
+  const id = await docId(externalId, "sale_");
+  const lineItems = items.map((item) => {
+    const productId = item.productId || item.id;
+    const product = productsById[productId] || {};
+    const price = Number(item.price ?? item.unitPrice) || 0;
+    const qty = Number(item.qty) || 0;
+    return {
+      productId,
+      name: item.name || product.name || "",
+      sku: product.sku || "",
+      price,
+      costPrice: Number(product.costPrice) || 0,
+      gstRate: Number(product.gstRate) || 0,
+      qty,
+    };
+  });
+  const subtotal = lineItems.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const taxAmount = lineItems.reduce((sum, item) => sum + item.qty * item.price * ((item.gstRate || 0) / 100), 0);
+  const pay = zentoryPayments({ cash, upi, credit, paymentMode, total: subtotal });
+  const createdAt = soldAt || new Date().toISOString();
+  const name = customerName || "Walk-in";
+  const receiptNumber = `RCT-${id.slice(5, 13).toUpperCase()}`;
+  await writeDoc("pos_sales", id, {
+    id,
+    receiptNumber,
+    ownerId: ZENTORY.OWNER_ID,
+    locationId: ZENTORY.LOCATION_ID,
+    items: lineItems,
+    subtotal,
+    taxAmount,
+    total: subtotal + taxAmount,
+    paymentMethod: pay.paymentMethod,
+    cash: pay.cash,
+    upi: pay.upi,
+    credit: pay.credit,
+    customerName: name,
+    channel: ZENTORY.CHANNEL || "oceanz_cafe",
+    externalId,
+    staff: staff || null,
+    note: note || "OceanZ backfill. Lots were short, so stock was not deducted.",
+    consumedLots: [],
+    voided: false,
+    stockDeducted: false,
+    createdAt,
+  });
+  if (pay.credit > 0.001) {
+    await writeKhata({
+      externalId: `${externalId}#credit`,
+      saleExternalId: externalId,
+      partyName: name,
+      type: "credit",
+      amount: pay.credit,
+      soldAt: createdAt,
+      description: `Food sale ${receiptNumber}`,
+    });
+  }
+  return { saleId: id, receiptNumber, financeOk: true };
+}
+
 /** Stamp the Zentory sale with the real day and payment split, and open Khata for credit. */
 export async function recordZentorySaleFinance({
   saleId,
