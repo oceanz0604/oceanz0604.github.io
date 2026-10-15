@@ -100,6 +100,7 @@ export function mapZentoryMenuProduct(p) {
     sku: p.sku || "",
     stock: p.stock,
     makeToOrder: !!p.makeToOrder,
+    ingredientStockTracked: p.ingredientStockTracked !== false,
     type: p.type || "simple",
     cafeExternalId: p.cafeExternalId || null,
     available: true,
@@ -107,14 +108,20 @@ export function mapZentoryMenuProduct(p) {
   });
 }
 
+/** Company setting: MTO plates are sold without checking or deducting raw lots. */
+function ingredientsUntracked(item) {
+  return !!item?.makeToOrder && item?.ingredientStockTracked === false;
+}
+
 /** Zentory `stock` is on-hand for simple SKUs and makeable plates for MTO. */
 export function foodItemOutOfStock(item) {
-  if (ZENTORY.PUSH_SALES === false) return false;
+  if (ZENTORY.PUSH_SALES === false || ingredientsUntracked(item)) return false;
   if (item?.stock === null || item?.stock === undefined) return false;
   return Number(item.stock) <= 0;
 }
 
 export function foodStockHint(item) {
+  if (ingredientsUntracked(item)) return "";
   if (item?.stock === null || item?.stock === undefined) return "";
   const n = Number(item.stock) || 0;
   if (ZENTORY.PUSH_SALES === false) return n > 0 ? String(n) : "";
@@ -123,7 +130,7 @@ export function foodStockHint(item) {
 }
 
 export function canAddFoodQty(item, nextQty) {
-  if (ZENTORY.PUSH_SALES === false) return true;
+  if (ZENTORY.PUSH_SALES === false || ingredientsUntracked(item)) return true;
   if (item?.stock === null || item?.stock === undefined) return true;
   return nextQty <= Number(item.stock);
 }
