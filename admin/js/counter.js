@@ -1355,6 +1355,10 @@ window.completeFoodSale = async function() {
         externalId: `food_sales/${today}/${saleId}`,
         customerName: foodCustomer,
         paymentMode: foodPaymentMode,
+        cash: cashAmount,
+        upi: upiAmount,
+        credit: creditAmount,
+        soldAt: new Date().toISOString(),
         items: zentoryItems,
         staff: session?.name || session?.id || "Counter",
         note: "OceanZ Counter",
@@ -1362,6 +1366,8 @@ window.completeFoodSale = async function() {
       applyZentorySaleResult(saleData, zResult);
       if (zResult.ok === false && !zResult.blocked) {
         notifyWarning("Sale saved. Stock sync to Zentory failed — check this row later.");
+      } else if (zResult.financeOk === false) {
+        notifyWarning("Sale saved. Zentory accounts did not update — check Khata later.");
       }
     }
 

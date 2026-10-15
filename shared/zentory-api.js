@@ -4,6 +4,13 @@
  */
 
 import { ZENTORY } from "./config.js";
+import {
+  clearZentoryFoodFinance,
+  recordZentoryCreditCollection,
+  recordZentorySaleFinance,
+} from "./zentory-finance.js";
+
+export { clearZentoryFoodFinance, recordZentoryCreditCollection };
 
 function headers() {
   return {
@@ -66,9 +73,20 @@ export async function fetchZentoryProducts({ force = false } = {}) {
 
 export function mapZentoryPayment(paymentMode) {
   const m = String(paymentMode || "cash").toLowerCase();
-  if (m === "upi") return "upi";
-  if (m === "card") return "card";
-  return "cash"; // cash | credit | split
+  if (m === "upi" || m === "card" || m === "credit" || m === "split") return m;
+  return "cash";
+}
+
+/** Record a credit collection on the customer's Zentory Khata. */
+export async function postZentoryKhata(entry) {
+  if (ZENTORY.PUSH_SALES === false) return { ok: true, skipped: true };
+  try {
+    const id = await recordZentoryCreditCollection(entry);
+    return { ok: true, id };
+  } catch (e) {
+    console.warn("[Zentory] khata update failed:", e.message);
+    return { ok: false, error: e.message };
+  }
 }
 
 /**
@@ -83,11 +101,22 @@ export async function postZentorySale({
   items,
   staff,
   note = "",
+  cash,
+  upi,
+  credit,
+  soldAt,
 }) {
   if (ZENTORY.PUSH_SALES === false) {
     return { ok: true, skipped: true };
   }
   try {
+    const mappedItems = (items || []).map((i) => ({
+      productId: i.productId || i.id,
+      qty: Number(i.qty) || 0,
+      unitPrice: Number(i.price ?? i.unitPrice) || 0,
+      price: Number(i.price ?? i.unitPrice) || 0,
+      cafeExternalId: i.cafeExternalId || null,
+    }));
     const payload = {
       externalId,
       channel: ZENTORY.CHANNEL || "oceanz_cafe",
@@ -95,12 +124,11 @@ export async function postZentorySale({
       locationId: ZENTORY.LOCATION_ID,
       customerName: customerName || "Walk-in",
       paymentMethod: mapZentoryPayment(paymentMode),
-      items: (items || []).map((i) => ({
-        productId: i.productId || i.id,
-        qty: Number(i.qty) || 0,
-        unitPrice: Number(i.price) || 0,
-        cafeExternalId: i.cafeExternalId || null,
-      })),
+      cash,
+      upi,
+      credit,
+      soldAt: soldAt || null,
+      items: mappedItems,
       staff: staff || null,
       note,
     };
@@ -108,11 +136,33 @@ export async function postZentorySale({
       method: "POST",
       body: JSON.stringify(payload),
     });
+    let financeOk = true;
+    let financeError = null;
+    try {
+      await recordZentorySaleFinance({
+        saleId: data.saleId,
+        externalId,
+        customerName,
+        cash,
+        upi,
+        credit,
+        paymentMode,
+        items: mappedItems,
+        soldAt,
+        receiptNumber: data.receiptNumber,
+      });
+    } catch (financeErr) {
+      financeOk = false;
+      financeError = financeErr.message || "Zentory accounts update failed";
+      console.warn("[Zentory] finance update failed:", financeError);
+    }
     return {
       ok: true,
       saleId: data.saleId,
       receiptNumber: data.receiptNumber,
       idempotent: !!data.idempotent,
+      financeOk,
+      financeError,
     };
   } catch (e) {
     const blocked = e.status === 409;
