@@ -61,8 +61,44 @@ function shortageError(productName, ingredientName, need) {
   return err;
 }
 
-/** Simple SKU: FEFO the finished goods. Complex MTO: FEFO each BOM ingredient. */
-async function consumeSaleQty(product, locationId, ownerId, qty, productById) {
+async function companyTracksIngredients(ownerId) {
+  const company = await getDoc("companies", ownerId);
+  if (!company || company.trackIngredientStock == null) return true;
+  return company.trackIngredientStock !== false;
+}
+
+function latestUnitCost(productId, batches, fallback) {
+  const mine = (batches || [])
+    .filter((b) => b && b.productId === productId)
+    .sort((a, b) => new Date(b.createdAt || b.purchaseDate || 0) - new Date(a.createdAt || a.purchaseDate || 0));
+  if (mine.length) return Number(mine[0].unitCost) || 0;
+  return Number(fallback) || 0;
+}
+
+function recipeLineQty(ing) {
+  const q = Number(ing && ing.qty) || 0;
+  const waste = Math.max(0, Number(ing && ing.wastagePct) || 0);
+  return q * (1 + waste / 100);
+}
+
+function theoreticalMakingCost(product, qty, batches, productsById) {
+  const recipe = product.recipe || { outputQty: 1, ingredients: [] };
+  const scale = (Number(qty) || 0) / Math.max(1, Number(recipe.outputQty) || 1);
+  let cost = 0;
+  for (const ing of recipe.ingredients || []) {
+    const ip = productsById?.[ing.productId];
+    const rate = latestUnitCost(ing.productId, batches, ip ? ip.costPrice : 0);
+    cost += rate * recipeLineQty(ing) * scale;
+  }
+  return cost;
+}
+
+/** Simple SKU: FEFO the finished goods. Complex MTO: FEFO each BOM ingredient, unless the company stopped tracking raw quantities. */
+async function consumeSaleQty(product, locationId, ownerId, qty, ctx) {
+  const productById = ctx?.productsById || ctx;
+  if (isComplexRecipe(product) && ctx && ctx.trackIngredients === false) {
+    return { picks: [], costTotal: theoreticalMakingCost(product, qty, ctx.batches, productById) };
+  }
   if (isComplexRecipe(product)) {
     const recipe = product.recipe;
     const scale = qty / Math.max(1, Number(recipe.outputQty) || 1);
@@ -193,6 +229,7 @@ async function findSaleByExternalId(ownerId, externalId) {
 }
 
 export async function listProducts({ ownerId, locationId }) {
+  const trackIngredients = await companyTracksIngredients(ownerId);
   const [productDocs, categoryDocs, stock, batches] = await Promise.all([
     listByOwner("products", ownerId),
     listCollection("categories"),
@@ -208,6 +245,7 @@ export async function listProducts({ ownerId, locationId }) {
     .forEach((b) => { batchQty[b.productId] = (batchQty[b.productId] || 0) + (Number(b.qty) || 0); });
 
   function makeableQty(p) {
+    if (isComplexRecipe(p) && !trackIngredients) return 9999;
     if (!isComplexRecipe(p)) return stockMap[p.id] ?? 0;
     const out = Math.max(1, Number(p.recipe.outputQty) || 1);
     let max = Infinity;
@@ -242,6 +280,7 @@ export async function listProducts({ ownerId, locationId }) {
         categoryName,
         stock: makeableQty(p),
         makeToOrder: isComplexRecipe(p),
+        ingredientStockTracked: !(isComplexRecipe(p) && !trackIngredients),
         cafeExternalId: p.cafeExternalId || null,
         type: p.type || "simple",
       };
@@ -292,8 +331,13 @@ export async function createSale(payload) {
     return { sale: patched, idempotent: true };
   }
 
-  const products = await listByOwner("products", ownerId);
+  const [products, batches] = await Promise.all([
+    listByOwner("products", ownerId),
+    listByOwner("batches", ownerId),
+  ]);
   const byId = Object.fromEntries(products.map((p) => [p.id, p]));
+  const trackIngredients = await companyTracksIngredients(ownerId);
+  const saleCtx = { trackIngredients, batches, productsById: byId };
   const lineItems = [];
   const allConsumed = [];
 
@@ -304,7 +348,7 @@ export async function createSale(payload) {
     const product = byId[productId];
     if (!product) throw Object.assign(new Error(`Unknown productId: ${productId}`), { status: 400 });
     const price = raw.unitPrice != null ? Number(raw.unitPrice) : Number(product.price) || 0;
-    const { picks, costTotal } = await consumeSaleQty(product, locationId, ownerId, qty, byId);
+    const { picks, costTotal } = await consumeSaleQty(product, locationId, ownerId, qty, saleCtx);
     allConsumed.push(...picks);
     lineItems.push({
       productId,

@@ -1,18 +1,18 @@
 /**
- * Post October food sales that were saved in OceanZ while Zentory posting was paused.
- * Sales already deducted from lots are left alone. The rest are written to Zentory
- * reports and Khata without taking more stock, because current lots cannot cover them.
- * Safe to re-run: booked sale ids and Khata ids are stable.
+ * Post October food sales into Zentory through today.
+ * Sales that already deducted finished-goods stock are left alone.
+ * Make-to-order lines follow the company setting (no raw-lot deduction when tracking is off).
+ * A sale that still cannot be filled because a simple SKU is short is written to reports and Khata only.
  *
  *   node scripts/backfill-zentory-october.mjs
  */
-import { BOOKING_DB_CONFIG } from "../shared/config.js";
-import { postZentoryKhata } from "../shared/zentory-api.js";
+import { BOOKING_DB_CONFIG, ZENTORY } from "../shared/config.js";
+import { postZentoryKhata, postZentorySale } from "../shared/zentory-api.js";
 import { bookHistoricalFoodSale } from "../shared/zentory-finance.js";
 
 const FS = "https://firestore.googleapis.com/v1/projects/inventory-management-oceanz/databases/(default)/documents";
 
-const DATES = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05"];
+const DATES = Array.from({ length: 15 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
 
 function asIso(value, fallback) {
   if (value === null || value === undefined || value === "") return fallback;
@@ -115,40 +115,130 @@ async function syncCollections(date, id, sale) {
   }
 }
 
-const summary = { alreadyDeducted: 0, booked: 0, financeFailed: 0, cafeMarked: 0, problems: [] };
+function booksOnly(sale) {
+  return String(sale.zentorySyncError || "").includes("not deducted");
+}
+
+async function deleteZentorySale(saleId) {
+  const res = await fetch(`${FS}/pos_sales/${encodeURIComponent(saleId)}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await res.text() || `delete ${saleId} HTTP ${res.status}`);
+  }
+}
+
+async function loadCatalog() {
+  const q = new URLSearchParams({ ownerId: ZENTORY.OWNER_ID, locationId: ZENTORY.LOCATION_ID });
+  const res = await fetch(`${ZENTORY.API_BASE}/api/products?${q}`, {
+    headers: { "X-Zentory-Key": ZENTORY.API_KEY },
+  });
+  if (!res.ok) throw new Error(`products HTTP ${res.status}`);
+  const data = await res.json();
+  const products = Array.isArray(data.products) ? data.products : [];
+  const byId = Object.fromEntries(products.map((p) => [p.id, p]));
+  const stock = new Map(products.map((p) => [p.id, Number(p.stock) || 0]));
+  return { byId, stock };
+}
+
+function saleNeeds(items, byId) {
+  const need = new Map();
+  for (const item of items) {
+    const id = item.productId || item.id;
+    const product = byId[id];
+    if (!product) return { ok: false, reason: `Unknown product ${item.name || id}` };
+    if (product.ingredientStockTracked === false) continue;
+    need.set(id, (need.get(id) || 0) + (Number(item.qty) || 0));
+  }
+  return { ok: true, need };
+}
+
+function stockCovers(need, stock) {
+  for (const [id, qty] of need) {
+    if ((stock.get(id) || 0) + 1e-6 < qty) return id;
+  }
+  return null;
+}
+
+const summary = { alreadyPosted: 0, posted: 0, booked: 0, financeFailed: 0, cafeMarked: 0, problems: [] };
 const productsById = await loadProducts();
+const catalog = await loadCatalog();
 
 for (const date of DATES) {
   const rows = await loadDay(date);
   for (const { id, sale } of rows) {
     const externalId = `food_sales/${date}/${id}`;
-    if (sale.zentorySyncStatus === "ok" && sale.zentorySaleId) {
-      summary.alreadyDeducted += 1;
+    const items = Array.isArray(sale.items) ? sale.items : [];
+    const placeholder = booksOnly(sale);
+    if (sale.zentorySyncStatus === "ok" && sale.zentorySaleId && !placeholder) {
+      summary.alreadyPosted += 1;
       console.log("SKIP", date, id);
       continue;
     }
-    const items = Array.isArray(sale.items) ? sale.items : [];
+
+    const checked = saleNeeds(items, catalog.byId);
+    const shortId = checked.ok ? stockCovers(checked.need, catalog.stock) : checked.reason;
+    const canPost = checked.ok && !shortId;
+
+    const payload = {
+      externalId,
+      customerName: sale.customerName || "Walk-in",
+      paymentMode: sale.paymentMode,
+      cash: sale.cash,
+      upi: sale.upi,
+      credit: sale.credit,
+      soldAt: soldAt(sale, date),
+      items,
+      staff: sale.staffName || sale.admin || "OceanZ",
+    };
+
     let result;
+    let books = false;
     try {
-      result = await bookHistoricalFoodSale({
-        externalId,
-        customerName: sale.customerName || "Walk-in",
-        paymentMode: sale.paymentMode,
-        cash: sale.cash,
-        upi: sale.upi,
-        credit: sale.credit,
-        soldAt: soldAt(sale, date),
-        items,
-        staff: sale.staffName || sale.admin || "OceanZ",
-        note: "OceanZ October backfill. Lots were short, so this sale is on the books only.",
-        productsById,
-      });
-      summary.booked += 1;
+      if (canPost) {
+        if (placeholder && sale.zentorySaleId) await deleteZentorySale(sale.zentorySaleId);
+        result = await postZentorySale({ ...payload, note: sale.note || "OceanZ October backfill" });
+        if (!result.ok) throw new Error(result.error || "Zentory sale failed");
+        for (const [pid, qty] of checked.need) {
+          catalog.stock.set(pid, (catalog.stock.get(pid) || 0) - qty);
+        }
+        summary.posted += 1;
+      } else {
+        const reason = checked.ok ? (catalog.byId[shortId]?.name || shortId) : shortId;
+        if (placeholder) {
+          summary.booked += 1;
+          console.log("KEEP", date, id, reason);
+          continue;
+        }
+        result = await bookHistoricalFoodSale({
+          ...payload,
+          note: `OceanZ October backfill. ${reason} was short, so stock was not deducted.`,
+          productsById,
+        });
+        books = true;
+        summary.booked += 1;
+        summary.problems.push({ date, id, error: `short: ${reason}` });
+      }
     } catch (e) {
       summary.financeFailed += 1;
       summary.problems.push({ date, id, error: e.message });
       console.log("FAIL", date, id, e.message);
+      if (placeholder) {
+        try {
+          await bookHistoricalFoodSale({
+            ...payload,
+            note: "OceanZ October backfill. Lots were short, so this sale is on the books only.",
+            productsById,
+          });
+        } catch (err) {
+          console.log("REBOOK", date, id, err.message);
+        }
+      }
       continue;
+    }
+
+    if (result.financeOk === false) {
+      summary.financeFailed += 1;
+      summary.problems.push({ date, id, error: result.financeError, saleId: result.saleId });
+      console.log("FINANCE", date, id, result.financeError);
     }
     try {
       await syncCollections(date, id, sale);
@@ -162,14 +252,14 @@ for (const date of DATES) {
         zentorySaleId: result.saleId || null,
         zentoryReceipt: result.receiptNumber || null,
         zentorySyncStatus: "ok",
-        zentorySyncError: "On Zentory reports and Khata. Stock was not deducted because lots were short.",
+        zentorySyncError: books ? "On Zentory reports and Khata. Stock was not deducted because a finished item was short." : null,
       });
       summary.cafeMarked += 1;
     } catch (e) {
       summary.problems.push({ date, id, error: `cafe mark: ${e.message}`, saleId: result.saleId });
       console.log("MARK", date, id, e.message);
     }
-    console.log("BOOK", date, id, result.saleId);
+    console.log(books ? "BOOK" : "POST", date, id, result.saleId);
   }
 }
 
