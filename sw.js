@@ -3,7 +3,7 @@
  * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v25-zsync';
+const CACHE_NAME = 'oceanz-v26-daybook';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)
@@ -19,6 +19,8 @@ const OPTIONAL_ASSETS = [
   '/member/dashboard.html',
   '/admin/index.html',
   '/admin/dashboard.html',
+  '/admin/daybook.html',
+  '/admin/js/daybook.js',
   '/shared/config.js',
   '/shared/utils.js',
   '/shared/leaderboard.js',

@@ -1192,6 +1192,10 @@
 
       <!-- Nav Items (dynamically filtered by permissions) -->
       <nav id="mainNav" class="flex-1 space-y-2 overflow-y-auto scrollbar-thin">
+        <a id="nav-daybook" href="daybook.html" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+          <span class="font-medium">Day Book</span>
+        </a>
         <a id="nav-recharges" href="#" data-permission="recharges" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg">
           <i data-lucide="wallet" class="w-5 h-5"></i>
           <span class="font-medium">Recharges</span>
@@ -1234,7 +1238,7 @@
       <!-- Footer -->
       <div class="pt-4 border-t border-gray-800 space-y-2">
         <!-- Sync Button -->
-        <button id="syncBtn" onclick="openSyncPanel()" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-green-400" style="border: 1px solid transparent;">
+        <button id="syncBtn" onclick="openSyncPanel()" hidden class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-green-400" style="border: 1px solid transparent;">
           <i data-lucide="refresh-cw" class="w-5 h-5"></i>
           <span class="font-medium">Sync Database</span>
           <span id="syncStatusDot" class="ml-auto w-2 h-2 rounded-full bg-gray-600"></span>

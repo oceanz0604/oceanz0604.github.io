@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cafe Day Book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0e14;
+      --card: #161a24;
+      --line: #2a3142;
+      --text: #e8edf7;
+      --muted: #93a0b8;
+      --accent: #7ee0c6;
+      --warn: #ffb020;
+      --danger: #ff6b7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Rajdhani, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 18px;
+    }
+    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 24px 0 8px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: end; }
+    h1 { margin: 0; font-size: 32px; letter-spacing: 0.02em; }
+    h2 { margin: 0 0 12px; font-size: 22px; }
+    p { color: var(--muted); }
+    a { color: var(--accent); }
+    .stats, .toolbar, .grid, .settings-grid { display: grid; gap: 12px; }
+    .stats { grid-template-columns: repeat(5, 1fr); margin: 16px 0; }
+    .card, .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .stat-label { color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .toolbar { grid-template-columns: 180px 1fr auto auto auto; align-items: end; margin-bottom: 16px; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    input, button { font: inherit; color: var(--text); }
+    input {
+      background: #0d1017;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      width: 100%;
+    }
+    button, .linkish {
+      background: var(--accent);
+      color: #06241c;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+    .check { flex-direction: row; align-items: center; text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--text); gap: 8px; }
+    .check input { width: auto; }
+    .grid { grid-template-columns: repeat(4, 1fr); }
+    .span-2 { grid-column: span 2; }
+    .products, .menu-edit { display: flex; flex-wrap: wrap; gap: 8px; }
+    .product-qty, .menu-edit-row { background: #0d1017; border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-width: 120px; }
+    .product-qty span, .menu-edit-row { font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
+    .product-qty small { color: var(--muted); }
+    .menu-edit-row { display: grid; grid-template-columns: 1fr 90px auto; gap: 8px; align-items: center; }
+    .actions-row, .settings-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    #preview { margin-top: 10px; color: var(--warn); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; white-space: nowrap; }
+    th { color: var(--muted); font-size: 13px; text-transform: uppercase; }
+    td.actions { display: flex; gap: 6px; }
+    td.actions button { padding: 4px 8px; font-size: 14px; }
+    .empty { color: var(--muted); text-align: center; padding: 24px; }
+    #daybook-toast {
+      position: fixed; bottom: 16px; right: 16px;
+      background: var(--accent); color: #06241c;
+      padding: 10px 14px; border-radius: 10px; font-weight: 700;
+    }
+    #daybook-toast.error { background: var(--danger); color: white; }
+    details { margin: 8px 0 16px; }
+    summary { cursor: pointer; font-weight: 700; }
+    .settings-grid { grid-template-columns: repeat(3, 1fr); margin-top: 12px; }
+    @media (max-width: 900px) {
+      .stats, .toolbar, .grid, .settings-grid { grid-template-columns: 1fr 1fr; }
+      .span-2 { grid-column: span 2; }
+    }
+    @media (max-width: 640px) {
+      .stats, .toolbar, .grid, .settings-grid, .span-2 { grid-template-columns: 1fr; grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="daybook-app">
+    <header>
+      <div>
+        <p style="margin:0 0 4px;">Manual counter book · no live floor feed</p>
+        <h1 id="cafe-title">Gaming Cafe</h1>
+      </div>
+      <p style="margin:0;"><a href="dashboard.html">OceanZ admin</a></p>
+    </header>
+    <main>
+      <section class="stats" aria-label="Day totals">
+        <div class="card"><div class="stat-label">Entries</div><div id="stat-entries" class="stat-value">0</div></div>
+        <div class="card"><div class="stat-label">After discount</div><div id="stat-collection" class="stat-value">0.00</div></div>
+        <div class="card"><div class="stat-label">Snacks</div><div id="stat-products" class="stat-value">0.00</div></div>
+        <div class="card"><div class="stat-label">Cash out</div><div id="stat-out" class="stat-value">0.00</div></div>
+        <div class="card"><div class="stat-label">Balance</div><div id="stat-balance" class="stat-value">0.00</div></div>
+      </section>
+
+      <section class="toolbar">
+        <label>Date
+          <input id="filter-date" type="date" />
+        </label>
+        <label class="check">
+          <input id="show-all" type="checkbox" />
+          Show every date
+        </label>
+        <button id="export-csv" type="button">Export CSV</button>
+        <button id="export-pdf" type="button">Export PDF</button>
+        <a class="linkish" href="#entry-form" style="text-align:center; text-decoration:none;">Add row</a>
+      </section>
+
+      <details>
+        <summary>Cafe settings and rate card</summary>
+        <div class="settings-grid">
+          <label>Cafe name <input id="cafe-name" /></label>
+          <label>Opening balance <input id="opening-balance" type="number" step="0.01" /></label>
+          <label>PCs up to this number use the first rate card <input id="split-at" type="number" min="1" step="1" /></label>
+          <label>Start No <input id="start-no" /></label>
+          <label>End No <input id="end-no" /></label>
+          <label>First group label <input id="group-a-label" /></label>
+          <label class="span-2">First group hourly rates <input id="group-a-rates" placeholder="70, 100, 150, 300" /></label>
+          <label>Second group label <input id="group-b-label" /></label>
+          <label class="span-2">Second group hourly rates <input id="group-b-rates" placeholder="90, 100, 200, 400" /></label>
+        </div>
+        <h2 style="margin-top:16px;">Snacks and drinks</h2>
+        <div id="menu-editor" class="menu-edit"></div>
+        <div class="settings-actions">
+          <button id="add-menu-item" type="button" class="ghost">Add item</button>
+          <button id="save-settings" type="button">Save settings</button>
+        </div>
+      </details>
+
+      <section class="panel" id="entry-form">
+        <h2>Entry</h2>
+        <div class="grid">
+          <label>Date <input id="entry-date" type="date" /></label>
+          <label>ID No <input id="entry-id" /></label>
+          <label class="span-2">Name <input id="entry-name" /></label>
+          <label>Comp No <input id="entry-comp" /></label>
+          <label>From <input id="entry-from" type="time" /></label>
+          <label>To <input id="entry-to" type="time" /></label>
+          <label>Extra minutes <input id="entry-extra-min" type="number" min="0" step="1" value="0" /></label>
+          <label>Hourly rate <input id="entry-rate" type="number" min="0" step="1" /></label>
+          <label>Discount <input id="entry-discount" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Extra cost <input id="entry-extra-cost" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Cash out <input id="entry-out" type="number" min="0" step="0.01" value="0" /></label>
+          <label class="span-2">Cash-out note <input id="entry-out-note" /></label>
+          <label>GPay <input id="pay-gpay" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Bharat Pay <input id="pay-bpay" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Debit <input id="pay-debit" type="number" min="0" step="0.01" value="0" /></label>
+          <label>Cash <input id="pay-cash" type="number" min="0" step="0.01" value="0" /></label>
+          <label>GO / other <input id="pay-other" type="number" min="0" step="0.01" value="0" /></label>
+        </div>
+        <h2 style="margin-top:16px;">Products</h2>
+        <div id="product-inputs" class="products"></div>
+        <p id="preview"></p>
+        <div class="actions-row">
+          <button id="save-entry" type="button">Add entry</button>
+          <button id="clear-entry" type="button" class="ghost">Clear</button>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top:16px;">
+        <h2>Ledger</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sr</th><th>ID</th><th>Name</th><th>Comp</th><th>From–To</th><th>Min</th>
+                <th>Rate</th><th>Af Disc</th><th>Products</th><th>GPay</th><th>Cash</th>
+                <th>Paid</th><th>OUT</th><th>Balance</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="ledger-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <div id="daybook-toast" hidden></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+  <script src="js/daybook.js"></script>
+</body>
+</html>
