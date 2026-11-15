@@ -220,16 +220,18 @@ export async function recordZentorySaleFinance({
   const pay = zentoryPayments({ cash, upi, credit, paymentMode, total });
   const createdAt = soldAt || new Date().toISOString();
   const name = customerName || "Walk-in";
-  await writeDoc("pos_sales", saleId, {
-    createdAt,
-    paymentMethod: pay.paymentMethod,
-    cash: pay.cash,
-    upi: pay.upi,
-    credit: pay.credit,
-    customerName: name,
-  });
+  const writes = [
+    writeDoc("pos_sales", saleId, {
+      createdAt,
+      paymentMethod: pay.paymentMethod,
+      cash: pay.cash,
+      upi: pay.upi,
+      credit: pay.credit,
+      customerName: name,
+    }),
+  ];
   if (pay.credit > 0.001) {
-    await writeKhata({
+    writes.push(writeKhata({
       externalId: `${externalId}#credit`,
       saleExternalId: externalId,
       partyName: name,
@@ -237,8 +239,9 @@ export async function recordZentorySaleFinance({
       amount: pay.credit,
       soldAt: createdAt,
       description: `Food sale ${receiptNumber || ""}`.trim(),
-    });
+    }));
   }
+  await Promise.all(writes);
   return pay;
 }
 
@@ -269,8 +272,9 @@ export async function clearZentoryFoodFinance(externalId, sale = {}) {
   const paid = round2(sale.creditPaid);
   if (issued <= 0.001 && paid <= 0.001) return;
   const name = sale.customerName || sale.memberName || "Walk-in";
+  const writes = [];
   if (issued > 0.001) {
-    await writeKhata({
+    writes.push(writeKhata({
       externalId: `${externalId}#credit`,
       saleExternalId: externalId,
       partyName: name,
@@ -278,12 +282,12 @@ export async function clearZentoryFoodFinance(externalId, sale = {}) {
       amount: 0,
       soldAt: new Date().toISOString(),
       description: "Food sale deleted",
-    });
+    }));
   }
   const payments = sale.creditPayments && typeof sale.creditPayments === "object" ? sale.creditPayments : {};
   const dates = Object.keys(payments);
   for (const date of dates) {
-    await writeKhata({
+    writes.push(writeKhata({
       externalId: `${externalId}#collect#${date}`,
       saleExternalId: externalId,
       partyName: name,
@@ -291,10 +295,10 @@ export async function clearZentoryFoodFinance(externalId, sale = {}) {
       amount: 0,
       soldAt: new Date().toISOString(),
       description: `Food credit collection removed ${date}`,
-    });
+    }));
   }
   if (!dates.length && paid > 0.001) {
-    await writeKhata({
+    writes.push(writeKhata({
       externalId: `${externalId}#collect#legacy`,
       saleExternalId: externalId,
       partyName: name,
@@ -302,6 +306,7 @@ export async function clearZentoryFoodFinance(externalId, sale = {}) {
       amount: 0,
       soldAt: new Date().toISOString(),
       description: "Food credit collection removed",
-    });
+    }));
   }
+  await Promise.all(writes);
 }

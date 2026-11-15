@@ -697,6 +697,14 @@ export const SharedCache = {
     return this._foodCreditPaymentsPromise;
   },
 
+  /** Swap one day into the cached tree (from a live listener) instead of re-downloading every day. */
+  patchFoodSalesDay(date, dayData) {
+    if (!date || !this._foodSalesCache.isValid()) return;
+    const tree = this._foodSalesCache.data;
+    if (dayData && Object.keys(dayData).length) tree[date] = dayData;
+    else delete tree[date];
+  },
+
   invalidateFoodSales() {
     this._foodSalesCache.invalidate();
     this._foodSalesPromise = null;

@@ -12,7 +12,8 @@ import {
   AUTH_APP_NAME, 
   FB_PATHS, 
   CONSTANTS,
-  SharedCache 
+  SharedCache,
+  ZENTORY
 } from "../../shared/config.js";
 import { getISTDate, getTodayIST, getISTTimestamp } from "../../shared/utils.js";
 import { getStaffSession, clearStaffSession, logStaffActivity } from "./permissions.js";
@@ -24,7 +25,13 @@ import {
   buildFoodSalePayload,
   foodCreditKey
 } from "../../shared/food-stats.js";
-import { fetchZentoryProducts, postZentorySale, applyZentorySaleResult, voidZentorySale } from "../../shared/zentory-api.js";
+import {
+  fetchZentoryProducts,
+  isZentoryFoodItem,
+  deductZentoryCachedStock,
+  syncFoodSaleToZentory,
+  retryPendingZentorySales,
+} from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
   filterFoodItems,
@@ -157,6 +164,7 @@ async function init(session) {
   loadBookings();
   loadCredits();
   loadFoodMenu();
+  retryTodayZentorySales();
   
   console.log("✅ POS Counter initialized");
 }
@@ -1342,63 +1350,37 @@ window.completeFoodSale = async function() {
     timestamp: Date.now()
   });
   
+  if (foodSaleInFlight) return;
+  foodSaleInFlight = true;
+  const checkoutBtn = document.querySelector(".food-checkout-btn");
+  if (checkoutBtn) checkoutBtn.disabled = true;
+
   try {
     const saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${today}`).push();
     const saleId = saleRef.key;
-    const zentoryItems = foodCart.filter((item) => {
-      const menu = foodMenu.find((m) => m.id === item.id);
-      return menu?.fromZentory || String(item.id || "").startsWith("prod_");
-    });
-
-    if (zentoryItems.length) {
-      const zResult = await postZentorySale({
-        externalId: `food_sales/${today}/${saleId}`,
-        customerName: foodCustomer,
-        paymentMode: foodPaymentMode,
-        cash: cashAmount,
-        upi: upiAmount,
-        credit: creditAmount,
-        soldAt: new Date().toISOString(),
-        items: zentoryItems,
-        staff: session?.name || session?.id || "Counter",
-        note: "OceanZ Counter",
-      });
-      applyZentorySaleResult(saleData, zResult);
-      if (zResult.ok === false && !zResult.blocked) {
-        notifyWarning("Sale saved. Stock sync to Zentory failed — check this row later.");
-      } else if (zResult.financeOk === false) {
-        notifyWarning("Sale saved. Zentory accounts did not update — check Khata later.");
-      }
+    const menuSnapshot = foodMenu;
+    const zentoryItems = saleData.items.filter((i) => isZentoryFoodItem(i, menuSnapshot));
+    const syncZentory = zentoryItems.length > 0 && ZENTORY.PUSH_SALES !== false;
+    if (syncZentory) {
+      saleData.zentorySyncStatus = "pending";
+      saleData.zentoryAttemptAt = Date.now();
     }
 
-    try {
-      await saleRef.set(saleData);
-    } catch (writeErr) {
-      if (saleData.zentorySaleId) {
-        await voidZentorySale(`food_sales/${today}/${saleId}`);
-      }
-      throw writeErr;
-    }
-    
-    // If credit, also update food_credits for the customer
-    if (foodPaymentMode === "credit" && foodCustomer) {
-      const creditRef = bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${foodCreditKey(foodCustomer)}`);
-      const creditSnap = await creditRef.once("value");
-      const existing = creditSnap.val() || { outstanding: 0 };
-      
-      await creditRef.update({
-        customerName: foodCustomer,
-        customerType,
-        outstanding: (existing.outstanding || 0) + total,
-        lastUpdated: Date.now()
-      });
-    }
+    const customer = foodCustomer;
+    const writeCredit = foodPaymentMode === "credit" && customer
+      ? bookingDb.ref(`${FB_PATHS.FOOD_CREDITS}/${foodCreditKey(customer)}`).transaction((cur) => ({
+          ...(cur || {}),
+          customerName: customer,
+          customerType,
+          outstanding: (Number(cur?.outstanding) || 0) + total,
+          lastUpdated: Date.now()
+        }))
+      : null;
+    await Promise.all([saleRef.set(saleData), writeCredit]);
 
     SharedCache.invalidateFoodSales();
-    
     notifySuccess(`Sale completed: ₹${total}`);
-    
-    // Reset form
+
     foodCart = [];
     foodCustomer = "Counter";
     $("foodCustomerInput").value = "";
@@ -1406,16 +1388,48 @@ window.completeFoodSale = async function() {
     $("foodSplitUpi").value = "";
     setFoodPaymentMode("cash");
     renderFoodCart();
-    loadFoodMenu(); // Refresh stock from Zentory
-    
-    // Log activity
-    logStaffActivity("food_sale", `Food sale ₹${total} to ${foodCustomer}`);
-    
+
+    if (syncZentory) {
+      deductZentoryCachedStock(zentoryItems);
+      loadFoodMenu();
+      syncFoodSaleToZentory(saleRef, {
+        date: today,
+        id: saleId,
+        sale: saleData,
+        menu: menuSnapshot,
+        note: "OceanZ Counter",
+      }).then((z) => {
+        if (z.ok === false) {
+          notifyWarning(z.blocked
+            ? `Saved, but Zentory refused the stock: ${z.error}`
+            : "Saved. Zentory sync failed — it will retry automatically.");
+        } else if (z.financeOk === false) {
+          notifyWarning("Saved. Zentory accounts did not update — check Khata later.");
+        }
+      });
+    }
+
+    logStaffActivity("food_sale", `Food sale ₹${total} to ${customer}`);
   } catch (err) {
     console.error("[Food] Sale error:", err);
     notifyError("Failed to complete sale: " + err.message);
+  } finally {
+    foodSaleInFlight = false;
+    if (checkoutBtn) checkoutBtn.disabled = false;
   }
 };
+
+let foodSaleInFlight = false;
+
+async function retryTodayZentorySales() {
+  try {
+    const today = getTodayIST();
+    const snap = await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${today}`).once("value");
+    await retryPendingZentorySales(bookingDb, FB_PATHS.FOOD_SALES, today, snap.val());
+  } catch (err) {
+    console.warn("[Food] Zentory retry skipped:", err);
+  }
+}
 
 // Close suggestions when clicking outside
 document.addEventListener("click", (e) => {

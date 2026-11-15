@@ -91,8 +91,7 @@ export async function postZentoryKhata(entry) {
 
 /**
  * Post sale to Zentory (MTO items deduct BOM lots immediately).
- * 409 / ingredient shortage → blocked: true (do not write cafe till).
- * Network / 5xx → ok: false so cafe can still save and flag the row.
+ * 409 / ingredient shortage → blocked: true. Network / 5xx → ok: false.
  */
 export async function postZentorySale({
   externalId,
@@ -177,29 +176,121 @@ export async function postZentorySale({
   }
 }
 
-/** Apply Zentory result onto a cafe food_sales record. Throws when shortage blocked the sale. */
-export function applyZentorySaleResult(saleData, zResult) {
-  if (!zResult) return saleData;
-  if (zResult.skipped) {
-    saleData.zentorySyncStatus = "skipped";
-    saleData.zentorySyncError = null;
-    return saleData;
+export function isZentoryFoodItem(item, menu = []) {
+  const id = String(item?.productId || item?.id || "");
+  if (id.startsWith("prod_")) return true;
+  const m = menu.find((x) => x.id === id);
+  return !!(m?.fromZentory || item?.fromZentory);
+}
+
+/** Lower cached stock right after a sale so the picker is correct without a catalog round trip. */
+export function deductZentoryCachedStock(items) {
+  if (!productCache.products) return;
+  const byId = new Map(productCache.products.map((p) => [p.id, p]));
+  for (const it of items || []) {
+    const p = byId.get(it.productId || it.id);
+    if (!p || p.stock === null || p.stock === undefined) continue;
+    if (p.makeToOrder && p.ingredientStockTracked === false) continue;
+    p.stock = Math.max(0, (Number(p.stock) || 0) - (Number(it.qty) || 0));
   }
-  if (zResult.ok) {
-    saleData.zentorySaleId = zResult.saleId || null;
-    saleData.zentoryReceipt = zResult.receiptNumber || null;
-    saleData.zentorySyncStatus = "ok";
-    saleData.zentorySyncError = null;
-    return saleData;
+}
+
+function zentorySyncFields(result) {
+  if (!result || result.skipped) {
+    return { zentorySyncStatus: "skipped", zentorySyncError: null, zentoryBlocked: null };
   }
-  if (zResult.blocked) {
-    const err = new Error(zResult.error || "Not enough ingredients to make this item");
-    err.blocked = true;
-    throw err;
+  if (result.ok) {
+    return {
+      zentorySaleId: result.saleId || null,
+      zentoryReceipt: result.receiptNumber || null,
+      zentorySyncStatus: "ok",
+      zentorySyncError: null,
+      zentoryBlocked: null,
+      zentoryFinanceError: result.financeOk === false ? (result.financeError || "Accounts update failed") : null,
+    };
   }
-  saleData.zentorySyncStatus = "failed";
-  saleData.zentorySyncError = zResult.error || "Zentory unavailable";
-  return saleData;
+  return {
+    zentorySyncStatus: "failed",
+    zentorySyncError: result.error || "Zentory unavailable",
+    zentoryBlocked: result.blocked ? true : null,
+  };
+}
+
+/**
+ * Post an already-saved cafe food row to Zentory and write the outcome onto
+ * that row. The till write happens first so staff never wait on Zentory.
+ */
+export async function syncFoodSaleToZentory(saleRef, { date, id, sale, menu = [], note }) {
+  const items = (sale.items || []).filter((i) => isZentoryFoodItem(i, menu));
+  if (!items.length) {
+    await saleRef.update({ zentorySyncStatus: "skipped", zentorySyncError: null }).catch(() => {});
+    return { ok: true, skipped: true };
+  }
+  const result = await postZentorySale({
+    externalId: `food_sales/${date}/${id}`,
+    customerName: sale.customerName || sale.member || "Walk-in",
+    paymentMode: sale.paymentMode,
+    cash: Number(sale.cash) || 0,
+    upi: Number(sale.upi) || 0,
+    credit: Number(sale.credit) || 0,
+    soldAt: new Date(sale.timestamp || Date.now()).toISOString(),
+    items,
+    staff: sale.staffName || sale.admin || "Admin",
+    note: note || sale.note || "OceanZ",
+  });
+  try {
+    await saleRef.update(zentorySyncFields(result));
+  } catch (e) {
+    console.warn("[Zentory] could not record sync result on cafe row:", e.message);
+  }
+  return result;
+}
+
+const RETRY_AFTER_MS = 2 * 60 * 1000;
+const MAX_RETRY_ATTEMPTS = 5;
+const retryInFlight = new Set();
+
+function needsZentoryRetry(sale, now) {
+  if (!sale || sale.entryType !== "food") return false;
+  const status = sale.zentorySyncStatus;
+  if (status !== "pending" && status !== "failed") return false;
+  if (sale.zentoryBlocked) return false;
+  if ((Number(sale.zentoryAttempts) || 0) >= MAX_RETRY_ATTEMPTS) return false;
+  const last = Number(sale.zentoryAttemptAt || sale.timestamp) || 0;
+  return now - last > RETRY_AFTER_MS;
+}
+
+/**
+ * Finish Zentory posts that never completed (tab closed, network drop).
+ * Each row is claimed with a transaction so two open tabs never post the same sale at once.
+ */
+export async function retryPendingZentorySales(db, salesPath, date, dayData) {
+  if (ZENTORY.PUSH_SALES === false || !db || !dayData) return;
+  const now = Date.now();
+  for (const [id, sale] of Object.entries(dayData)) {
+    if (!needsZentoryRetry(sale, now)) continue;
+    const key = `${date}/${id}`;
+    if (retryInFlight.has(key)) continue;
+    retryInFlight.add(key);
+    const ref = db.ref(`${salesPath}/${date}/${id}`);
+    try {
+      const tx = await ref.transaction((cur) => {
+        if (!cur) return cur;
+        if (!needsZentoryRetry(cur, Date.now())) return;
+        return {
+          ...cur,
+          zentoryAttemptAt: Date.now(),
+          zentoryAttempts: (Number(cur.zentoryAttempts) || 0) + 1,
+        };
+      });
+      if (!tx.committed || !tx.snapshot?.val()) continue;
+      await syncFoodSaleToZentory(ref, { date, id, sale: tx.snapshot.val() });
+    } catch (e) {
+      console.warn("[Zentory] retry failed:", key, e.message);
+    } finally {
+      retryInFlight.delete(key);
+    }
+  }
 }
 
 export async function voidZentorySale(externalId) {
