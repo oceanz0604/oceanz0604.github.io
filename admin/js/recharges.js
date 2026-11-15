@@ -1366,7 +1366,9 @@ function render() {
       : `<span class="txn-type-badge" style="background: rgba(0,240,255,0.12); color: var(--neon-cyan);">Game</span>`;
     const stockWarn = isFood && r.zentorySyncStatus === "failed"
       ? `<span class="txn-type-badge" title="${String(r.zentorySyncError || "Zentory stock sync failed").replace(/"/g, "&quot;")}" style="background: rgba(255,0,68,0.2); color: #ff6688;">Stock?</span>`
-      : "";
+      : isFood && r.zentorySyncStatus === "pending"
+        ? `<span class="txn-type-badge" title="Sending to Zentory" style="background: rgba(255,200,0,0.15); color: #ffd166;">Syncing</span>`
+        : "";
 
     const jsId = escJsAttr(r.id);
     const jsDate = escJsAttr(r.date || selectedDate);

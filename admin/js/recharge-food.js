@@ -13,6 +13,7 @@ import {
   FB_PATHS,
   CONSTANTS,
   SharedCache,
+  ZENTORY,
   getISTDate
 } from "../../shared/config.js";
 import { getStaffSession, canEditData } from "./permissions.js";
@@ -26,7 +27,16 @@ import {
   purgeOrphanedFoodCreditPayments
 } from "../../shared/food-stats.js";
 import { fitCollectionsToSale } from "../../shared/sale-cash.js";
-import { fetchZentoryProducts, postZentorySale, voidZentorySale, postZentoryKhata, clearZentoryFoodFinance, invalidateZentoryProductCache, applyZentorySaleResult } from "../../shared/zentory-api.js";
+import {
+  fetchZentoryProducts,
+  voidZentorySale,
+  postZentoryKhata,
+  clearZentoryFoodFinance,
+  isZentoryFoodItem,
+  deductZentoryCachedStock,
+  syncFoodSaleToZentory,
+  retryPendingZentorySales,
+} from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
   filterFoodItems,
@@ -151,9 +161,11 @@ export async function loadFoodDay(dateStr) {
     foodSalesListener = ref;
     foodSalesHandler = snap => {
       const data = snap.val() || {};
+      SharedCache.patchFoodSalesDay(dateStr, data);
       foodDayState = Object.entries(data).map(([id, sale]) =>
         foodSaleToLedger({ ...sale, id, date: dateStr })
       );
+      retryPendingZentorySales(bookingDb, FB_PATHS.FOOD_SALES, dateStr, data);
       if (typeof onFoodStateChange === "function") onFoodStateChange(foodDayState);
       hideLegacyFoodBlock();
       resolve(foodDayState);
@@ -764,37 +776,39 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
   try {
     await initFoodFirebase();
 
-    // Restore Zentory stock for this cafe sale (soft-fail).
-    const zVoid = await voidZentorySale(`food_sales/${dateStr}/${id}`);
-    if (!zVoid?.ok) {
-      console.warn("[RechargeFood] Zentory void failed:", zVoid?.error);
-    }
-    try {
-      await clearZentoryFoodFinance(`food_sales/${dateStr}/${id}`, sale);
-    } catch (khataErr) {
-      console.warn("[RechargeFood] Zentory khata clear failed:", khataErr.message);
-    }
-
-    // Remove sale first, then scrub matching credit-collection log rows
     await bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${dateStr}/${id}`).remove();
 
-    const paymentsRemoved = await removeFoodCreditPaymentsForSale(
-      bookingDb,
-      id,
-      dateStr,
-      FB_PATHS.FOOD_CREDIT_PAYMENTS
-    );
+    const [paymentsRemoved] = await Promise.all([
+      removeFoodCreditPaymentsForSale(bookingDb, id, dateStr, FB_PATHS.FOOD_CREDIT_PAYMENTS),
+      pending > 0 && sale.member
+        ? adjustFoodCreditLedger(sale.member, -pending, sale.customerType, sale)
+        : null,
+    ]);
 
-    if (pending > 0 && sale.member) {
-      await adjustFoodCreditLedger(sale.member, -pending, sale.customerType, sale);
+    if (paymentsRemoved > 0 || dateStr !== currentFoodDate) {
+      SharedCache.invalidateFoodSales();
+      if (typeof window.loadAllOutstandingCredits === "function") {
+        window.loadAllOutstandingCredits();
+      }
     }
-
-    SharedCache.invalidateFoodSales();
     const extra = paymentsRemoved > 0 ? ` (cleared ${paymentsRemoved} credit collection${paymentsRemoved > 1 ? "s" : ""})` : "";
     toast("success", "Food entry deleted" + extra);
-    if (typeof window.loadAllOutstandingCredits === "function") {
-      window.loadAllOutstandingCredits();
-    }
+
+    const externalId = `food_sales/${dateStr}/${id}`;
+    const posted = sale.zentorySaleId || ["ok", "pending"].includes(sale.zentorySyncStatus);
+    Promise.all([
+      posted
+        ? voidZentorySale(externalId).then((z) => {
+            if (!z?.ok && !/not found/i.test(z?.error || "")) {
+              throw new Error(z?.error || "stock was not returned");
+            }
+          })
+        : null,
+      clearZentoryFoodFinance(externalId, sale),
+    ]).catch((zErr) => {
+      console.warn("[RechargeFood] Zentory cleanup failed:", zErr.message);
+      toast("warning", `Deleted here, but Zentory was not updated: ${zErr.message}`);
+    });
   } catch (err) {
     toast("error", "Delete failed: " + err.message);
   }
@@ -908,78 +922,89 @@ window.saveFoodRechargeSale = async function() {
     }
   }
 
+  if (foodSaveInFlight) return;
+  foodSaveInFlight = true;
+  setFoodSaveBusy(true);
+
   try {
     const ready = await initFoodFirebase();
     if (!ready) throw new Error("Database not ready");
 
+    const isEdit = !!foodEditId;
+    const menuSnapshot = foodMenu;
+    const hasZentoryItems = !isEdit && saleData.items.some((i) => isZentoryFoodItem(i, menuSnapshot));
     let saleId = foodEditId;
     let saleRef = null;
-    if (foodEditId) {
+    let writeRow;
+    if (isEdit) {
       saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}/${foodEditId}`);
-      await saleRef.update(saleData);
+      writeRow = saleRef.update(saleData);
     } else {
       saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
       saleId = saleRef.key;
-
-      const zentoryItems = foodCart.filter((item) => {
-        const menu = foodMenu.find((m) => m.id === item.id);
-        return menu?.fromZentory || String(item.id || "").startsWith("prod_");
-      });
-      if (zentoryItems.length) {
-        const paymentMode = credit > 0 && cash === 0 && upi === 0
-          ? "credit"
-          : (cash > 0 && upi > 0) || (cash > 0 && credit > 0) || (upi > 0 && credit > 0)
-            ? "split"
-            : upi > 0 ? "upi" : "cash";
-        const zResult = await postZentorySale({
-          externalId: `food_sales/${saleDate}/${saleId}`,
-          customerName: customerInput,
-          paymentMode,
-          cash,
-          upi,
-          credit,
-          soldAt: new Date(saleData.timestamp || Date.now()).toISOString(),
-          items: zentoryItems,
-          staff: session?.name || session?.email || "Admin",
-          note: ($("foodRechargeNote")?.value || "").trim() || "OceanZ Recharges",
-        });
-        applyZentorySaleResult(saleData, zResult);
-        if (zResult.ok === false && !zResult.blocked) {
-          toast("warning", "Sale saved. Stock sync to Zentory failed — check this row later.");
-        } else if (zResult.financeOk === false) {
-          toast("warning", "Sale saved. Zentory accounts did not update — check Khata later.");
-        }
+      if (hasZentoryItems && ZENTORY.PUSH_SALES !== false) {
+        saleData.zentorySyncStatus = "pending";
+        saleData.zentoryAttemptAt = Date.now();
       }
-      try {
-        await saleRef.set(saleData);
-      } catch (writeErr) {
-        if (saleData.zentorySaleId) {
-          await voidZentorySale(`food_sales/${saleDate}/${saleId}`);
-        }
-        throw writeErr;
-      }
+      writeRow = saleRef.set(saleData);
     }
 
-    // Sync aggregate food credit ledger by delta of pending credit
     const newPending = Math.max(0, saleData.credit - (saleData.creditPaid || 0));
     const creditDelta = newPending - previousPending;
-    if (creditDelta !== 0) {
-      await adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData);
-    }
+    await Promise.all([
+      writeRow,
+      creditDelta !== 0
+        ? adjustFoodCreditLedger(customerInput, creditDelta, customerType, saleData)
+        : null,
+    ]);
 
-    SharedCache.invalidateFoodSales();
-    toast("success", foodEditId ? `Food sale updated: ₹${total}` : `Food sale saved: ₹${total}`);
+    if (saleDate !== currentFoodDate) SharedCache.invalidateFoodSales();
+    toast("success", isEdit ? `Food sale updated: ₹${total}` : `Food sale saved: ₹${total}`);
     closeAddFoodRechargeModal();
-    invalidateZentoryProductCache();
-    loadFoodMenuItems({ force: true });
-    if (typeof window.loadAllOutstandingCredits === "function") {
-      window.loadAllOutstandingCredits();
+
+    if (hasZentoryItems && saleData.zentorySyncStatus === "pending") {
+      deductZentoryCachedStock(saleData.items.filter((i) => isZentoryFoodItem(i, menuSnapshot)));
+      loadFoodMenuItems({ force: false });
+      syncFoodSaleToZentory(saleRef, {
+        date: saleDate,
+        id: saleId,
+        sale: saleData,
+        menu: menuSnapshot,
+        note: saleData.note || "OceanZ Recharges",
+      }).then((z) => {
+        if (z.ok === false) {
+          toast("warning", z.blocked
+            ? `Saved, but Zentory refused the stock: ${z.error}`
+            : "Saved. Zentory sync failed — it will retry, or check the Stock? badge.");
+        } else if (z.financeOk === false) {
+          toast("warning", "Saved. Zentory accounts did not update — check Khata later.");
+        }
+      });
     }
   } catch (err) {
     console.error("❌ RechargeFood: save failed", err);
     toast("error", "Failed to save food sale: " + err.message);
+  } finally {
+    foodSaveInFlight = false;
+    setFoodSaveBusy(false);
   }
 };
+
+let foodSaveInFlight = false;
+
+function setFoodSaveBusy(busy) {
+  const btn = document.querySelector('#addFoodRechargeModal button[onclick="saveFoodRechargeSale()"]');
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.style.opacity = busy ? "0.6" : "";
+  if (busy) {
+    btn.dataset.label = btn.innerHTML;
+    btn.innerHTML = "Saving…";
+  } else if (btn.dataset.label) {
+    btn.innerHTML = btn.dataset.label;
+    delete btn.dataset.label;
+  }
+}
 
 /**
  * Collect food credit against a specific food_sales entry (same UX as gaming).
@@ -1048,30 +1073,34 @@ export async function collectFoodSaleCredit({ date, id, cash, upi, stillCredit, 
 
   // Also log in food_credit_payments + reduce food_credits outstanding
   if (collected > 0) {
-    await bookingDb.ref(`${FB_PATHS.FOOD_CREDIT_PAYMENTS}/${today}`).push({
-      saleId: id,
-      saleDate: date,
-      customerId: foodCreditKey(ledger.member),
-      customerName: ledger.member,
-      cash,
-      upi,
-      total: collected,
-      timestamp: Date.now(),
-      by: adminName || getAdminName()
-    });
-    await adjustFoodCreditLedger(ledger.member, -collected, ledger.customerType, ledger);
+    await Promise.all([
+      bookingDb.ref(`${FB_PATHS.FOOD_CREDIT_PAYMENTS}/${today}`).push({
+        saleId: id,
+        saleDate: date,
+        customerId: foodCreditKey(ledger.member),
+        customerName: ledger.member,
+        cash,
+        upi,
+        total: collected,
+        timestamp: Date.now(),
+        by: adminName || getAdminName()
+      }),
+      adjustFoodCreditLedger(ledger.member, -collected, ledger.customerType, ledger),
+    ]);
     const dayPay = applied.creditPayments?.[today] || {};
     const dayTotal = (Number(dayPay.cash) || 0) + (Number(dayPay.upi) || 0);
-    const khata = await postZentoryKhata({
+    postZentoryKhata({
       externalId: `food_sales/${date}/${id}#collect#${today}`,
       partyName: ledger.member,
       amount: dayTotal,
       soldAt: new Date(now).toISOString(),
       description: `Food credit collected ${today}`,
+    }).then((khata) => {
+      if (khata && khata.ok === false) {
+        console.warn("[RechargeFood] Zentory khata collection failed:", khata.error);
+        toast("warning", "Collected. Zentory Khata did not update — check Khata later.");
+      }
     });
-    if (khata && khata.ok === false) {
-      console.warn("[RechargeFood] Zentory khata collection failed:", khata.error);
-    }
   }
 
   SharedCache.invalidateFoodSales();
