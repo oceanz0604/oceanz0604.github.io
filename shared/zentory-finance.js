@@ -211,6 +211,7 @@ export async function recordZentorySaleFinance({
   items,
   soldAt,
   receiptNumber,
+  previousCredit = 0,
 }) {
   if (!saleId) throw new Error("Zentory sale id missing");
   const total = (items || []).reduce(
@@ -240,9 +241,17 @@ export async function recordZentorySaleFinance({
       soldAt: createdAt,
       description: `Food sale ${receiptNumber || ""}`.trim(),
     }));
+  } else if (Number(previousCredit) > 0.001) {
+    writes.push(zeroZentorySaleCredit(externalId));
   }
   await Promise.all(writes);
   return pay;
+}
+
+/** Zero the credit Khata row of a sale version that was voided or edited off credit. */
+export async function zeroZentorySaleCredit(externalId) {
+  const id = await zentoryKhataDocId(`${externalId}#credit`);
+  await writeDoc("khata", id, { amount: 0, description: "Food sale changed" }, { create: false });
 }
 
 /** Khata debit when cafe credit is collected. Amount is the day's collected total, not a delta. */
@@ -272,11 +281,12 @@ export async function clearZentoryFoodFinance(externalId, sale = {}) {
   const paid = round2(sale.creditPaid);
   if (issued <= 0.001 && paid <= 0.001) return;
   const name = sale.customerName || sale.memberName || "Walk-in";
+  const saleExternalId = sale.zentoryExternalId || externalId;
   const writes = [];
   if (issued > 0.001) {
     writes.push(writeKhata({
-      externalId: `${externalId}#credit`,
-      saleExternalId: externalId,
+      externalId: `${saleExternalId}#credit`,
+      saleExternalId,
       partyName: name,
       type: "credit",
       amount: 0,

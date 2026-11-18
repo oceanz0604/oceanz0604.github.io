@@ -8,6 +8,7 @@ import {
   clearZentoryFoodFinance,
   recordZentoryCreditCollection,
   recordZentorySaleFinance,
+  zeroZentorySaleCredit,
 } from "./zentory-finance.js";
 
 export { clearZentoryFoodFinance, recordZentoryCreditCollection };
@@ -195,9 +196,101 @@ export function deductZentoryCachedStock(items) {
   }
 }
 
+/** Zentory matches sales by external id, so each edited version gets its own (`#r1`, `#r2`…). */
+export function zentoryExternalIdFor(date, id, sale = {}) {
+  return sale.zentoryExternalId || `food_sales/${date}/${id}`;
+}
+
+function zentoryLinesKey(items, menu) {
+  return (items || [])
+    .filter((i) => isZentoryFoodItem(i, menu))
+    .map((i) => `${i.productId || i.id}:${Number(i.qty) || 0}:${Number(i.price ?? i.unitPrice) || 0}`)
+    .sort()
+    .join("|");
+}
+
+/**
+ * Decide what an edit means for Zentory and return the row fields to write with it.
+ * - items changed → void the old Zentory sale and post the edit under a new revision id
+ * - only payment / customer changed on a synced sale → re-stamp the existing Zentory sale
+ */
+export function planZentoryEdit({ date, id, before, after, menu = [] }) {
+  if (ZENTORY.PUSH_SALES === false || !before) return { mode: "none", fields: {} };
+  const status = before.zentorySyncStatus || (before.zentorySaleId ? "ok" : null);
+  const wasPosted = !!before.zentorySaleId || ["ok", "pending", "failed"].includes(status);
+  const itemsChanged = zentoryLinesKey(before.items, menu) !== zentoryLinesKey(after.items, menu);
+  const hasZentoryItems = (after.items || []).some((i) => isZentoryFoodItem(i, menu));
+
+  if (itemsChanged && (wasPosted || hasZentoryItems)) {
+    const rev = (Number(before.zentoryRev) || 0) + 1;
+    const oldExt = zentoryExternalIdFor(date, id, before);
+    const fields = {
+      zentoryRev: rev,
+      zentoryExternalId: `food_sales/${date}/${id}#r${rev}`,
+      zentorySyncStatus: "pending",
+      zentorySyncError: null,
+      zentoryBlocked: null,
+      zentoryAttemptAt: Date.now(),
+      zentoryAttempts: 0,
+    };
+    if (wasPosted) {
+      fields.zentoryVoidExternalId = before.zentoryVoidExternalId || oldExt;
+      fields.zentoryVoidCredit = before.zentoryVoidExternalId
+        ? Number(before.zentoryVoidCredit) || 0
+        : Number(before.credit) || 0;
+    }
+    return { mode: "repost", fields };
+  }
+
+  const paymentChanged =
+    (Number(before.cash) || 0) !== (Number(after.cash) || 0) ||
+    (Number(before.upi) || 0) !== (Number(after.upi) || 0) ||
+    (Number(before.credit) || 0) !== (Number(after.credit) || 0) ||
+    (before.customerName || before.member || "") !== (after.customerName || "");
+  if (paymentChanged && status === "ok" && before.zentorySaleId) {
+    return { mode: "restamp", fields: {} };
+  }
+  return { mode: "none", fields: {} };
+}
+
+/** Push an edit's new payment split / customer onto the Zentory sale that is already there. */
+export async function restampZentorySale({ date, id, before, after }) {
+  try {
+    await recordZentorySaleFinance({
+      saleId: before.zentorySaleId,
+      externalId: zentoryExternalIdFor(date, id, before),
+      customerName: after.customerName || "Walk-in",
+      cash: Number(after.cash) || 0,
+      upi: Number(after.upi) || 0,
+      credit: Number(after.credit) || 0,
+      paymentMode: after.paymentMode,
+      items: after.items || [],
+      soldAt: new Date(after.timestamp || Date.now()).toISOString(),
+      receiptNumber: before.zentoryReceipt || "",
+      previousCredit: Number(before.credit) || 0,
+    });
+    return { ok: true };
+  } catch (e) {
+    console.warn("[Zentory] re-stamp failed:", e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+async function voidAndClearCredit(externalId, credit) {
+  const z = await voidZentorySale(externalId);
+  if (!z.ok && !/not found/i.test(z.error || "")) throw new Error(z.error || "Zentory void failed");
+  if (Number(credit) > 0.001) await zeroZentorySaleCredit(externalId);
+}
+
 function zentorySyncFields(result) {
   if (!result || result.skipped) {
-    return { zentorySyncStatus: "skipped", zentorySyncError: null, zentoryBlocked: null };
+    return {
+      zentorySyncStatus: "skipped",
+      zentorySyncError: null,
+      zentoryBlocked: null,
+      zentorySaleId: null,
+      zentoryReceipt: null,
+    };
   }
   if (result.ok) {
     return {
@@ -221,13 +314,25 @@ function zentorySyncFields(result) {
  * that row. The till write happens first so staff never wait on Zentory.
  */
 export async function syncFoodSaleToZentory(saleRef, { date, id, sale, menu = [], note }) {
+  if (sale.zentoryVoidExternalId) {
+    try {
+      await voidAndClearCredit(sale.zentoryVoidExternalId, sale.zentoryVoidCredit);
+      await saleRef.update({ zentoryVoidExternalId: null, zentoryVoidCredit: null });
+    } catch (e) {
+      const result = { ok: false, error: `Old version not reversed: ${e.message}` };
+      await saleRef.update(zentorySyncFields(result)).catch(() => {});
+      return result;
+    }
+  }
+
+  const externalId = zentoryExternalIdFor(date, id, sale);
   const items = (sale.items || []).filter((i) => isZentoryFoodItem(i, menu));
   if (!items.length) {
-    await saleRef.update({ zentorySyncStatus: "skipped", zentorySyncError: null }).catch(() => {});
+    await saleRef.update(zentorySyncFields({ skipped: true })).catch(() => {});
     return { ok: true, skipped: true };
   }
   const result = await postZentorySale({
-    externalId: `food_sales/${date}/${id}`,
+    externalId,
     customerName: sale.customerName || sale.member || "Walk-in",
     paymentMode: sale.paymentMode,
     cash: Number(sale.cash) || 0,
@@ -239,6 +344,12 @@ export async function syncFoodSaleToZentory(saleRef, { date, id, sale, menu = []
     note: note || sale.note || "OceanZ",
   });
   try {
+    // Deleted or edited again while this post was in flight: take it back out.
+    const current = (await saleRef.once("value")).val();
+    if (!current || zentoryExternalIdFor(date, id, current) !== externalId) {
+      if (result.ok) await voidAndClearCredit(externalId, sale.credit);
+      return { ok: true, superseded: true };
+    }
     await saleRef.update(zentorySyncFields(result));
   } catch (e) {
     console.warn("[Zentory] could not record sync result on cafe row:", e.message);

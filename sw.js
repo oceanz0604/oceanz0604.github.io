@@ -3,7 +3,7 @@
  * Network-first for app shell so deploys show up; cache for offline fallback.
  */
 
-const CACHE_NAME = 'oceanz-v26-fastsave';
+const CACHE_NAME = 'oceanz-v27-editsync';
 const OFFLINE_URL = '/offline.html';
 
 // Core assets to cache (only essential files)

@@ -36,6 +36,10 @@ import {
   deductZentoryCachedStock,
   syncFoodSaleToZentory,
   retryPendingZentorySales,
+  planZentoryEdit,
+  restampZentorySale,
+  zentoryExternalIdFor,
+  invalidateZentoryProductCache,
 } from "../../shared/zentory-api.js";
 import {
   uniqueFoodCategories,
@@ -794,18 +798,23 @@ window.deleteFoodRecharge = async function(id, dateOverride) {
     const extra = paymentsRemoved > 0 ? ` (cleared ${paymentsRemoved} credit collection${paymentsRemoved > 1 ? "s" : ""})` : "";
     toast("success", "Food entry deleted" + extra);
 
-    const externalId = `food_sales/${dateStr}/${id}`;
-    const posted = sale.zentorySaleId || ["ok", "pending"].includes(sale.zentorySyncStatus);
+    const baseExternalId = `food_sales/${dateStr}/${id}`;
+    const posted = sale.zentorySaleId || ["ok", "pending", "failed"].includes(sale.zentorySyncStatus);
+    const toVoid = [
+      posted ? zentoryExternalIdFor(dateStr, id, sale) : null,
+      sale.zentoryVoidExternalId || null,
+    ].filter(Boolean);
+    const voidOne = (ext) => voidZentorySale(ext).then((z) => {
+      if (!z?.ok && !/not found/i.test(z?.error || "")) {
+        throw new Error(z?.error || "stock was not returned");
+      }
+    });
     Promise.all([
-      posted
-        ? voidZentorySale(externalId).then((z) => {
-            if (!z?.ok && !/not found/i.test(z?.error || "")) {
-              throw new Error(z?.error || "stock was not returned");
-            }
-          })
-        : null,
-      clearZentoryFoodFinance(externalId, sale),
-    ]).catch((zErr) => {
+      ...toVoid.map(voidOne),
+      clearZentoryFoodFinance(baseExternalId, sale),
+    ]).then(() => {
+      if (toVoid.length) invalidateZentoryProductCache();
+    }).catch((zErr) => {
       console.warn("[RechargeFood] Zentory cleanup failed:", zErr.message);
       toast("warning", `Deleted here, but Zentory was not updated: ${zErr.message}`);
     });
@@ -936,8 +945,19 @@ window.saveFoodRechargeSale = async function() {
     let saleId = foodEditId;
     let saleRef = null;
     let writeRow;
+    let editPlan = { mode: "none", fields: {} };
+    let beforeRaw = null;
     if (isEdit) {
       saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}/${foodEditId}`);
+      beforeRaw = (await saleRef.once("value")).val();
+      editPlan = planZentoryEdit({
+        date: saleDate,
+        id: saleId,
+        before: beforeRaw,
+        after: saleData,
+        menu: menuSnapshot,
+      });
+      Object.assign(saleData, editPlan.fields);
       writeRow = saleRef.update(saleData);
     } else {
       saleRef = bookingDb.ref(`${FB_PATHS.FOOD_SALES}/${saleDate}`).push();
@@ -962,9 +982,19 @@ window.saveFoodRechargeSale = async function() {
     toast("success", isEdit ? `Food sale updated: ₹${total}` : `Food sale saved: ₹${total}`);
     closeAddFoodRechargeModal();
 
-    if (hasZentoryItems && saleData.zentorySyncStatus === "pending") {
-      deductZentoryCachedStock(saleData.items.filter((i) => isZentoryFoodItem(i, menuSnapshot)));
-      loadFoodMenuItems({ force: false });
+    if (editPlan.mode === "restamp") {
+      restampZentorySale({ date: saleDate, id: saleId, before: beforeRaw, after: saleData }).then((z) => {
+        if (!z.ok) toast("warning", "Updated. Zentory accounts did not update — check Khata later.");
+      });
+    }
+
+    const repost = editPlan.mode === "repost";
+    if (repost) invalidateZentoryProductCache();
+    if ((hasZentoryItems || repost) && saleData.zentorySyncStatus === "pending") {
+      if (!repost) {
+        deductZentoryCachedStock(saleData.items.filter((i) => isZentoryFoodItem(i, menuSnapshot)));
+        loadFoodMenuItems({ force: false });
+      }
       syncFoodSaleToZentory(saleRef, {
         date: saleDate,
         id: saleId,
